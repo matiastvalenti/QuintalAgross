@@ -1,0 +1,214 @@
+:root {
+  /* Typography - Inter/sans-serif - Premium Spacing */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Noto Serif", Georgia, serif;
+
+  --text-xs: 11px;
+  --text-sm: 12.5px;
+  --text-md: 14px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 24px;
+  --text-3xl: 32px;
+
+  --font-regular: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+  --font-black: 800;
+
+  /* Spacing - Optimized for Professional Flow */
+  --s-1: 4px;
+  --s-2: 8px;
+  --s-3: 12px;
+  --s-4: 16px;
+  --s-5: 20px;
+  --s-6: 24px;
+  --s-8: 32px;
+  --s-10: 40px;
+  --s-12: 48px;
+
+  /* Radius - More Organic/Modern */
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 14px;
+  --r-xl: 20px;
+  --r-full: 999px;
+
+  /* Shadows - Tonal & Deep */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -2px rgba(0, 0, 0, 0.02);
+  --shadow-premium: 0 25px 50px -12px rgba(0, 0, 0, 0.08);
+  --shadow-glow: 0 0 20px rgba(5, 150, 105, 0.15);
+  --shadow-modal: 0 50px 100px -20px rgba(15, 23, 42, 0.12);
+
+  /* Glassmorphism - Tonal Frost */
+  --glass: rgba(255, 255, 255, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --blur: blur(20px);
+
+  /* Colors - Agro-Luxury 2026 */
+  --bg-page: #F8FAFC; 
+  --bg-card: #FFFFFF;
+  --bg-sidebar: #0B132B; 
+  
+  /* Aliases */
+  --bg: var(--bg-page);
+  --panel: var(--bg-card);
+  --panel-2: #F1F5F9;
+
+  --border-color: #E2E8F0; 
+  --border-hover: #CBD5E1; 
+  --border: 1px solid var(--border-color);
+
+  /* Text - High Contrast / High Legibility */
+  --text: #0F172A; 
+  --text-secondary: #64748B; 
+  --muted: #64748B; 
+  --subtle: #E2E8F0; 
+  --inverse: #FFFFFF;
+
+  /* Primary Brand - Corporate Color */
+  --primary: #0B132B;
+  --primary-hover: #1E3A8A;
+  --secondary: #1E3A8A;
+  --primary-light: #EBF0F6; 
+  --primary-text: #0B132B;
+
+  /* Semantic - Refined Tones */
+  --ok: #16A34A; 
+  --ok-bg: #F0FDF4;
+  --ok-text: #166534;
+
+  --warn: #F59E0B; 
+  --warn-bg: #FFFBEB;
+  --warn-text: #92400E;
+
+  --bad: #DC2626; 
+  --bad-bg: #FEF2F2;
+  --bad-text: #991B1B;
+
+  --info: #1E3A8A; /* Links */
+  --info-bg: #EFF6FF;
+  --info-text: #1E40AF;
+  
+  /* Accent Tones */
+  --accent-obsidian: #0F172A;
+  --accent-gold: #D97706;
+  --accent-indigo: #6366F1;
+
+  --focus: 0 0 0 4px rgba(34, 58, 143, 0.1);
+
+  /* Table Specific */
+  --row-hover: #F8FAFC;
+  --row-selected: #F1F5F9;
+  --th-bg: #F8FAFC;
+  --th-text: #475569;
+
+  /* Layout Dimensions */
+  --topbar-h: 60px;
+  --sidebar-w: 240px;
+  --sidebar-collapsed: 64px;
+  --input-h: 32px;
+}
+
+/* Global Resets - Zero Horizontal Scroll P0 */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  /* Prevent body scroll - Content scrolls inside AppShell */
+  width: 100%;
+  background-color: var(--bg-page);
+  -webkit-font-smoothing: antialiased;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  /* Create stacking context for modals */
+}
+
+/* Custom Scrollbars - Premium Minimalist */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
+/* Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 transparent;
+}
+
+/* Standard ERP 2026 Micro-Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade {
+  animation: fadeIn 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-scale {
+  animation: scaleIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.animate-slide-up {
+  animation: slideInUp 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+.animate-slide-right {
+  animation: slideInRight 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+/* Hover effects for Bento cards */
+.hover-lift {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.hover-lift:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-lg);
+}

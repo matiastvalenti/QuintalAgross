@@ -1,0 +1,141 @@
+.container {
+    padding: 24px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.filters {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.filterBtn {
+    padding: 8px 16px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+    background: white;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.filterBtn:hover {
+    background: var(--bg-hover);
+}
+
+.filterBtn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+.count {
+    background: rgba(255, 255, 255, 0.2);
+    padding: 2px 6px;
+    border-radius: 100px;
+    font-size: 11px;
+}
+
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.item {
+    display: flex;
+    gap: 20px;
+    padding: 20px;
+    background: white;
+    border-radius: 12px;
+    border: 1px solid var(--border-color);
+    transition: all 0.2s;
+}
+
+.item.unread {
+    border-left: 4px solid var(--primary);
+    box-shadow: 0 4px 12px rgba(37, 99, 235, 0.08);
+}
+
+.item.read {
+    opacity: 0.8;
+}
+
+.iconArea {
+    width: 44px;
+    height: 44px;
+    border-radius: 10px;
+    background: var(--bg-page);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.body {
+    flex: 1;
+}
+
+.top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 8px;
+}
+
+.title {
+    margin: 0;
+    font-size: 15px;
+    font-weight: 700;
+}
+
+.date {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.msg {
+    font-size: 14px;
+    color: var(--text-primary);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.msgRead {
+    font-size: 14px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin: 0;
+}
+
+.actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 16px;
+    border-top: 1px solid var(--border-color);
+    padding-top: 12px;
+}
+
+.empty {
+    padding: 60px;
+    text-align: center;
+    color: var(--muted);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}

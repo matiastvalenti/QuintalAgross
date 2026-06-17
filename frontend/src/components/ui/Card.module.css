@@ -1,0 +1,40 @@
+.card {
+    background: var(--bg-card);
+    /* White */
+    border: 1px solid var(--border-color);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-sm);
+    overflow: hidden;
+    transition: box-shadow 200ms ease;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 16px;
+    /* Reduced padding P0 */
+    border-bottom: 1px solid var(--border-color);
+    background: #fff;
+    min-height: 32px;
+}
+
+.header h3 {
+    margin: 0;
+    font-size: 15px;
+    /* Slightly smaller */
+    font-weight: 600;
+    color: var(--text);
+}
+
+.body {
+    padding: 10px 16px;
+    /* Reduced padding P0 */
+    flex: 1;
+}
+
+.noPad {
+    padding: 0;
+}

@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Quintal Agross ERP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&family=Noto+Serif:wght@400;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <script type="module" crossorigin src="/assets/index-C_DHJUva.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BV5IOpTQ.css">
+  </head>
+  <body>
+    <div id="root">
+      <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes spinReverse { to { transform: rotate(-360deg); } }
+        @keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.05); opacity: 0.8; } }
+        @keyframes progressFill { 0% { width: 0%; } 100% { width: 100%; } }
+        @keyframes scaleDot { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-5px); } }
+      </style>
+      <div style="position:fixed;top:0;left:0;right:0;bottom:0;background:radial-gradient(circle at center, #ffffff 0%, #f1f5f9 100%);display:flex;align-items:center;justify-content:center;z-index:9999;font-family:system-ui, -apple-system, sans-serif;">
+        <div style="display:flex;flex-direction:column;align-items:center;gap:40px;padding:60px;border-radius:40px;background:rgba(255, 255, 255, 0.4);backdrop-filter:blur(10px);border:1px solid rgba(255, 255, 255, 0.6);box-shadow:0 20px 50px rgba(0, 0, 0, 0.05);">
+          <div style="position:relative;width:100px;height:100px;display:flex;align-items:center;justify-content:center;">
+            <div style="position:absolute;width:100%;height:100%;border:4px solid #e2e8f0;border-top-color:#2563eb;border-left-color:#3b82f6;border-radius:50%;animation:spin 1.2s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite;"></div>
+            <div style="font-size:40px;font-weight:900;color:#0f172a;z-index:1;animation:pulse 2s ease-in-out infinite;">Q</div>
+          </div>
+          <div style="text-align:center;">
+            <h2 style="font-size:32px;font-weight:900;color:#1e293b;margin:0;letter-spacing:-0.04em;">Quintal<span style="color:#2563eb;display:inline-block;animation:scaleDot 1.5s infinite;">.</span></h2>
+            <p style="font-size:12px;color:#94a3b8;font-weight:800;text-transform:uppercase;letter-spacing:0.2em;margin-top:12px;">Iniciando Sistema...</p>
+          </div>
+          <div style="width:200px;height:6px;background:#f1f5f9;border-radius:20px;overflow:hidden;position:relative;">
+            <div style="position:absolute;width:0%;height:100%;background:linear-gradient(90deg, #2563eb, #818cf8, #2563eb);border-radius:20px;animation:progressFill 3s forwards cubic-bezier(0.65, 0, 0.35, 1);"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

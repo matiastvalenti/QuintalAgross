@@ -1,0 +1,22 @@
+INFO:     Will watch for changes in these directories: ['C:\\Users\\matia\\Cosas\\Escritorio\\Programacion\\Otro\\QuintalAgross_Back\\api']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [2792] using WatchFiles
+C:\Users\matia\AppData\Local\Packages\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\LocalCache\local-packages\Python313\site-packages\pydantic\_internal\_config.py:383: UserWarning: Valid config keys have changed in V2:
+* 'orm_mode' has been renamed to 'from_attributes'
+  warnings.warn(message, UserWarning)
+INFO:     Started server process [21516]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+DEBUG: Pre-import block finished
+[SCHEDULER] Automated alerts initialized for 08:00
+INFO:     127.0.0.1:59333 - "GET /tasks/notifications?unread_only=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54652 - "GET /rates/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59333 - "GET /tasks/notifications?unread_only=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59202 - "GET /tasks/notifications?unread_only=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59202 - "GET /rates/latest HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59202 - "GET /tasks/notifications?unread_only=true HTTP/1.1" 200 OK
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [21516]
+INFO:     Stopping reloader process [2792]

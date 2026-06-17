@@ -1,0 +1,762 @@
+.dashboard {
+  height: 100vh;
+  overflow: hidden;
+  background-color: #f1f5f9;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  color: #1e293b;
+  padding: 8px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* =========================================
+   1. BARRA EJECUTIVA COMPACTA
+ ========================================= */
+.executiveBar {
+  background: #0f172a;
+  border-radius: 6px;
+  padding: 4px 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+.execGroup {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.execTitle {
+  font-size: 10px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+  padding-right: 12px;
+  border-right: 1px solid rgba(255, 255, 255, 0.1);
+}
+.execItems {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.execLabel {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+}
+.execVal {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f8fafc;
+  font-family: 'Outfit', sans-serif;
+}
+.execSep {
+  color: #334155;
+  font-size: 10px;
+  margin: 0 4px;
+}
+.tickerHighlight {
+  color: #10b981;
+}
+
+.marketCards {
+  display: flex;
+  gap: 8px;
+}
+.marketCard {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 4px 10px;
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.marketLabel {
+  font-size: 9px;
+  font-weight: 700;
+  color: #94a3b8;
+  letter-spacing: 0.05em;
+}
+.marketVal {
+  font-size: 13px;
+  font-weight: 800;
+  color: #f8fafc;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================
+   2. OPERACIONES
+ ========================================= */
+.opsRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-shrink: 0;
+}
+.opsContainer {
+  display: flex;
+  gap: 8px;
+}
+.opsBtn {
+  background: #ffffff;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 11px;
+  font-weight: 700;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: all 0.2s;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
+}
+.opsBtn:hover {
+  background: #f8fafc;
+  border-color: var(--primary);
+  color: var(--primary);
+}
+
+/* =========================================
+   3. LAYOUT PRINCIPAL
+ ========================================= */
+.mainGrid {
+  display: grid;
+  grid-template-columns: 1fr 2.2fr 1fr;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+}
+.panel {
+  background: #ffffff;
+  border: none;
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+}
+.flatPanel {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+.panelHeader {
+  background: transparent;
+  padding: 16px 16px 8px 16px;
+  font-size: 11px;
+  font-weight: 800;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin: 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.04);
+}
+.flatPanel .panelHeader {
+  border-bottom: 2px solid #cbd5e1;
+  padding: 16px 0 8px 0;
+}
+.coreHeader {
+  background: transparent !important;
+  color: #0f172a !important;
+  padding: 16px 16px 8px 16px !important;
+}
+
+/* =========================================
+   4. POSICIÓN FINANCIERA EJECUTIVA
+ ========================================= */
+.execPosBlock {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.04);
+}
+.execPosBlock:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.execPosLabel {
+  font-size: 11px;
+  font-weight: 700;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.execPosVal {
+  font-size: 20px;
+  font-weight: 900;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.divider {
+  height: 1px;
+  background: rgba(15, 23, 42, 0.06);
+  margin: 12px 0;
+}
+
+.flatList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.flatRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 6px 0;
+}
+.flatLabelDark {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+.flatVal {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================
+   5. ACCIONES PRIORITARIAS Y DESVÍOS
+ ========================================= */
+.kpiCentralBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.04);
+}
+.kpiCentralLabel {
+  font-size: 11px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.08em;
+}
+.kpiCentralVal {
+  font-size: 36px;
+  font-weight: 900;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+.kpiCentralPlus {
+  color: #94a3b8;
+  font-weight: 400;
+  margin: 0 6px;
+}
+
+.priorityActionItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.04);
+  gap: 16px;
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+.priorityActionItem:last-of-type {
+  border-bottom: none;
+}
+.priorityActionItem:hover {
+  background: #f8fafc;
+}
+.actionInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+.actionTitle {
+  font-size: 14px;
+  font-weight: 800;
+  color: #0f172a;
+}
+.actionImpactValStage9 {
+  font-size: 22px;
+  font-weight: 900;
+  font-family: 'Outfit', sans-serif;
+  color: #0f172a;
+  margin-top: 4px;
+}
+.actionQtyStage9 {
+  font-size: 12px;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 2px;
+}
+.actionBtn {
+  background: var(--primary);
+  color: #ffffff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 16px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+.actionBtn:hover {
+  background: var(--primary-hover);
+}
+
+.severityBadge {
+  font-size: 8px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.badgeCritica { background: #fee2e2; color: #ef4444; border: 1px solid #fca5a5; }
+.badgeAlta { background: #ffedd5; color: #f97316; border: 1px solid #fed7aa; }
+.badgeMedia { background: #fef3c7; color: #d97706; border: 1px solid #fde68a; }
+
+.subSectionHeader {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+}
+
+.desvioItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+}
+.desvioItem:last-child {
+  border-bottom: none;
+}
+.desvioIcon {
+  font-size: 18px;
+}
+.desvioInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1;
+}
+.desvioTitle {
+  font-size: 13px;
+  font-weight: 700;
+  color: #0f172a;
+}
+.desvioQty {
+  font-size: 11px;
+  color: #64748b;
+}
+.desvioImpact {
+  font-size: 11px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+/* =========================================
+   6. RIESGOS Y VENCIMIENTOS
+ ========================================= */
+.portfolioItemRisk {
+  background: #ffffff;
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid rgba(15, 23, 42, 0.04);
+}
+.riskCritico {
+  background: #fff5f5;
+  border-left: 4px solid #ef4444;
+  border-color: rgba(239, 68, 68, 0.1);
+}
+.riskAlto {
+  background: #fffbeb;
+  border-left: 4px solid #f59e0b;
+  border-color: rgba(245, 158, 11, 0.1);
+}
+.riskMedio {
+  background: #ffffff;
+  border-left: 4px solid #cbd5e1;
+}
+.portfolioItemRisk:hover {
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.05);
+}
+.riskCardTitle {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  margin-bottom: 4px;
+}
+.riskCardVal {
+  font-size: 20px;
+  font-weight: 900;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.riskCardQty {
+  font-size: 11px;
+  font-weight: 500;
+  color: #64748b;
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.statusBarContainer {
+  height: 4px;
+  background: #e2e8f0;
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+.statusBarDanger {
+  height: 100%;
+  background: #ef4444;
+}
+.statusBarWarning {
+  height: 100%;
+  background: #f59e0b;
+}
+
+.outlineBtn {
+  background: transparent;
+  border: 1px solid #cbd5e1;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
+  width: 100%;
+}
+.outlineBtn:hover {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: #94a3b8;
+}
+
+.textDanger { color: #D14343 !important; }
+.weightDanger { font-weight: 700; color: #D14343; }
+.weightWarning { font-weight: 700; color: #D9822B; }
+
+/* =========================================
+   NEW CLASSES FOR ETAPA 10.1
+ ========================================= */
+.accountsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.accountCell {
+  display: flex;
+  flex-direction: column;
+  padding: 10px 12px;
+  gap: 2px;
+  background: #ffffff;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.03);
+}
+.accountLabel {
+  font-size: 11px;
+  color: #475569;
+  font-weight: 600;
+}
+.accountVal {
+  font-size: 15px;
+  font-weight: 800;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiCentralBlockRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 16px 20px;
+  background: #ffffff;
+  border-radius: 8px;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  margin-bottom: 12px;
+  box-shadow: 0 2px 8px -2px rgba(15, 23, 42, 0.03);
+}
+
+.riskCardTitleRev {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  margin-top: 4px;
+}
+.riskCardValHuge {
+  font-size: 24px;
+  font-weight: 900;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.alertItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  background: #fffbeb;
+  border-left: 3px solid #f59e0b;
+  border-radius: 0 6px 6px 0;
+  margin-bottom: 8px;
+}
+.alertIcon {
+  font-size: 14px;
+  line-height: 1.2;
+}
+.alertText {
+  font-size: 12px;
+  color: #475569;
+  line-height: 1.4;
+}
+.alertText b {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.accountCtx {
+  font-size: 10px;
+  color: #94a3b8;
+  margin-top: 2px;
+}
+
+.riskFlatBlock {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.riskFlatBlock:hover {
+  opacity: 0.7;
+}
+.riskFlatBlock:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.riskFlatTitle {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  letter-spacing: 0.05em;
+  margin-top: 2px;
+}
+.riskFlatVal {
+  font-size: 26px;
+  font-weight: 900;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.subPanelCard {
+  background: #f8fafc;
+  border-radius: 6px;
+  border: 1px solid rgba(15, 23, 42, 0.04);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+
+/* =========================================
+   ETAPA 10 OPERATIVA
+ ========================================= */
+.cashFlowGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.cashFlowItem {
+  background: #f8fafc;
+  border: 1px solid rgba(15, 23, 42, 0.06);
+  padding: 12px;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+}
+.cashFlowLabel {
+  font-size: 10px;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.cashFlowVal {
+  font-size: 16px;
+  font-weight: 900;
+  color: #0f172a;
+  font-family: 'Outfit', sans-serif;
+}
+
+.agendaList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.agendaItem {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.agendaItem:hover {
+  background: #f8fafc;
+}
+.agendaCheckbox {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #cbd5e1;
+  border-radius: 4px;
+}
+.agendaText {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.opsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.opsCard {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
+}
+.opsCardTitle {
+  font-size: 11px;
+  font-weight: 800;
+  color: #0f172a;
+  text-transform: uppercase;
+  margin-bottom: 12px;
+}
+.opsCardData {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 4px;
+}
+.opsCardMain {
+  font-size: 20px;
+  font-weight: 900;
+  font-family: 'Outfit', sans-serif;
+  color: #0f172a;
+}
+.opsCardSub {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+}
+.opsCardMeta {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-bottom: 16px;
+}
+.opsCardBtn {
+  background: #0f172a;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  text-align: center;
+  transition: opacity 0.2s;
+  margin-top: auto;
+}
+.opsCardBtn:hover {
+  opacity: 0.8;
+}
+
+.cobranzaList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cobranzaItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.04);
+}
+.cobranzaItem:last-child {
+  border-bottom: none;
+}
+.cobranzaClient {
+  font-size: 12px;
+  font-weight: 700;
+  color: #0f172a;
+  flex: 1;
+}
+.cobranzaVal {
+  font-size: 14px;
+  font-weight: 800;
+  font-family: 'Outfit', sans-serif;
+  color: #0f172a;
+  margin-right: 12px;
+}
+.cobranzaStatus {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  width: 55px;
+  text-align: center;
+}
+.cobranzaHoy { background: #dbeafe; color: #1e3a8a; }
+.cobranzaManana { background: #f1f5f9; color: #475569; }
+.cobranzaVencido { background: #fee2e2; color: #991b1b; }

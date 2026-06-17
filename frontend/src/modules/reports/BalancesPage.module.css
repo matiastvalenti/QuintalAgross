@@ -1,0 +1,179 @@
+.pageLayout {
+    padding: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100vh;
+    box-sizing: border-box;
+    background: #f8fafc;
+}
+
+.container {
+    display: flex;
+    flex: 1;
+    background: white;
+    border-radius: 20px;
+    border: 1px solid #e2e8f0;
+    overflow: hidden;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar {
+    width: 280px;
+    border-right: 1px solid #e2e8f0;
+    background: #fdfdfd;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebarHeader {
+    padding: 16px;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.sidebarTitle {
+    margin: 0;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1e293b;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.filterContent {
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.filterSection {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.filterLabel {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.verticalTabs {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.verticalTab {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    border: none;
+    background: transparent;
+    color: #64748b;
+    font-size: 14px;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.verticalTab:hover {
+    background: #f1f5f9;
+    color: #1e293b;
+}
+
+.verticalTab.active {
+    background: #eff6ff;
+    color: var(--primary);
+    font-weight: 600;
+}
+
+.statsMini {
+    margin-top: auto;
+    padding-top: 24px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.miniStat {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.miniLabel {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+.miniValue {
+    font-size: 14px;
+    font-weight: 700;
+    color: #475569;
+}
+
+.mainContent {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: white;
+    overflow: hidden;
+}
+
+.tableWrap {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.row {
+    transition: background 0.2s;
+}
+
+.row:hover {
+    background: #f8fafc;
+}
+
+.codeCell {
+    font-family: var(--font-mono);
+    font-size: 13px;
+    font-weight: 600;
+    color: #64748b;
+}
+
+.balanceCell {
+    text-align: right;
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+.positive {
+    color: #ef4444; /* Debt to Collect usually shown red in some contexts, but here let's be consistent with Accounting */
+}
+
+/* In Balances Page, positive means they owe us (Client balance > 0) */
+.positive { color: #dc2626; } /* Ex: Customers owe us money */
+.negative { color: #16a34a; } /* Ex: We owe money or they have credit */
+.neutral { color: #94a3b8; }
+
+.actionBtn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+    background: white;
+    color: #64748b;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.actionBtn:hover {
+    background: #f8fafc;
+    color: var(--primary);
+    border-color: var(--primary);
+}

@@ -1,0 +1,61 @@
+.controls {
+    margin-bottom: var(--spacing-lg);
+}
+
+.select {
+    padding: var(--spacing-sm) var(--spacing-md);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    min-width: 250px;
+}
+
+.ledger {
+    background: var(--surface);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    padding: var(--spacing-md);
+}
+
+.summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid var(--background);
+    margin-bottom: var(--spacing-md);
+    padding-bottom: var(--spacing-sm);
+}
+
+.balance {
+    font-size: 1.25rem;
+    font-weight: bold;
+}
+
+.negative {
+    color: var(--error);
+}
+
+.positive {
+    color: var(--success);
+}
+
+.table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table th,
+.table td {
+    padding: var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.debit {
+    color: var(--error);
+    font-weight: 500;
+}
+
+.credit {
+    color: var(--success);
+    font-weight: 500;
+}

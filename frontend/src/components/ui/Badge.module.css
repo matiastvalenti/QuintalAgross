@@ -1,0 +1,50 @@
+.badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px 8px;
+    border-radius: var(--r-full);
+    font-size: 11px;
+    font-weight: var(--font-medium);
+    line-height: 1.4;
+    white-space: nowrap;
+    letter-spacing: 0.02em;
+}
+
+/* Variants using semantic bg/text pairs */
+.badge {
+    background: var(--panel-2);
+    color: var(--muted);
+    border: 1px solid var(--border-color);
+}
+
+/* Default/Draft */
+
+.ok {
+    background: var(--ok-bg);
+    color: var(--ok-text);
+    border-color: rgba(16, 185, 129, 0.2);
+}
+
+.warn {
+    background: var(--warn-bg);
+    color: var(--warn-text);
+    border-color: rgba(245, 158, 11, 0.2);
+}
+
+.bad {
+    background: var(--bad-bg);
+    color: var(--bad-text);
+    border-color: rgba(239, 68, 68, 0.2);
+}
+
+.accent {
+    background: var(--info-bg);
+    color: var(--info-text);
+    border-color: rgba(59, 130, 246, 0.2);
+}
+
+.purple {
+    background: #f3e8ff;
+    color: #7e22ce;
+    border-color: rgba(126, 34, 206, 0.2);
+}

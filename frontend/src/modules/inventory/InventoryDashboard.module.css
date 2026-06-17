@@ -1,0 +1,130 @@
+.container {
+  /* Alabaster Refined 4.3 - Inventory Insights */
+  --bg-main: #f1f5f9;
+  --glass: rgba(255, 255, 255, 0.98);
+  --text-primary: #0f172a;
+  --text-muted: #94a3b8;
+  --accent-blue: #3b82f6;
+  --accent-orange: #f59e0b;
+  --accent-green: #10b981;
+
+  padding: 40px;
+  background-color: var(--bg-main);
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.header h1 {
+  font-size: 32px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.kpiCard {
+  background: white;
+  padding: 28px;
+  border-radius: 36px;
+  border: 1px solid rgba(0,0,0,0.02);
+  box-shadow: 0 10px 40px rgba(0,0,0,0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.kpiLabel {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+
+.kpiValue {
+  font-size: 30px;
+  font-weight: 950;
+  color: var(--text-primary);
+  margin: 12px 0 6px;
+  letter-spacing: -0.04em;
+}
+
+/* Bento Grid Layout */
+.bento {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: auto auto;
+  gap: 24px;
+}
+
+.card {
+  background: white;
+  border-radius: 40px;
+  padding: 32px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.02);
+}
+
+.cardTitle {
+  font-size: 20px;
+  font-weight: 950;
+  color: var(--text-primary);
+  margin-bottom: 32px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Table Style */
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th {
+  text-align: left;
+  padding: 12px 0;
+  font-size: 11px;
+  font-weight: 900;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.table td {
+  padding: 16px 0;
+  border-top: 1px solid #f1f5f9;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.criticalBadge {
+  background: #fef2f2;
+  color: #ef4444;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.chartContainer {
+  height: 300px;
+  width: 100%;
+}
+
+@media (max-width: 1200px) {
+  .bento { grid-template-columns: 1fr; }
+  .statsGrid { grid-template-columns: repeat(2, 1fr); }
+}

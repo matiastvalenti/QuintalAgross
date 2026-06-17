@@ -1,0 +1,243 @@
+{
+  "project": "Quintal Agross ERP",
+  "version": "1.1.0",
+  "last_update": "2026-03-16",
+  "tasks": [
+    {
+      "id": "T2.0.1",
+      "title": "Definir convención multimoneda y redondeos",
+      "phase": 2,
+      "status": "DONE",
+      "dependencies": [],
+      "files": ["docs/ACCOUNTING_RULES.md"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T2.1.1",
+      "title": "Crear modelo Document (UUID, multi-moneda)",
+      "phase": 2,
+      "status": "DONE",
+      "dependencies": ["T2.0.1"],
+      "files": ["api/app/db/models.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T2.1.2",
+      "title": "Crear modelo Application (UUID, vinculación)",
+      "phase": 2,
+      "status": "DONE",
+      "dependencies": ["T2.1.1"],
+      "files": ["api/app/db/models.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T2.1.3",
+      "title": "Implementar Lógica de Pagos Parciales",
+      "phase": 2,
+      "status": "DONE",
+      "dependencies": ["T2.1.2"],
+      "files": ["api/app/modules/accounts/document_router.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T2.1.6",
+      "title": "ND Automática por Diferencia de Cambio",
+      "phase": 2,
+      "status": "DONE",
+      "dependencies": ["T2.1.2"],
+      "files": [
+        "api/app/modules/accounts/document_router.py", 
+        "api/app/modules/accounts/fx_router.py",
+        "api/app/modules/accounts/fx_service.py",
+        "web/src/modules/accounting/FxAdjustmentDocModal.jsx"
+      ],
+      "updated_at": "2026-03-13"
+    },
+    {
+      "id": "T2.1.4",
+      "title": "Cálculo de Saldo Vivo por Comprobante",
+      "phase": 2,
+      "status": "DONE",
+      "dependencies": ["T2.1.3"],
+      "files": ["api/app/modules/accounts/document_router.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T2.1.5",
+      "title": "Ledger Multimoneda Real",
+      "phase": 2,
+      "status": "DONE",
+      "dependencies": ["T2.1.4"],
+      "files": ["api/app/modules/accounts/document_router.py", "web/src/modules/accounting/Accounting.jsx"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T3.0.1",
+      "title": "Definir entidades: OV/OC/Remito como docs operativos, Factura como Document",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T2.1.5"],
+      "files": ["api/app/db/commercial_models.py", "api/app/main.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T3.1.1",
+      "title": "Modelo Product + categorías + iva_rate + cuentas contables",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.0.1"],
+      "files": ["api/app/db/commercial_models.py", "api/app/modules/products/product_router.py", "api/app/modules/products/product_schemas.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T3.1.2",
+      "title": "Modelo Warehouse / StockItem",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.0.1"],
+      "files": ["api/app/db/commercial_models.py", "api/app/modules/warehouse/warehouse_router.py", "api/app/modules/warehouse/warehouse_schemas.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T3.2.1",
+      "title": "Ventas: Crear OV + líneas",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.1.1"],
+      "files": ["api/app/db/commercial_models.py", "api/app/modules/sales/sales_order_router.py", "api/app/modules/sales/sales_order_schemas.py"],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T3.2.2",
+      "title": "Ventas: Crear Remito desde OV + impacto stock (-)",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.2.1", "T3.1.2"],
+      "files": [
+        "api/app/db/commercial_models.py",
+        "api/app/modules/sales/delivery_note_router.py",
+        "api/app/modules/sales/delivery_note_schemas.py"
+      ],
+      "updated_at": "2026-02-18"
+    },
+    {
+      "id": "T3.2.3",
+      "title": "Ventas: Crear Factura desde Remito(s) + DocumentLines + cuenta corriente",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.2.2"],
+      "files": ["src/modules/sales/InvoiceForm.jsx"],
+      "updated_at": "2026-03-14"
+    },
+    {
+      "id": "T3.2.4",
+      "title": "Reporte: Remitos pendientes de facturar (ventas)",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.2.3"],
+      "files": ["src/modules/sales/DeliveryNotesPage.jsx"],
+      "updated_at": "2026-03-14"
+    },
+    {
+      "id": "T3.3.1",
+      "title": "Compras: Crear OC + líneas",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.1.1"],
+      "files": ["api/app/modules/purchases/purchase_order_router.py", "src/modules/purchases/PurchaseOrderForm.jsx"],
+      "updated_at": "2026-03-14"
+    },
+    {
+      "id": "T3.3.2",
+      "title": "Compras: Crear Remito desde OC + impacto stock (+)",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.3.1", "T3.1.2"],
+      "files": ["api/app/modules/sales/delivery_note_router.py"],
+      "updated_at": "2026-03-14"
+    },
+    {
+      "id": "T3.3.3",
+      "title": "Compras: Crear Factura compra desde Remito(s) + cuenta proveedor",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.3.2"],
+      "files": ["api/app/modules/accounts/document_router.py", "src/modules/sales/InvoiceForm.jsx"],
+      "updated_at": "2026-03-14"
+    },
+    {
+      "id": "T3.3.4",
+      "title": "Reporte: Remitos pendientes de facturar (compras)",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.3.3"],
+      "files": ["src/modules/purchases/PurchaseDeliveryNotesPage.jsx"],
+      "updated_at": "2026-03-14"
+    },
+    {
+      "id": "T3.4.1",
+      "title": "PDFs: Remito preimpreso + Factura PDF básico",
+      "phase": 3,
+      "status": "DONE",
+      "dependencies": ["T3.2.3", "T3.3.3"],
+      "files": ["api/app/modules/finance/pdf_export.py", "api/app/modules/sales/delivery_note_router.py"],
+      "updated_at": "2026-04-09"
+    },
+    {
+      "id": "T4.1.3",
+      "title": "Automatización de Notas de Débito por intereses de cheques",
+      "phase": 4,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        "api/app/modules/accounts/financial_automation_router.py",
+        "api/app/modules/accounts/interest_engine.py",
+        "src/modules/accounting/CheckInterestModal.jsx",
+        "src/modules/finance/ReceiptForm.jsx"
+      ],
+      "updated_at": "2026-03-16"
+    },
+    {
+      "id": "T0.2.1",
+      "title": "Estandarización Modular del Frontend (src/modules)",
+      "phase": 0,
+      "status": "DONE",
+      "dependencies": ["T0.1.2"],
+      "files": [
+        "src/modules/auth/*",
+        "src/modules/dashboard/*",
+        "src/modules/finance/ExpenseClaimForm.jsx",
+        "src/App.jsx",
+        "src/components/workspace/WindowRegistry.jsx"
+      ],
+      "updated_at": "2026-03-16"
+    },
+    {
+      "id": "T5.1.2",
+      "title": "Libros de IVA Digital (Exportación CSV + TXT)",
+      "phase": 5,
+      "status": "DONE",
+      "dependencies": [],
+      "files": ["api/app/modules/accounting/iva_router.py", "web/src/modules/reports/TaxReportsPage.jsx"],
+      "updated_at": "2026-03-16"
+    },
+    {
+      "id": "T5.1.3",
+      "title": "Configuración de Alícuotas por Producto/Servicio",
+      "phase": 5,
+      "status": "DONE",
+      "dependencies": [],
+      "files": ["api/app/modules/accounting/iva_router.py"],
+      "updated_at": "2026-03-16"
+    },
+    {
+      "id": "T6.0.4",
+      "title": "Liquidación de Granos (LPG AFIP) - Lógica interna",
+      "phase": 6,
+      "status": "DONE",
+      "dependencies": ["T6.0.2"],
+      "files": ["api/app/modules/inventory/grain_lpg_engine.py", "web/src/modules/inventory/grains/GrainSettlementModal.jsx"],
+      "updated_at": "2026-03-16"
+    }
+  ]
+}

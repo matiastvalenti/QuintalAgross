@@ -1,0 +1,58 @@
+/* Layout — Header, Nav, Page wrapper (dark theme) */
+
+.container {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.header {
+    background: var(--panel);
+    border-bottom: 1px solid rgba(255, 255, 255, .06);
+    padding: var(--s-3) var(--s-6);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.header h1 {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--accent);
+    letter-spacing: -0.3px;
+}
+
+.nav {
+    display: flex;
+    gap: var(--s-1);
+}
+
+.nav a {
+    color: var(--muted);
+    text-decoration: none;
+    font-size: var(--text-sm);
+    font-weight: 500;
+    padding: var(--s-1) var(--s-3);
+    border-radius: var(--r-sm);
+    transition: color 150ms, background 150ms;
+}
+
+.nav a:hover {
+    color: var(--text);
+    background: rgba(255, 255, 255, .06);
+}
+
+.main {
+    padding: var(--s-6);
+    max-width: 1280px;
+    margin: 0 auto;
+    width: 100%;
+    flex: 1;
+}
+
+.title {
+    color: var(--text);
+    margin-bottom: var(--s-6);
+    font-size: 20px;
+    font-weight: 700;
+}

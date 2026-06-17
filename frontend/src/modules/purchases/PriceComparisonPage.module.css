@@ -1,0 +1,174 @@
+.heroSection {
+    margin: 20px;
+    margin-bottom: 24px;
+}
+
+.featuredCard {
+    background: white;
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    position: relative;
+    overflow: hidden;
+}
+
+.lastPurchaseBadge {
+    position: absolute;
+    top: 0;
+    right: 0;
+    background: #f8fafc;
+    padding: 6px 16px;
+    border-bottom-left-radius: 16px;
+    font-size: 11px;
+    font-weight: 800;
+    color: #64748b;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    letter-spacing: 0.05em;
+    border-left: 1px solid #e2e8f0;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.heroMain {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 32px;
+}
+
+.productTitle {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 800;
+    color: #1e293b;
+    margin-bottom: 8px;
+}
+
+.providerSub {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #3b82f6;
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.dateRef {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: #64748b;
+    font-size: 13px;
+}
+
+.heroValueWrap {
+    text-align: right;
+}
+
+.heroLabel {
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 4px;
+}
+
+.heroValue {
+    font-size: 32px;
+    font-weight: 900;
+    color: #0f172a;
+}
+
+.heroStats {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    font-size: 14px;
+    font-weight: 700;
+    margin-top: 4px;
+}
+
+.textDanger {
+    color: #ef4444;
+}
+
+.textSuccess {
+    color: #10b981;
+}
+
+/* Indicadores visuales en la card */
+.priceUp { border-left: 6px solid #ef4444; }
+.priceDown { border-left: 6px solid #10b981; }
+
+.searchBarSection {
+    margin: 0 20px 24px 20px;
+    z-index: 50;
+    position: relative;
+}
+
+.searchBarContent {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.8);
+    border-radius: 20px;
+    padding: 8px 12px;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-height: 64px;
+}
+
+.mainAutocomplete {
+    flex: 2;
+}
+
+.secondaryAutocomplete {
+    flex: 1;
+}
+
+.divider {
+    width: 1px;
+    height: 32px;
+    background: #e2e8f0;
+}
+
+.latestRow {
+    background-color: #f0f9ff !important;
+}
+
+.latestRow td {
+    border-bottom: 2px solid #bae6fd !important;
+}
+
+.footerHint {
+    margin: 20px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+@media (max-width: 768px) {
+    .heroMain {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .heroValueWrap {
+        text-align: left;
+    }
+    .heroStats {
+        justify-content: flex-start;
+    }
+    .filtersContainer {
+        grid-template-columns: 1fr;
+    }
+}

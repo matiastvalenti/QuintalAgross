@@ -1,0 +1,17 @@
+.desktopLayer {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    /* Let clicks pass through to background page if no window hit */
+    overflow: hidden;
+    z-index: 9000;
+    /* Above everything including topbar (1000) and sidebar (50) */
+}
+
+.desktopLayer>* {
+    pointer-events: auto;
+    /* Re-enable pointer events for windows and dock */
+}

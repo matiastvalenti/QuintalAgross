@@ -1,0 +1,98 @@
+.frame {
+    position: absolute;
+    background: var(--bg-card);
+    /* White */
+    border: 1px solid var(--border-color);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-modal);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    /* transition: width 0.1s, height 0.1s; -> Disable generic transition for smoother drag, maybe only for maximize */
+}
+
+.maximized {
+    border-radius: 0;
+    border: none;
+}
+
+.header {
+    height: 36px;
+    background: #f1f3f5;
+    /* Light grey header */
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 12px;
+    cursor: grab;
+    user-select: none;
+    flex-shrink: 0;
+}
+
+.header:active {
+    cursor: grabbing;
+}
+
+.title {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.controls {
+    display: flex;
+    gap: 6px;
+}
+
+.btn {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.btn:hover {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text);
+}
+
+.close:hover {
+    background: var(--bad);
+    color: white;
+}
+
+.content {
+    flex: 1;
+    overflow: auto;
+    /* Internal scroll */
+    position: relative;
+    background: white;
+    /* Ensure bg */
+}
+
+.resizeHandle {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    z-index: 10;
+    /* Custom Triangle helper */
+    background: linear-gradient(135deg, transparent 50%, var(--border-color) 50%);
+    opacity: 0.5;
+}
+
+.resizeHandle:hover {
+    opacity: 1;
+}

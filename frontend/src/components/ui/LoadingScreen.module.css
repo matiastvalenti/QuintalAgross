@@ -1,0 +1,190 @@
+.overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(circle at center, #ffffff 0%, #f1f5f9 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 40px;
+    padding: 60px;
+    border-radius: 40px;
+    background: rgba(255, 255, 255, 0.4);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.05);
+}
+
+.logoWrapper {
+    position: relative;
+    width: 100px;
+    height: 100px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.outerRing {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    border: 4px solid #e2e8f0;
+    border-top-color: #2563eb;
+    border-left-color: #3b82f6;
+    border-radius: 50%;
+    animation: spin 1.2s cubic-bezier(0.5, 0.1, 0.4, 0.9) infinite;
+    filter: drop-shadow(0 0 8px rgba(37, 99, 235, 0.2));
+}
+
+.innerRing {
+    position: absolute;
+    width: 65%;
+    height: 65%;
+    border: 3px solid #f1f5f9;
+    border-bottom-color: #818cf8;
+    border-right-color: #6366f1;
+    border-radius: 50%;
+    animation: spinReverse 2s linear infinite;
+}
+
+.logoText {
+    font-size: 40px;
+    font-weight: 900;
+    color: #0f172a;
+    z-index: 1;
+    font-family: 'Outfit', sans-serif;
+    letter-spacing: -0.05em;
+    animation: pulse 2s ease-in-out infinite;
+}
+
+.textWrapper {
+    text-align: center;
+}
+
+.brand {
+    font-size: 32px;
+    font-weight: 900;
+    color: #1e293b;
+    margin: 0;
+    letter-spacing: -0.04em;
+}
+
+.brand span {
+    color: #2563eb;
+    display: inline-block;
+    animation: scaleDot 1.5s infinite;
+}
+
+.status {
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-top: 12px;
+    opacity: 0.8;
+}
+
+.progressTrack {
+    width: 200px;
+    height: 6px;
+    background: #f1f5f9;
+    border-radius: 20px;
+    overflow: hidden;
+    position: relative;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.02);
+}
+
+.progressBar {
+    position: absolute;
+    width: 0%;
+    height: 100%;
+    background: linear-gradient(90deg, #2563eb, #818cf8, #2563eb);
+    background-size: 200% 100%;
+    border-radius: 20px;
+    animation: progressFill 3s forwards cubic-bezier(0.65, 0, 0.35, 1), shimmer 2s infinite linear;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+@keyframes spinReverse {
+    to { transform: rotate(-360deg); }
+}
+
+@keyframes progressFill {
+    0% { width: 0%; }
+    100% { width: 100%; }
+}
+
+@keyframes shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.05); opacity: 0.8; }
+}
+
+@keyframes scaleDot {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+}
+
+/* Inline Loading Overlay */
+.inlineOverlay {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    padding: 40px;
+    width: 100%;
+    height: 100%;
+    min-height: 200px;
+}
+
+.spinnerWrapper {
+    position: relative;
+    width: 48px;
+    height: 48px;
+}
+
+.spinnerRing {
+    width: 100%;
+    height: 100%;
+    border: 3px solid #e2e8f0;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.spinnerDot {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4px;
+    height: 4px;
+    background: #2563eb;
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.overlayText {
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+    letter-spacing: 0.05em;
+}

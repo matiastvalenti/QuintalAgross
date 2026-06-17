@@ -1,0 +1,135 @@
+.btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: var(--r-md);
+    font-weight: var(--font-semibold);
+    font-size: var(--text-sm);
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+    outline: none;
+    font-family: inherit;
+    line-height: 1;
+    border: 1px solid transparent;
+}
+
+.btn:focus-visible {
+    box-shadow: var(--focus);
+}
+
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* Sizes */
+.sm {
+    height: 26px;
+    padding: 0 8px;
+    font-size: var(--text-xs);
+}
+
+.md {
+    height: 32px;
+    padding: 0 12px;
+}
+
+.iconOnly {
+    padding: 0;
+    width: 40px;
+}
+
+.sm.iconOnly {
+    width: 32px;
+}
+
+/* Variants */
+.primary {
+    background: var(--primary);
+    color: var(--inverse);
+    box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255,255,255,0.1);
+}
+
+.primary:hover:not(:disabled) {
+    background: var(--primary-hover);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.primary:active:not(:disabled) {
+    transform: translateY(0);
+}
+
+.secondary {
+    background: var(--bg-card);
+    color: var(--text);
+    border-color: var(--border-color);
+    box-shadow: var(--shadow-sm);
+}
+
+.secondary:hover:not(:disabled) {
+    background: var(--panel-2);
+    border-color: var(--border-hover);
+    color: var(--text);
+}
+
+.outline {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-color);
+}
+
+.outline:hover:not(:disabled) {
+    background: var(--panel-2);
+    border-color: var(--border-hover);
+    color: var(--text);
+}
+
+.ghost {
+    background: transparent;
+    color: var(--text-secondary);
+}
+
+.ghost:hover:not(:disabled) {
+    background: var(--panel-2);
+    color: var(--text);
+}
+
+.danger {
+    background: var(--bad-bg);
+    color: var(--bad-text);
+}
+
+.danger:hover:not(:disabled) {
+    background: #fee2e2;
+}
+
+.success {
+    background: var(--ok);
+    color: #fff;
+    box-shadow: var(--shadow-sm);
+}
+
+/* Loading state */
+.loading {
+    opacity: 0.75;
+    cursor: wait;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    flex-shrink: 0;
+}

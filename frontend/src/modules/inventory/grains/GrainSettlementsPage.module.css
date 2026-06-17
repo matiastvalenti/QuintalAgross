@@ -1,0 +1,244 @@
+.container {
+    padding: 24px;
+    background-color: #f8fafc;
+    min-height: 100%;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 32px;
+}
+
+.premiumTitle {
+    font-size: 32px;
+    font-weight: 900;
+    color: #1e293b;
+    margin: 0;
+    letter-spacing: -0.025em;
+}
+
+.accentText {
+    background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.premiumSubtitle {
+    color: #64748b;
+    font-size: 14px;
+    margin: 4px 0 0 0;
+}
+
+.headerActions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Summary Cards */
+.summaryGrid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin-bottom: 32px;
+}
+
+.statCardPremium {
+    background: white;
+    padding: 24px;
+    border-radius: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    border: 1px solid rgba(226, 232, 240, 0.8);
+}
+
+.statCardPremium:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
+
+.statLabel {
+    display: block;
+    font-size: 13px;
+    font-weight: 700;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 8px;
+}
+
+.statValue {
+    font-size: 28px;
+    font-weight: 900;
+    color: #0f172a;
+    margin: 0;
+    font-family: 'Inter', sans-serif;
+}
+
+.iconCircle {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+}
+
+.statBar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    height: 5px;
+    width: 100%;
+    opacity: 0.7;
+}
+
+/* Filters */
+.filtersCard {
+    background: white;
+    padding: 24px;
+    border-radius: 16px;
+    margin-bottom: 24px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.filterGroup {
+    display: flex;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.filterItem {
+    flex: 1;
+    min-width: 200px;
+}
+
+.filterItem label {
+    display: block;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    margin-bottom: 8px;
+}
+
+/* Table */
+.tableCard {
+    background: white;
+    border-radius: 16px;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+    overflow: hidden;
+}
+
+.headerRow th {
+    background: #f8fafc;
+    color: #475569;
+    font-size: 11px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 16px;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.tableRow {
+    transition: background 0.2s;
+}
+
+.tableRow:hover {
+    background: #f1f5f9;
+}
+
+.tableRow td {
+    padding: 16px;
+    font-size: 14px;
+    color: #334155;
+    border-bottom: 1px solid #f1f5f9;
+}
+
+.grainTag {
+    font-weight: 700;
+    color: #4f46e5;
+}
+
+.loadingCell, .emptyCell {
+    padding: 48px;
+    text-align: center;
+    color: #94a3b8;
+    font-style: italic;
+}
+
+.typeBadge {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 800;
+}
+
+.primaryBadge {
+    background: #eff6ff;
+    color: #2563eb;
+    border: 1px solid #dbeafe;
+}
+
+.secondaryBadge {
+    background: #faf5ff;
+    color: #9333ea;
+    border: 1px solid #f3e8ff;
+}
+
+.entityName {
+    font-weight: 700;
+    color: #1e293b;
+    font-size: 14px;
+}
+
+.brokerName {
+    font-size: 11px;
+    color: #4f46e5;
+    font-weight: 600;
+    margin-top: 2px;
+}
+
+.miniSub {
+    font-size: 10px;
+    color: #94a3b8;
+}
+
+.currency {
+    font-size: 10px;
+    font-weight: 800;
+    color: #94a3b8;
+    text-transform: uppercase;
+}
+
+.totalAmt {
+    color: #0f172a;
+    font-family: 'Inter', sans-serif;
+}
+
+.statusBadge {
+    font-size: 10px;
+    font-weight: 900;
+    padding: 4px 12px;
+    border-radius: 99px;
+    letter-spacing: 0.02em;
+}
+
+.statusClosed {
+    background: #ecfdf5;
+    color: #059669;
+}
+
+.statusOpen {
+    background: #fffbeb;
+    color: #d97706;
+}

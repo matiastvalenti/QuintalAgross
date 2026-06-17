@@ -1,0 +1,7 @@
+Docs found: 1
+  ('0424a870-175e-41ec-9fbd-6bf907af496e', None, None, 217.8, 'OPEN', 'INVOICE')
+
+DNs found: 0
+
+OVs found: 1
+  ('1b9060f4-2d06-440c-9806-ce1c54f47bf3', '39612bf8-65eb-44af-a684-00bea9b76df2', 'RAMIREZ MARTIN', 'CONFIRMED', 217.8)

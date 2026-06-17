@@ -1,0 +1,46 @@
+.shell {
+    display: flex;
+    height: 100vh;
+    /* Strict height */
+    width: 100vw;
+    overflow: hidden;
+    /* No global scroll */
+    background: var(--bg-page);
+}
+
+.mainArea {
+    flex: 1;
+    /* Take remaining width */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    min-width: 0;
+    /* Prevent flex blowouts */
+}
+
+.content {
+    flex: 1;
+    overflow-y: auto;
+    /* Scrollable content */
+    overflow-x: hidden;
+    /* No horizontal scroll */
+    width: 100%;
+    padding: 16px 20px;
+    /* Consistent padding - compacted */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Ensure inner content is centered but takes width */
+.innerContent {
+    width: 100%;
+    flex: 1;
+}
+
+@media (max-width: 768px) {
+    .content {
+        padding: 16px;
+    }
+}

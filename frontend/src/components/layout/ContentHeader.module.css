@@ -1,0 +1,43 @@
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: var(--s-3);
+}
+
+.left {}
+
+.breadcrumbs {
+    display: flex;
+    align-items: center;
+    gap: var(--s-2);
+    font-size: var(--text-xs);
+    color: var(--subtle);
+    margin-bottom: var(--s-1);
+}
+
+.breadcrumbs a {
+    color: var(--muted);
+    text-decoration: none;
+    transition: color 100ms;
+}
+
+.breadcrumbs a:hover {
+    color: var(--text);
+}
+
+.breadcrumbs .sep {
+    color: var(--subtle);
+}
+
+.title {
+    font-size: var(--text-xl);
+    font-weight: var(--font-bold);
+    color: var(--text);
+}
+
+.actions {
+    display: flex;
+    gap: var(--s-2);
+    align-items: center;
+}

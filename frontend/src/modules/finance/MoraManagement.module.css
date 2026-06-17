@@ -1,0 +1,248 @@
+.container {
+  /* Alabaster Refined 4.0 - Mora Management */
+  --bg-main: #f0f4f8;
+  --glass: rgba(255, 255, 255, 0.95);
+  --glass-stroke: rgba(255, 255, 255, 0.8);
+  --text-primary: #0f172a;
+  --accent-red: #ef4444;
+  --accent-green: #10b981;
+  --accent-blue: #3b82f6;
+
+  padding: 40px;
+  background-color: var(--bg-main);
+  min-height: 100vh;
+  font-family: 'Inter', system-ui, sans-serif;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 32px;
+}
+
+.statCard {
+  background: white;
+  padding: 28px;
+  border-radius: 32px;
+  border: 1px solid rgba(0,0,0,0.03);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.02);
+  display: flex;
+  flex-direction: column;
+}
+
+.statValue {
+  font-size: 32px;
+  font-weight: 950;
+  letter-spacing: -0.04em;
+  margin: 12px 0 4px;
+}
+
+.statLabel {
+  font-size: 11px;
+  font-weight: 900;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+}
+
+/* Debtors List */
+.debtorCard {
+  background: white;
+  border-radius: 36px;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid rgba(0,0,0,0.03);
+  margin-bottom: 24px;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.03);
+}
+
+.debtorHeader {
+  padding: 22px 36px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) 180px 150px 44px;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.entityInfo h3 {
+  font-size: 19px;
+  font-weight: 950;
+  color: #1e293b;
+  margin: 0;
+  letter-spacing: -0.03em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.entityCode {
+  font-size: 13px;
+  font-weight: 850;
+  color: #94a3b8;
+}
+
+.debtSummary {
+  display: contents; /* Allows children summaryItems to participate in the debtorHeader grid */
+}
+
+.summaryItem {
+  display: flex;
+  flex-direction: column;
+}
+
+.summaryLabel {
+  font-size: 10px;
+  font-weight: 900;
+  color: #94a3b8;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+
+.summaryValue {
+  font-size: 18px;
+  font-weight: 950;
+  color: #0f172a;
+}
+
+/* Actions Menu */
+.actionsBar {
+  padding: 20px 36px;
+  background: #f8fafc;
+  display: flex;
+  gap: 12px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.actionBtn {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 20px;
+  border-radius: 16px;
+  font-size: 13px;
+  font-weight: 900;
+  cursor: pointer;
+  border: 1px solid rgba(0,0,0,0.05);
+  transition: all 0.3s;
+}
+
+.whatsappBtn {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.whatsappBtn:hover {
+  background: #166534;
+  color: white;
+}
+
+.ghostBtn {
+  background: white;
+  color: #64748b;
+}
+
+.ghostBtn:hover {
+  background: #f1f5f9;
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+/* Detail Table */
+.detailTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.detailTable th {
+  text-align: left;
+  padding: 16px 36px;
+  font-size: 11px;
+  font-weight: 900;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: #fdfdfd;
+}
+
+.detailTable td {
+  padding: 20px 36px;
+  border-top: 1px solid #f1f5f9;
+  font-size: 14px;
+}
+
+.daysBadge {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.critical { background: #fee2e2; color: #ef4444; }
+.warning { background: #fff9ed; color: #f59e0b; }
+.safe { background: #f0fdf4; color: #10b981; }
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 40px;
+}
+
+.searchWrap {
+  position: relative;
+  width: 400px;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 16px 24px 16px 54px;
+  border-radius: 24px;
+  border: 1px solid rgba(0,0,0,0.06);
+  background: white;
+  font-weight: 850;
+  font-size: 14px;
+  transition: 0.3s;
+}
+
+.searchInput:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 4px rgba(59,130,246,0.1);
+}
+
+.viewToggle {
+  display: flex;
+  background: white;
+  padding: 6px;
+  border-radius: 20px;
+  border: 1px solid rgba(0,0,0,0.04);
+}
+
+.toggleBtn {
+  padding: 10px 24px;
+  border-radius: 14px;
+  font-size: 13px;
+  font-weight: 900;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+  color: #64748b;
+  transition: 0.3s;
+}
+
+.toggleBtnActive {
+  background: #0f172a;
+  color: white;
+}
+
+@media (max-width: 1200px) {
+  .statsGrid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 768px) {
+  .statsGrid { grid-template-columns: 1fr; }
+  .debtHeader { flex-direction: column; align-items: flex-start; gap: 24px; }
+  .debtSummary { flex-wrap: wrap; }
+}

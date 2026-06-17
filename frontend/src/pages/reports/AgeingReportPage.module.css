@@ -1,0 +1,283 @@
+.pageContainer {
+    padding: 24px;
+    width: 100%;
+    margin: 0;
+    animation: fadeIn 0.4s ease-out;
+    background: #f8fafc;
+    display: flex;
+    flex-direction: column;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.statsGrid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.statCard {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+}
+
+.statCard:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.12), 0 10px 15px -5px rgba(0, 0, 0, 0.05);
+    border-color: var(--primary);
+}
+
+.statCard::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: transparent;
+    transition: background 0.3s;
+}
+
+.blue:hover::before {
+    background: #0ea5e9;
+}
+
+.yellow:hover::before {
+    background: #f59e0b;
+}
+
+.green:hover::before {
+    background: #10b981;
+}
+
+.red:hover::before {
+    background: #ef4444;
+}
+
+.purple:hover::before {
+    background: #8b5cf6;
+}
+
+.statIcon {
+    width: 44px;
+    height: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 4px;
+}
+
+.statValue {
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--text);
+    letter-spacing: -0.8px;
+    line-height: 1.1;
+}
+
+.statLabel {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.statTrend {
+    font-size: 11px;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+/* Colors */
+.blue .statIcon {
+    background: #e0f2fe;
+    color: #0284c7;
+}
+
+.yellow .statIcon {
+    background: #fef3c7;
+    color: #d97706;
+}
+
+.green .statIcon {
+    background: #dcfce7;
+    color: #16a34a;
+}
+
+.red .statIcon {
+    background: #fee2e2;
+    color: #dc2626;
+}
+
+.purple .statIcon {
+    background: #f3e8ff;
+    color: #9333ea;
+}
+
+/* Background hints */
+.blue::after,
+.yellow::after,
+.red::after,
+.purple::after {
+    content: '';
+    position: absolute;
+    right: -20px;
+    top: -20px;
+    width: 100px;
+    height: 100px;
+    filter: blur(40px);
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.blue::after {
+    background: #e0f2fe;
+}
+
+.yellow::after {
+    background: #fef3c7;
+}
+
+.red::after {
+    background: #fee2e2;
+}
+
+.purple::after {
+    background: #f3e8ff;
+}
+
+/* Toolbar */
+.toolbar {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 20px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-bottom: 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+.toolbarTop {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.searchWrap {
+    position: relative;
+    flex: 1;
+    max-width: 400px;
+}
+
+.searchIcon {
+    position: absolute;
+    left: 14px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--text-secondary);
+}
+
+.searchInput {
+    width: 100%;
+    padding: 10px 14px 10px 40px;
+    border: 1.5px solid var(--border-color);
+    border-radius: 12px;
+    font-size: 14px;
+    background: #f8fafc;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.searchInput:focus {
+    border-color: var(--primary);
+    background: white;
+    box-shadow: 0 0 0 4px rgba(79, 70, 229, 0.1);
+    outline: none;
+}
+
+/* Table Polish */
+.tableCard {
+    background: white;
+    border: 1px solid var(--border-color);
+    border-radius: 24px;
+    box-shadow: 0 4px 20px -5px rgba(0, 0, 0, 0.05);
+    margin-bottom: 40px;
+    transition: box-shadow 0.3s;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+.tableCard:hover {
+    box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.1);
+}
+
+.viewToggle {
+    display: flex;
+    background: #f1f5f9;
+    padding: 4px;
+    border-radius: 12px;
+}
+
+.toggleBtn {
+    padding: 6px 14px;
+    border-radius: 10px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.toggleBtn.active {
+    background: white;
+    color: var(--primary);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.progressContainer {
+    margin-top: 8px;
+    height: 4px;
+    background: #f1f5f9;
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.progressBar {
+    height: 100%;
+    background: var(--bad);
+    transition: width 0.5s ease-out;
+}
