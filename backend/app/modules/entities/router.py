@@ -104,6 +104,11 @@ def get_sale_conditions(db: Session = Depends(get_db)):
     return [{"id": str(c.id), "description": c.description} for c in conditions]
 
 
+def normalize_tax_id(tax_id: Optional[str]) -> str:
+    if not tax_id:
+        return ""
+    return "".join(c for c in tax_id if c.isdigit())
+
 def _get_next_code(db: Session, type: EntityType) -> str:
     prefix = "C" if type == EntityType.CLIENT else "P"
     last = db.query(Entity).filter(Entity.code.like(f"{prefix}-%")).order_by(Entity.code.desc()).first()
@@ -124,6 +129,27 @@ def create_entity(entity: EntityCreate, db: Session = Depends(get_db)):
         exists = db.query(Entity).filter(Entity.code == entity.code).first()
         if exists: raise HTTPException(status_code=400, detail="Entity with this Code already exists")
             
+    if entity.tax_id:
+        normalized_new = normalize_tax_id(entity.tax_id)
+        if normalized_new:
+            all_entities = db.query(Entity).filter(Entity.tax_id != None).all()
+            for e in all_entities:
+                if normalize_tax_id(e.tax_id) == normalized_new:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "DUPLICATE_TAX_ID",
+                            "message": "Ya existe una entidad con ese CUIT.",
+                            "existing_entity": {
+                                "id": e.id,
+                                "name": e.name,
+                                "type": e.type.value if hasattr(e.type, 'value') else e.type,
+                                "code": e.code,
+                                "tax_id": e.tax_id
+                            }
+                        }
+                    )
+
     db_entity = Entity(**entity.model_dump(exclude={"create_linked"}))
     db.add(db_entity)
     db.commit()
@@ -160,6 +186,28 @@ def read_entity(entity_id: str, db: Session = Depends(get_db)):
 def update_entity(entity_id: str, entity: EntityUpdate, db: Session = Depends(get_db)):
     db_entity = db.query(Entity).filter(Entity.id == entity_id).first()
     if db_entity is None: raise HTTPException(status_code=404, detail="Entity not found")
+    
+    if entity.tax_id is not None:
+        normalized_new = normalize_tax_id(entity.tax_id)
+        if normalized_new:
+            all_entities = db.query(Entity).filter(Entity.id != entity_id, Entity.tax_id != None).all()
+            for e in all_entities:
+                if normalize_tax_id(e.tax_id) == normalized_new:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "DUPLICATE_TAX_ID",
+                            "message": "Ya existe una entidad con ese CUIT.",
+                            "existing_entity": {
+                                "id": e.id,
+                                "name": e.name,
+                                "type": e.type.value if hasattr(e.type, 'value') else e.type,
+                                "code": e.code,
+                                "tax_id": e.tax_id
+                            }
+                        }
+                    )
+
     update_data = entity.model_dump(exclude_unset=True)
     for key, value in update_data.items(): setattr(db_entity, key, value)
     db.commit()

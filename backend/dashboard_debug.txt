@@ -515,3 +515,6 @@ AttributeError: type object 'CashPosition' has no attribute 'cost_center'
 [2026-06-22 11:08:41.393417] Starting dashboard summary (Refreshed) - CostCenter: 1
 [2026-06-22 11:08:41.776091] Error in critical stock: type object 'Product' has no attribute 'track_stock'
 [2026-06-22 11:08:44.915463] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-22 12:22:51.913914] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-22 12:22:51.921061] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-22 12:22:54.225504] Error in funnel: type object 'Application' has no attribute 'date'
