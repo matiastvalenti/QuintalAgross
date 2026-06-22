@@ -12,6 +12,158 @@ from app.db.models.commercial_models import (
 
 logger = logging.getLogger(__name__)
 
+def recalc_sales_order_traceability_strict(db: Session, order: SalesOrder) -> list:
+    """
+    Recalcula estrictamente qty_delivered y qty_invoiced de una OV
+    basándose solo en vínculos duros (source_sales_line_id). No usa fuzzy matching.
+    """
+    if not order.lines:
+        return []
+
+    # Remitos vinculados (status != CANCELLED)
+    dns = db.query(DeliveryNote).filter(
+        DeliveryNote.sales_order_id == order.id,
+        DeliveryNote.status != DeliveryNoteStatus.CANCELLED
+    ).all()
+    dn_ids = [dn.id for dn in dns]
+
+    # Facturas vinculadas por tabla puente (RV -> FV)
+    invoice_links = db.query(InvoiceDeliveryNoteLink).filter(
+        InvoiceDeliveryNoteLink.delivery_note_id.in_(dn_ids)
+    ).all() if dn_ids else []
+    invoice_ids = {link.document_id for link in invoice_links}
+
+    # Facturas vinculadas directo a líneas (OV -> FV)
+    line_ids = [l.id for l in order.lines]
+    direct_invoice_ids = db.query(DocumentLine.document_id).filter(
+        DocumentLine.source_sales_line_id.in_(line_ids)
+    ).all()
+    invoice_ids.update([r[0] for r in direct_invoice_ids])
+
+    invoices = db.query(Document).filter(
+        Document.id.in_(list(invoice_ids)),
+        Document.status != DocumentStatus.CANCELLED
+    ).all() if invoice_ids else []
+
+    any_change = False
+    recalculated_lines = []
+
+    for line in order.lines:
+        line_id = str(line.id)
+        old_delivered = float(line.qty_delivered or 0)
+        old_invoiced = float(line.qty_invoiced or 0)
+
+        # Sumar remitos
+        total_deliv = Decimal("0.0")
+        for dn in dns:
+            for dnl in dn.lines:
+                if str(dnl.source_sales_line_id) == line_id:
+                    total_deliv += Decimal(str(dnl.qty or 0))
+
+        # Sumar facturas
+        total_inv = Decimal("0.0")
+        for inv in invoices:
+            for il in inv.lines:
+                if str(il.source_sales_line_id) == line_id:
+                    total_inv += Decimal(str(il.qty or 0))
+
+        if old_delivered != float(total_deliv) or old_invoiced != float(total_inv):
+            line.qty_delivered = total_deliv
+            line.qty_invoiced = total_inv
+            any_change = True
+
+        recalculated_lines.append({
+            "line_id": str(line.id),
+            "product_id": str(line.product_id),
+            "qty_ordered": float(line.qty),
+            "old_qty_delivered": old_delivered,
+            "new_qty_delivered": float(total_deliv),
+            "old_qty_invoiced": old_invoiced,
+            "new_qty_invoiced": float(total_inv)
+        })
+
+    if any_change:
+        db.flush()
+        recalc_sales_order_status(db, order.id)
+
+    return recalculated_lines
+
+def recalc_purchase_order_traceability_strict(db: Session, order: PurchaseOrder) -> list:
+    """
+    Recalcula estrictamente qty_received y qty_invoiced de una OC
+    basándose solo en vínculos duros (source_purchase_line_id). No usa fuzzy matching.
+    """
+    if not order.lines:
+        return []
+
+    # Remitos de compra (DeliveryNote con OrderType.PURCHASE u OC vinculada)
+    dns = db.query(DeliveryNote).filter(
+        DeliveryNote.purchase_order_id == order.id,
+        DeliveryNote.status != DeliveryNoteStatus.CANCELLED
+    ).all()
+    dn_ids = [dn.id for dn in dns]
+
+    # Facturas vinculadas por tabla puente (RC -> FC) - Opcional en compras pero posible
+    invoice_links = db.query(InvoiceDeliveryNoteLink).filter(
+        InvoiceDeliveryNoteLink.delivery_note_id.in_(dn_ids)
+    ).all() if dn_ids else []
+    invoice_ids = {link.document_id for link in invoice_links}
+
+    # Facturas vinculadas directo a líneas (OC -> FC)
+    line_ids = [l.id for l in order.lines]
+    direct_invoice_ids = db.query(DocumentLine.document_id).filter(
+        DocumentLine.source_purchase_line_id.in_(line_ids)
+    ).all()
+    invoice_ids.update([r[0] for r in direct_invoice_ids])
+
+    invoices = db.query(Document).filter(
+        Document.id.in_(list(invoice_ids)),
+        Document.status != DocumentStatus.CANCELLED
+    ).all() if invoice_ids else []
+
+    any_change = False
+    recalculated_lines = []
+
+    for line in order.lines:
+        line_id = str(line.id)
+        old_received = float(line.qty_received or 0)
+        old_invoiced = float(line.qty_invoiced or 0)
+
+        # Sumar remitos
+        total_rec = Decimal("0.0")
+        for dn in dns:
+            for dnl in dn.lines:
+                if str(dnl.source_purchase_line_id) == line_id:
+                    total_rec += Decimal(str(dnl.qty or 0))
+
+        # Sumar facturas
+        total_inv = Decimal("0.0")
+        for inv in invoices:
+            for il in inv.lines:
+                if str(il.source_purchase_line_id) == line_id:
+                    total_inv += Decimal(str(il.qty or 0))
+
+        if old_received != float(total_rec) or old_invoiced != float(total_inv):
+            line.qty_received = total_rec
+            line.qty_invoiced = total_inv
+            any_change = True
+
+        recalculated_lines.append({
+            "line_id": str(line.id),
+            "product_id": str(line.product_id),
+            "qty_ordered": float(line.qty),
+            "old_qty_received": old_received,
+            "new_qty_received": float(total_rec),
+            "old_qty_invoiced": old_invoiced,
+            "new_qty_invoiced": float(total_inv)
+        })
+
+    if any_change:
+        db.flush()
+        recalc_purchase_order_status(db, order.id)
+
+    return recalculated_lines
+
 def sync_sales_order_traceability(db: Session, order: SalesOrder):
     """
     Restaura las cantidades entregadas (qty_delivered) y facturadas (qty_invoiced)

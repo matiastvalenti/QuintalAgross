@@ -15,7 +15,7 @@ import Skeleton from '../../components/ui/Skeleton';
 import TableSkeleton, { TableRowSkeleton } from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
-import { Eye, Edit, Trash2, Search, Plus, PlusCircle, Filter, PackageOpen, Link2Off, ChevronUp, ChevronDown, X, FileText, Printer, TrendingUp, Clock, CheckCircle, Activity, Calendar, Truck, Package, LayoutGrid, ArrowUpRight, Layers, ArrowRight } from 'lucide-react';
+import { Eye, Edit, Trash2, Search, Plus, PlusCircle, Filter, PackageOpen, Link2Off, ChevronUp, ChevronDown, X, FileText, Printer, TrendingUp, Clock, CheckCircle, Activity, Calendar, Truck, Package, LayoutGrid, ArrowUpRight, Layers, ArrowRight, CheckSquare, Square, AlertCircle } from 'lucide-react';
 import { generateDeliveryNotePdfBlob } from '../../services/SalesOrderPdf';
 import api from '../../services/api';
 import { useWindow } from '../../context/WindowContext';
@@ -73,6 +73,7 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
 
   const [showDirectForm, setShowDirectForm] = useState(false);
   const [showCrossForm, setShowCrossForm] = useState(false);
+  const [remitoQtys, setRemitoQtys] = useState({});
   const [crossOV, setCrossOV] = useState(null);
   
   // Direct Form Data
@@ -171,9 +172,9 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
       const ov = await api.get(`/sales/sales-orders/${id}`);
       setCrossOV(ov);
       
-      // Pre-fill lines with remaining qty
-      const lines = ov.lines
-        .filter(l => (l.qty - (l.qty_delivered || 0)) > 0)
+      const lines = ov.lines || [];
+      const validLines = lines
+        .filter(l => (parseFloat(l.qty || 0) - parseFloat(l.qty_delivered || 0)) > 0)
         .map(l => ({
            ...l,
            id: l.id,
@@ -187,7 +188,15 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
            selected: true
         }));
       
-      setCrossLines(lines);
+      setCrossLines(validLines);
+      
+      const initialQtys = {};
+      lines.forEach(l => {
+          const pending = Math.max(0, parseFloat(l.qty || 0) - parseFloat(l.qty_delivered || 0));
+          initialQtys[l.id] = pending;
+      });
+      setRemitoQtys(initialQtys);
+
       if (!skipFormOpen) {
           setShowCrossForm(true);
       }
@@ -258,7 +267,7 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
   };
 
   const handleSeleccionarOrden = async (orden) => {
-    openNuevoRemito(orden.id);
+    loadOVForCrossing(orden.id);
     setShowCreateType(false);
   };
 
@@ -544,35 +553,38 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
     }
   };
 
-  const submitCrossRemito = async (e) => {
-    e.preventDefault();
-    if (!crossForm.warehouse_id || !crossForm.number) return showToast("Faltan datos obligatorios", "error");
-    const validLines = crossLines.filter(l => l.selected && l.qty_to_deliver > 0);
-    if (validLines.length === 0) return showToast("Seleccione al menos un ítem con cantidad positiva", "error");
-    
-    const payload = {
-      warehouse_id: crossForm.warehouse_id,
-      number: crossForm.number,
-      notes: crossForm.notes,
-      confirm_now: true,
-      lines: validLines.map(l => ({
-        source_sales_line_id: l.id,
-        description: l.description,
-        qty: l.qty_to_deliver
-      }))
-    };
+  const handleConfirmCrossRemito = () => {
+    const items = crossOV?.lines || [];
+    const selectedLines = items
+      .filter(item => {
+        const qty = parseFloat(remitoQtys[item.id] || 0);
+        return qty > 0;
+      })
+      .map(item => {
+        const qtyPackages = parseFloat(remitoQtys[item.id] || 0);
+        const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || 1);
+        const qtyUnits = qtyPackages * factor;
+        return {
+          ...item,
+          source_sales_line_id: item.id,
+          qty_packages: qtyPackages,       // envases seleccionados
+          qty_to_remit: qtyUnits,          // unidades totales (lo que espera DeliveryNoteForm como qty)
+          product: item.product,
+          description: item.product?.name || item.description,
+          _unit_content: factor,
+          _unit_label: item.product?.container?.unit?.short_name || item.unit_short_name || 'u',
+        };
+      });
 
-    try {
-      await api.post(`/sales/delivery-notes/from-ov/${crossOV.id}`, payload);
-      showToast("Remito creado y confirmado desde OV", "success");
-      setShowCrossForm(false);
-      setCrossOV(null);
-      if (location.search.includes('ov_id')) navigate('/ventas/remitos', { replace: true });
-      fetchAll();
-    } catch (e) { 
-      console.error(e); 
-      showToast(e.message || "Error al cruzar remito", "error"); 
+    if (selectedLines.length === 0) {
+      return showToast("Seleccioná al menos un ítem para remitir", "warning");
     }
+
+    const draftKey = `remito_draft_ov_${crossOV.id}`;
+    localStorage.setItem(draftKey, JSON.stringify(selectedLines));
+
+    setShowCrossForm(false);
+    openNuevoRemito(crossOV.id, { draft_key: draftKey });
   };
 
   return (
@@ -1049,57 +1061,112 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
       </Modal>
       
       {/* Crossing Form Modal */}
-      <Modal open={showCrossForm} onClose={() => { setShowCrossForm(false); setCrossOV(null); if (location.search.includes('ov_id')) navigate('/ventas/remitos', { replace: true }); }} 
-        title={crossOV ? `Cruzar Orden de Venta ${crossOV.number}` : 'Cruzar O.V.'} wide
-        footer={
-          <>
-            <Button variant="secondary" onClick={() => setShowCrossForm(false)}>Cancelar</Button>
-            <Button type="submit" form="cross-remito-form">Generar Remito (Borrador)</Button>
-          </>
-        }
-      >
-        <form id="cross-remito-form" onSubmit={submitCrossRemito} className={s.formContainer}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 16 }}>
-             <Card noPad style={{ padding: 16, border: '1px solid var(--border-color)', boxShadow: 'none' }}>
-                <div style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 4 }}>Información de la Orden</div>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>{entityName(crossOV?.entity_id)}</div>
-                <div style={{ fontSize: 12 }}>{crossOV?.date && new Date(crossOV.date).toLocaleDateString()}</div>
-             </Card>
-              <Card noPad style={{ padding: 16, border: '1px solid var(--border-color)', boxShadow: 'none' }}>
-                 <div className={s.fieldGrid} style={{ gridTemplateColumns: '120px 1fr 1fr' }}>
-                    <Select label="PV" value={crossForm.pv} onChange={e => setCrossForm({...crossForm, pv: e.target.value})}>
-                        {pvOptions.map(p => <option key={p.pv} value={p.pv}>{p.pv} - {p.name}</option>)}
-                    </Select>
-                    <Input label="Nro Remito" required value={crossForm.number} onChange={e => setCrossForm({...crossForm, number: e.target.value})} />
-                    <Select label="Depósito" required value={crossForm.warehouse_id} onChange={e => setCrossForm({...crossForm, warehouse_id: e.target.value})}>
-                       {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                    </Select>
-                 </div>
-              </Card>
-          </div>
+      <Modal open={showCrossForm} onClose={() => setShowCrossForm(false)} title={`Seleccionar ítems a remitir de OV ${crossOV?.number || ''}`} wide>
+          <div style={{ padding: '0 24px 24px' }}>
+            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20, fontWeight: 600 }}>
+              Seleccioná los productos y cantidades que querés incluir en este remito.
+              Lo que no remitas quedará como <strong>pendiente</strong> en la orden.
+            </p>
 
-          <Card title="Ítems a Remitir" noPad style={{ border: '1px solid var(--border-color)', boxShadow: 'none' }}>
-            <table className={t.table}>
-              <thead>
-                <tr>
-                  <th>Producto</th>
-                  <th style={{ textAlign: 'right', width: 140 }}>Cantidad a Remitir</th>
-                </tr>
-              </thead>
-              <tbody>
-                {crossLines.filter(l => l.selected).map((l, i) => (
-                  <tr key={l.id}>
-                     <td><strong>{l.description}</strong></td>
-                     <td style={{ textAlign: 'right', fontWeight: 800, color: 'var(--primary)' }}>{l.qty_to_deliver}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </Card>
-          <div style={{ marginTop: 12 }}>
-             <Input label="Observaciones del Remito" value={crossForm.notes} onChange={e => setCrossForm({...crossForm, notes: e.target.value})} />
+            <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '10px 16px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', alignItems: 'center' }}>
+                <div></div>
+                <div>PRODUCTO</div>
+                <div style={{ textAlign: 'center' }}>PEDIDO</div>
+                <div style={{ textAlign: 'center' }}>YA REMIT.</div>
+                <div style={{ textAlign: 'center' }}>PENDIENTE</div>
+                <div style={{ textAlign: 'center' }}>A REMITIR AHORA</div>
+              </div>
+              {(crossOV?.lines || []).map(item => {
+                const qtyDelivered = parseFloat(item.qty_delivered || 0);
+                const qtyOrdered = parseFloat(item.qty || 0);
+                const pending = Math.max(0, qtyOrdered - qtyDelivered);
+                const currentQty = remitoQtys[item.id] !== undefined ? remitoQtys[item.id] : pending;
+                const isSelected = currentQty > 0;
+                const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || 1);
+                const unitLabel = item.product?.container?.unit?.short_name || item.unit_short_name || 'u';
+
+                return (
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '14px 16px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', background: isSelected ? '#eff6ff' : '#fff', transition: 'background 0.15s' }}>
+                    <div style={{ display: 'flex', justifyContent: 'center' }}>
+                      {pending > 0 ? (
+                        <button
+                          style={{ border: 'none', background: 'none', cursor: 'pointer', color: isSelected ? '#2563eb' : '#cbd5e1', padding: 0 }}
+                          onClick={() => {
+                            if (isSelected) {
+                              setRemitoQtys(prev => ({ ...prev, [item.id]: 0 }));
+                            } else {
+                              setRemitoQtys(prev => ({ ...prev, [item.id]: pending }));
+                            }
+                          }}
+                        >
+                          {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                        </button>
+                      ) : (
+                        <AlertCircle size={18} style={{ color: '#059669' }} title="Totalmente remitido" />
+                      )}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>{item.product?.name || item.name || item.description || 'Sin nombre'}</div>
+                      {(item.product?.brand?.name || item.brand) && <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{item.product?.brand?.name || item.brand}</div>}
+                      {pending <= 0 && <div style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>✓ Totalmente remitido</div>}
+                    </div>
+                    {/* PEDIDO */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{qtyOrdered} env.</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{(qtyOrdered * factor).toFixed(1)} {unitLabel}</div>
+                    </div>
+                    {/* YA REMIT. */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{qtyDelivered} env.</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{(qtyDelivered * factor).toFixed(1)} {unitLabel}</div>
+                    </div>
+                    {/* PENDIENTE */}
+                    <div style={{ textAlign: 'center' }}>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: pending > 0 ? '#d97706' : '#059669' }}>{pending.toFixed(2)} env.</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: pending > 0 ? '#d97706' : '#059669' }}>{(pending * factor).toFixed(1)} {unitLabel}</div>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                      {pending > 0 ? (
+                        <>
+                          <input
+                            type="number"
+                            min={0}
+                            max={pending}
+                            step="any"
+                            value={currentQty}
+                            onChange={e => {
+                              const val = Math.min(parseFloat(e.target.value) || 0, pending);
+                              setRemitoQtys(prev => ({ ...prev, [item.id]: val }));
+                            }}
+                            style={{ width: 90, padding: '6px 10px', borderRadius: 10, border: `2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`, textAlign: 'center', fontWeight: 800, fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none' }}
+                          />
+                          <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {unitLabel}</div>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>—</span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>
+                {Object.values(remitoQtys).filter(q => q > 0).length} de {(crossOV?.lines || []).filter(i => parseFloat(i.qty || 0) - parseFloat(i.qty_delivered || 0) > 0).length} ítems pendientes seleccionados
+              </div>
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button onClick={() => setShowCrossForm(false)} style={{ padding: '10px 22px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+                <button
+                  onClick={handleConfirmCrossRemito}
+                  style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: '#1d4ed8', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+                >
+                  <Truck size={16} /> Generar Remito
+                </button>
+              </div>
+            </div>
           </div>
-        </form>
       </Modal>
 
       {/* Detail View Modal */}

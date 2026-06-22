@@ -13,6 +13,15 @@ from decimal import Decimal
 
 router = APIRouter(prefix="/pending-items", tags=["Pending Items"])
 
+def get_product_sales_account_code(product):
+    if not product:
+        return None
+    if hasattr(product, "sales_account_code"):
+        return product.sales_account_code
+    if hasattr(product, "sales_account") and product.sales_account:
+        return getattr(product.sales_account, "code", None)
+    return getattr(product, "sales_account_id", None)
+
 class PendingLineResponse(BaseModel):
     id: str
     parent_id: str
@@ -87,7 +96,7 @@ def get_pending_so_lines(entity_id: str, sale_condition_id: Optional[str] = None
             "quantity_per_container": float(l.product.quantity_per_container or 1.0) if l.product else 1.0,
             "container_name": l.product.container.name if (l.product and l.product.container) else "Unidad",
             "unit_short_name": l.product.container.unit.short_name if (l.product and l.product.container and l.product.container.unit) else "u",
-            "sales_account_code": l.product.sales_account_code if l.product else None,
+            "sales_account_code": get_product_sales_account_code(l.product),
             "source_sales_line_id": str(l.id)
         })
     return res
@@ -144,7 +153,7 @@ def get_pending_dn_lines(entity_id: str, sale_condition_id: Optional[str] = None
             "quantity_per_container": float(l.product.quantity_per_container or 1.0) if l.product else 1.0,
             "container_name": l.product.container.name if (l.product and l.product.container) else "Unidad",
             "unit_short_name": l.product.container.unit.short_name if (l.product and l.product.container and l.product.container.unit) else "u",
-            "sales_account_code": l.product.sales_account_code if l.product else None,
+            "sales_account_code": get_product_sales_account_code(l.product),
             "source_dn_line_id": str(l.id),
             "source_sales_line_id": str(l.source_sales_line_id) if l.source_sales_line_id else None
         })

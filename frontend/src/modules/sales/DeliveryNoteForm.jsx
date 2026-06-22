@@ -126,8 +126,7 @@ export default function DeliveryNoteForm(props) {
   const totals = useMemo(() => {
     return items.reduce(
       (acc, i) => {
-        const factor = i._unit_content || 1;
-        const sub = (i.qty || 0) * factor * (i.unit_price || 0);
+        const sub = (i.qty || 0) * (i.unit_price || 0);
         const bonif = sub * ((i.discount_pct || 0) / 100);
         const net = sub - bonif;
         const vat = net * (i.vat_rate || 0.21);
@@ -213,7 +212,7 @@ export default function DeliveryNoteForm(props) {
                 _unit_content: parseFloat(l._unit_content || 1),
                 _container_name: l._container_name || 'Unidad',
                 _unit_label: l._unit_label || 'u',
-                source_sales_line_id: l.id,
+                source_sales_line_id: l.source_sales_line_id || l.id,
                 _parent_number: l.parent_number || '',
             })));
         } else if (autoOpenSelector) {
@@ -565,11 +564,15 @@ export default function DeliveryNoteForm(props) {
       } else if (item.currency === 'ARS' && currency === 'USD') {
         finalUnitPrice = exchangeRate > 0 ? item.unit_price / exchangeRate : item.unit_price;
       }
+      const factor = item.quantity_per_container || 1;
+      const qtyBase = selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0);
+      
       return {
         id: Math.random(),
         product_id: item.product_id,
         description: item.product_name || item.description,
-        qty: selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0),
+        qty: qtyBase,
+        qty_packages: factor > 1 ? qtyBase / factor : undefined,
         unit_price: finalUnitPrice,
         discount_pct: item.discount_pct || 0,
         vat_rate: item.vat_rate || 0.21,

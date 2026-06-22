@@ -22,7 +22,7 @@ from app.modules.finance.pdf_export import export_document_to_pdf
 from app.modules.finance.mailer import send_email
 from pydantic import BaseModel
 from app.modules.inventory.stock_utils import reserve_stock, unreserve_stock
-from app.modules.sales.sales_utils import recalc_sales_order_status, sync_sales_order_traceability
+from app.modules.sales.sales_utils import recalc_sales_order_status, sync_sales_order_traceability, recalc_sales_order_traceability_strict
 
 class EmailPayload(BaseModel):
     to_email: str
@@ -620,6 +620,15 @@ def get_sales_order(order_id: str, db: Session = Depends(get_db)):
     return response
 
 
+def get_product_sales_account_code(product):
+    if not product:
+        return None
+    if hasattr(product, "sales_account_code"):
+        return product.sales_account_code
+    if hasattr(product, "sales_account") and product.sales_account:
+        return getattr(product.sales_account, "code", None)
+    return getattr(product, "sales_account_id", None)
+
 @router.get("/{order_id}/traceability", dependencies=[Depends(check_permission("sales_orders", "view"))])
 def get_sales_order_traceability(order_id: str, db: Session = Depends(get_db)):
     """
@@ -694,7 +703,7 @@ def get_sales_order_traceability(order_id: str, db: Session = Depends(get_db)):
             "unit_price": float(l.unit_price),
             "discount_pct": float(l.discount_pct or 0),
             "vat_rate": float(l.vat_rate or 0.21),
-            "sales_account_code": l.product.sales_account_code if l.product else None,
+            "sales_account_code": get_product_sales_account_code(l.product),
             "quantity_per_container": float(l.product.quantity_per_container or 1) if l.product else 1,
             "container_name": l.product.container.name if l.product and l.product.container else "Unidad",
             "unit_label": l.product.container.unit.short_name if l.product and l.product.container and l.product.container.unit else "u",
@@ -894,7 +903,7 @@ def update_sales_order(
 
         # Update or Create lines
         for i, line_dict in enumerate(lines_data):
-            calc = _calculate_line(line_dict.model_dump(), db)
+            calc = _calculate_line(line_dict if isinstance(line_dict, dict) else line_dict.model_dump(), db)
             line_order_val = calc.pop("line_order", i)
             # Extraer y remover el id para que no explote la asignación de campos nuevos
             lid = calc.pop("id", None)
@@ -1135,4 +1144,33 @@ def get_order_by_line(line_id: str, db: Session = Depends(get_db)):
             "id": order.entity.id,
             "name": order.entity.name
         } if order.entity else None
+    }
+
+# ═══════════════════════════════════════════
+# RECALCULATE TRACEABILITY
+# ═══════════════════════════════════════════
+@router.post("/{order_id}/recalculate-traceability")
+def recalculate_sales_order_traceability(
+    order_id: str, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("sales_orders", "edit"))
+):
+    """Recalcula estrictamente trazabilidad y estado de la OV"""
+    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="OV no encontrada")
+    
+    old_status = order.status.value if order.status else None
+    
+    recalculated_lines = recalc_sales_order_traceability_strict(db, order)
+    
+    db.commit()
+    db.refresh(order)
+    
+    return {
+        "order_id": order.id,
+        "number": order.number,
+        "old_status": old_status,
+        "new_status": order.status.value if order.status else None,
+        "recalculated_lines": recalculated_lines
     }

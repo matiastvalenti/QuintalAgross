@@ -568,8 +568,11 @@ export default function SalesOrderForm(props) {
       const realId = item.id;
       const qtyDelivered = parseFloat(item.qty_delivered || 0);
       const qtyOrdered = parseFloat(item.qty || 0);
-      const pending = qtyOrdered - qtyDelivered;
-      if (pending > 0) initial[realId] = pending;
+      const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || item._unit_content || 1);
+      const pendingBase = Math.max(0, qtyOrdered - qtyDelivered);
+      if (pendingBase > 0) {
+        initial[realId] = Number((pendingBase / factor).toFixed(2));
+      }
     });
     setRemitoQtys(initial);
     setShowRemitoModal(true);
@@ -584,8 +587,8 @@ export default function SalesOrderForm(props) {
       })
       .map(item => {
         const qtyPackages = parseFloat(remitoQtys[item.id] || 0);
-        const factor = parseFloat(item._unit_content || 1);
-        const qtyUnits = qtyPackages * factor;
+        const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || item._unit_content || 1);
+        const qtyUnits = Number((qtyPackages * factor).toFixed(2));
         return {
           ...item,
           qty_packages: qtyPackages,       // envases seleccionados
@@ -674,17 +677,19 @@ export default function SalesOrderForm(props) {
 
   const handleAddItem = (p) => {
     if (!p) return;
+    const factor = p.quantity_per_container || 1;
     const newItem = {
       id: Math.random(),
       product_id: p.id,
       name: p.name,
       brand: p.brand?.name || p.brand_name || '',
-      qty: 1,
+      qty: factor,
+      qty_packages: factor > 1 ? 1 : null,
       cost_price: p.cost_price || 0,
       unit_price: p.base_price || p.cost_price || 0,
       discount_pct: 0,
       vat_rate: p.tax_type?.rate ?? 0.21,
-      _unit_content: p.quantity_per_container || 1,
+      _unit_content: factor,
       _unit_label: p.container?.unit?.short_name || '',
     };
     setItems([...items, newItem]);
@@ -1279,24 +1284,31 @@ export default function SalesOrderForm(props) {
                 <div style={{ textAlign: 'center' }}>A REMITIR AHORA</div>
               </div>
               {items.map(item => {
-                const qtyDelivered = parseFloat(item.qty_delivered || 0);
-                const qtyOrdered = parseFloat(item.qty || 0);
-                const pending = Math.max(0, qtyOrdered - qtyDelivered);
-                const currentQty = remitoQtys[item.id] !== undefined ? remitoQtys[item.id] : pending;
+                const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || item._unit_content || 1);
+                const unitLabel = item._unit_label || item.unit_of_measure || 'LT';
+                
+                const orderedBaseQty = parseFloat(item.qty || 0);
+                const deliveredBaseQty = parseFloat(item.qty_delivered || 0);
+                const pendingBaseQty = Math.max(0, orderedBaseQty - deliveredBaseQty);
+                
+                const orderedPackages = Number((orderedBaseQty / factor).toFixed(2));
+                const deliveredPackages = Number((deliveredBaseQty / factor).toFixed(2));
+                const pendingPackages = Number((pendingBaseQty / factor).toFixed(2));
+                
+                const currentQty = remitoQtys[item.id] !== undefined ? remitoQtys[item.id] : pendingPackages;
                 const isSelected = currentQty > 0;
-                const factor = parseFloat(item._unit_content || 1);
 
                 return (
                   <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '14px 16px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', background: isSelected ? '#eff6ff' : '#fff', transition: 'background 0.15s' }}>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
-                      {pending > 0 ? (
+                      {pendingBaseQty > 0 ? (
                         <button
                           style={{ border: 'none', background: 'none', cursor: 'pointer', color: isSelected ? '#2563eb' : '#cbd5e1', padding: 0 }}
                           onClick={() => {
                             if (isSelected) {
                               setRemitoQtys(prev => ({ ...prev, [item.id]: 0 }));
                             } else {
-                              setRemitoQtys(prev => ({ ...prev, [item.id]: pending }));
+                              setRemitoQtys(prev => ({ ...prev, [item.id]: pendingPackages }));
                             }
                           }}
                         >
@@ -1309,44 +1321,45 @@ export default function SalesOrderForm(props) {
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>{item.product?.name || item.name || item.description || 'Sin nombre'}</div>
                       {(item.product?.brand?.name || item.brand) && <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{item.product?.brand?.name || item.brand}</div>}
-                      {pending <= 0 && <div style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>✓ Totalmente remitido</div>}
+                      {pendingBaseQty <= 0 && <div style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>✓ Totalmente remitido</div>}
                     </div>
                     {/* PEDIDO */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{qtyOrdered} env.</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{(qtyOrdered * factor).toFixed(1)} {item._unit_label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{factor > 1 ? `${orderedPackages.toString().replace(/\.00$/, '')} env.` : `${orderedBaseQty} und.`}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{orderedBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* YA REMIT. */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{qtyDelivered} env.</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{(qtyDelivered * factor).toFixed(1)} {item._unit_label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{factor > 1 ? `${deliveredPackages.toString().replace(/\.00$/, '')} env.` : `${deliveredBaseQty} und.`}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{deliveredBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* PENDIENTE */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: pending > 0 ? '#d97706' : '#059669' }}>{pending.toFixed(2)} env.</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: pending > 0 ? '#d97706' : '#059669' }}>{(pending * factor).toFixed(1)} {item._unit_label}</div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: pendingBaseQty > 0 ? '#d97706' : '#059669' }}>{factor > 1 ? `${pendingPackages.toString().replace(/\.00$/, '')} env.` : `${pendingBaseQty} und.`}</div>
+                      <div style={{ fontSize: 10, fontWeight: 600, color: pendingBaseQty > 0 ? '#d97706' : '#059669' }}>{pendingBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                      {pending > 0 ? (
+                      {pendingBaseQty > 0 ? (
                         <>
                           <input
                             type="number"
                             min={0}
-                            max={pending}
+                            max={pendingPackages}
                             step="any"
                             value={currentQty}
                             onChange={e => {
-                              const val = Math.min(parseFloat(e.target.value) || 0, pending);
+                              const val = Math.min(parseFloat(e.target.value) || 0, pendingPackages);
                               setRemitoQtys(prev => ({ ...prev, [item.id]: val }));
                             }}
                             style={{ width: 90, padding: '6px 10px', borderRadius: 10, border: `2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`, textAlign: 'center', fontWeight: 800, fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none' }}
                           />
-                          <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {item._unit_label}</div>
+                          <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2).replace(/\.00$/, '')} {unitLabel}</div>
                         </>
                       ) : (
                         <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>—</span>
                       )}
                     </div>
+
                   </div>
                 );
               })}
