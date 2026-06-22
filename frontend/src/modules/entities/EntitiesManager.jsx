@@ -74,7 +74,7 @@ export default function EntitiesManager({ initialType = 'client' }) {
             <div style={{ flex: 1, display: 'flex', minHeight: 0, overflow: 'hidden', padding: '0 16px 16px 16px', gap: '12px' }}>
                 {/* 1. LEFT PANE (Tree) */}
                 <div style={{ 
-                    width: '220px', 
+                    width: '180px', 
                     background: 'white',
                     borderRadius: 'var(--r-md)',
                     boxShadow: 'var(--shadow-sm)',

@@ -1,6 +1,6 @@
 import React from 'react';
 import { 
-    Search as SearchIcon, Wallet, FileSpreadsheet, MapPin, Layout, Eye 
+    Search as SearchIcon, Wallet, FileSpreadsheet, MapPin, Layout, Edit 
 } from 'lucide-react';
 import t from '../../../components/ui/Table.module.css';
 import Badge from '../../../components/ui/Badge';
@@ -32,7 +32,7 @@ export default function EntitiesTable({
                 alignItems: 'center',
                 background: 'white'
             }}>
-                <div style={{ position: 'relative', width: '300px' }}>
+                <div style={{ position: 'relative', width: '380px' }}>
                     <SearchIcon 
                         size={15} 
                         style={{ 
@@ -73,18 +73,18 @@ export default function EntitiesTable({
                 </div>
                 
                 <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                     <div style={{ fontSize: '12px', fontWeight: 500, color: '#64748b', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px' }}>
-                        {entities.length} res
+                     <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px' }}>
+                        {entities.length} resultados
                     </div>
                     <button 
                         onClick={onImportSaldos}
                         title="Carga masiva de saldos históricos"
                         style={{
                             padding: '6px 14px',
-                            background: 'var(--primary-light)',
-                            border: '1px solid var(--primary)',
+                            background: 'white',
+                            border: '1px solid #e2e8f0',
                             borderRadius: '8px',
-                            color: 'var(--primary)',
+                            color: '#64748b',
                             fontSize: '12px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -92,6 +92,14 @@ export default function EntitiesTable({
                             alignItems: 'center',
                             gap: 8,
                             transition: 'all 0.2s ease',
+                        }}
+                        onMouseEnter={e => {
+                            e.currentTarget.style.borderColor = '#cbd5e1';
+                            e.currentTarget.style.background = '#f8fafc';
+                        }}
+                        onMouseLeave={e => {
+                            e.currentTarget.style.borderColor = '#e2e8f0';
+                            e.currentTarget.style.background = 'white';
                         }}
                     >
                         <Wallet size={16} /> Cargar Saldos
@@ -126,11 +134,11 @@ export default function EntitiesTable({
                     <button 
                         onClick={onNew}
                         style={{
-                            padding: '6px 14px',
-                            background: 'white',
-                            border: '1px solid #e2e8f0',
+                            padding: '6px 16px',
+                            background: 'linear-gradient(135deg, var(--primary) 0%, #4338ca 100%)',
+                            border: 'none',
                             borderRadius: '8px',
-                            color: 'var(--primary)',
+                            color: 'white',
                             fontSize: '12px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -138,18 +146,16 @@ export default function EntitiesTable({
                             alignItems: 'center',
                             gap: 6,
                             transition: 'all 0.2s ease',
-                            boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+                            boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.25)'
                         }}
                         onMouseEnter={e => {
-                            e.currentTarget.style.borderColor = 'var(--primary)';
-                            e.currentTarget.style.background = '#f8fafc';
+                            e.currentTarget.style.opacity = '0.9';
                         }}
                         onMouseLeave={e => {
-                            e.currentTarget.style.borderColor = '#e2e8f0';
-                            e.currentTarget.style.background = 'white';
+                            e.currentTarget.style.opacity = '1';
                         }}
                     >
-                        <span style={{ fontSize: '16px', lineHeight: 1 }}>+</span> Nuevo
+                        <span style={{ fontSize: '15px', lineHeight: 1, fontWeight: 700 }}>+</span> Nuevo
                     </button>
                 </div>
             </div>
@@ -170,10 +176,12 @@ export default function EntitiesTable({
                     <table className={t.table} style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
                         <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1, boxShadow: '0 1px 0 #e2e8f0' }}>
                             <tr>
-                                <th style={{ paddingLeft: 24, background: '#f8fafc', color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Entidad</th>
-                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Identificación</th>
-                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em' }}>Ubicación</th>
-                                <th style={{ width: 60, background: '#f8fafc' }}></th>
+                                <th style={{ paddingLeft: 16, background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', width: '80px', height: '32px' }}>Código</th>
+                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', height: '32px' }}>Entidad</th>
+                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', width: '100px', height: '32px' }}>Tipo</th>
+                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', width: '130px', height: '32px' }}>CUIT</th>
+                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', height: '32px' }}>Ubicación</th>
+                                <th style={{ width: '120px', background: '#f8fafc', height: '32px' }}></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -189,53 +197,48 @@ export default function EntitiesTable({
                                         borderBottom: '1px solid #f1f5f9',
                                         animationDelay: `${index * 0.05}s`
                                     }}
-                                    onMouseEnter={e => {
-                                        if (selectedEntity?.id !== e.currentTarget.id) {
-                                            e.currentTarget.style.background = '#f8fafc';
+                                    onMouseEnter={el => {
+                                        if (selectedEntity?.id !== e.id) {
+                                            el.currentTarget.style.background = '#f8fafc';
                                         }
                                     }}
-                                    onMouseLeave={e => {
-                                        if (selectedEntity?.id !== e.currentTarget.id) {
-                                            e.currentTarget.style.background = selectedEntity?.id === e.currentTarget.id ? 'var(--primary-light)' : 'transparent';
+                                    onMouseLeave={el => {
+                                        if (selectedEntity?.id !== e.id) {
+                                            el.currentTarget.style.background = 'transparent';
                                         }
                                     }}
                                     id={e.id}
                                 >
-                                    <td style={{ padding: '16px 24px' }}>
-                                        <div style={{ fontWeight: 600, color: '#1e293b', fontSize: '14px' }}>
-                                            {e.name}
-                                        </div>
-                                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                                            {e.type === 'mixed' && <Badge variant="accent">Mixto</Badge>}
-                                            {e.type === 'client' && <Badge variant="primary">Cliente</Badge>}
-                                            {e.type === 'provider' && <Badge variant="success">Proveedor</Badge>}
-                                            {e.type === 'employee' && <Badge variant="info">Empleado</Badge>}
-                                        </div>
+                                    <td style={{ padding: '8px 12px', paddingLeft: 16, fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
+                                        {e.code || '---'}
                                     </td>
-                                    <td style={{ padding: '16px 0' }}>
-                                        <div style={{ fontSize: '13px', color: '#475569', fontWeight: 500 }}>
-                                            {e.tax_id || 'Sin CUIT'}
-                                        </div>
-                                        <div style={{ fontSize: '11px', color: '#94a3b8', marginTop: 2 }}>
-                                            Interno: <span style={{ fontWeight: 600 }}>{e.code || '---'}</span>
-                                        </div>
+                                    <td style={{ padding: '8px 12px', fontSize: '13px', fontWeight: 600, color: '#1e293b', maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={e.name}>
+                                        {e.name}
                                     </td>
-                                    <td style={{ padding: '16px 0' }}>
+                                    <td style={{ padding: '8px 12px' }}>
+                                        {e.type === 'mixed' && <Badge variant="accent">Mixto</Badge>}
+                                        {e.type === 'client' && <Badge variant="primary">Cliente</Badge>}
+                                        {e.type === 'provider' && <Badge variant="success">Proveedor</Badge>}
+                                        {e.type === 'employee' && <Badge variant="info">Empleado</Badge>}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>
+                                        {e.tax_id || 'Sin CUIT'}
+                                    </td>
+                                    <td style={{ padding: '8px 12px', fontSize: '12px', color: '#64748b' }}>
                                         {e.city ? (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '13px', color: '#64748b' }}>
-                                                <MapPin size={14} style={{ color: '#94a3b8' }} />
-                                                {e.city}, {e.state}
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
+                                                <MapPin size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
+                                                <span>{e.city}, {e.state}</span>
                                             </div>
                                         ) : (
-                                            <span style={{ fontSize: '12px', color: '#cbd5e1', fontStyle: 'italic' }}>No definida</span>
+                                            <span style={{ fontSize: '11px', color: '#cbd5e1', fontStyle: 'italic' }}>No definida</span>
                                         )}
                                     </td>
-                                    <td style={{ textAlign: 'right', paddingRight: 24 }}>
-                                        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                    <td style={{ textAlign: 'right', padding: '4px 16px 4px 4px' }} onClick={evt => evt.stopPropagation()}>
+                                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
                                             <button 
-                                                title="Vista 360 / CRM"
-                                                onClick={(evt) => {
-                                                    evt.stopPropagation();
+                                                title="Ver detalle / 360"
+                                                onClick={() => {
                                                     openEntityDashboard(e.id, { 
                                                         title: `Vista 360: ${e.name}`, 
                                                         width: 1100, 
@@ -243,18 +246,17 @@ export default function EntitiesTable({
                                                     });
                                                 }}
                                                 style={{
-                                                    width: 32, height: 32, borderRadius: 8, border: 'none', background: 'transparent',
+                                                    width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent',
                                                     color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                                                 }}
                                                 onMouseEnter={el => el.currentTarget.style.color = 'var(--primary)'}
                                                 onMouseLeave={el => el.currentTarget.style.color = '#94a3b8'}
                                             >
-                                                <Layout size={18} />
+                                                <Layout size={15} />
                                             </button>
                                             <button 
-                                                title="Resumen de Cuenta"
-                                                onClick={(evt) => {
-                                                    evt.stopPropagation();
+                                                title="Ver resumen / cuenta corriente"
+                                                onClick={() => {
                                                     openResumenCuenta(e.id, { 
                                                         title: `Resumen: ${e.name}`, 
                                                         width: 1200, 
@@ -262,27 +264,35 @@ export default function EntitiesTable({
                                                     });
                                                 }}
                                                 style={{
-                                                    width: 32, height: 32, borderRadius: 8, border: 'none', background: 'transparent',
+                                                    width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent',
                                                     color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
                                                 }}
                                                 onMouseEnter={el => el.currentTarget.style.color = 'var(--primary)'}
                                                 onMouseLeave={el => el.currentTarget.style.color = '#94a3b8'}
                                             >
-                                                <Wallet size={18} />
+                                                <Wallet size={15} />
                                             </button>
-                                            <div style={{ 
-                                                display: 'flex', 
-                                                alignItems: 'center', 
-                                                justifyContent: 'center',
-                                                width: '32px',
-                                                height: '32px',
-                                                borderRadius: '8px',
-                                                background: selectedEntity?.id === e.id ? 'white' : 'transparent',
-                                                boxShadow: selectedEntity?.id === e.id ? '0 2px 4px rgba(0,0,0,0.05)' : 'none',
-                                                color: selectedEntity?.id === e.id ? 'var(--primary)' : '#cbd5e1'
-                                            }}>
-                                                <Eye size={18} />
-                                            </div>
+                                            <button 
+                                                title="Editar"
+                                                onClick={() => {
+                                                    onSelect(e);
+                                                }}
+                                                style={{
+                                                    width: 26, height: 26, borderRadius: 6, border: 'none',
+                                                    background: selectedEntity?.id === e.id ? 'white' : 'transparent',
+                                                    boxShadow: selectedEntity?.id === e.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
+                                                    color: selectedEntity?.id === e.id ? 'var(--primary)' : '#cbd5e1',
+                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
+                                                }}
+                                                onMouseEnter={el => el.currentTarget.style.color = 'var(--primary)'}
+                                                onMouseLeave={el => {
+                                                    if (selectedEntity?.id !== e.id) {
+                                                        el.currentTarget.style.color = '#cbd5e1';
+                                                    }
+                                                }}
+                                            >
+                                                <Edit size={15} />
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
