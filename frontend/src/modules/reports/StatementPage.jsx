@@ -407,11 +407,11 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
 
             <div className={s.container}>
                 {selectedEntity ? (
-                    <div>
+                    <div className={s.contentPanel}>
                         {/* Summary Header Cards */}
                         <div className={s.summaryHeader}>
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #1d4ed8' }}>
-                                <div className={s.cardIconBox} style={{ background: '#eff6ff', color: '#1d4ed8' }}><Receipt size={20}/></div>
+                                <div className={s.cardIconBox} style={{ background: '#eff6ff', color: '#1d4ed8' }}><Receipt size={16}/></div>
                                 <div className={s.cardContentBox}>
                                     <div className={s.cardTitle}>Saldo ARS</div>
                                     <div className={s.balanceValue} style={{ color: totals.b_ars < -0.1 ? '#dc2626' : '#1e293b' }}>
@@ -422,7 +422,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             </div>
 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #7c3aed' }}>
-                                <div className={s.cardIconBox} style={{ background: '#f5f3ff', color: '#7c3aed' }}><Wallet size={20}/></div>
+                                <div className={s.cardIconBox} style={{ background: '#f5f3ff', color: '#7c3aed' }}><Wallet size={16}/></div>
                                 <div className={s.cardContentBox}>
                                     <div className={s.cardTitle}>Saldo USD</div>
                                     <div className={s.balanceValue} style={{ color: totals.b_usd < -0.1 ? '#dc2626' : '#1e293b' }}>
@@ -433,7 +433,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             </div>
 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #0f766e' }}>
-                                <div className={s.cardIconBox} style={{ background: '#f0fdfa', color: '#0f766e' }}><Activity size={20}/></div>
+                                <div className={s.cardIconBox} style={{ background: '#f0fdfa', color: '#0f766e' }}><Activity size={16}/></div>
                                 <div className={s.cardContentBox}>
                                     <div className={s.cardTitle}>Total convertido a ARS</div>
                                     <div className={s.balanceValue} style={{ color: (dashboard?.total_balance || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
@@ -444,7 +444,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             </div>
 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #ea580c' }}>
-                                <div className={s.cardIconBox} style={{ background: '#fff7ed', color: '#ea580c' }}><Clock size={20}/></div>
+                                <div className={s.cardIconBox} style={{ background: '#fff7ed', color: '#ea580c' }}><Clock size={16}/></div>
                                 <div className={s.cardContentBox}>
                                     <div className={s.cardTitle}>Pendiente de facturar</div>
                                     <div className={s.balanceValue} style={{ color: '#ea580c' }}>
@@ -567,105 +567,150 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             </div>
                         </div>
 
-                        {/* Professional Ledger Table */}
-                        <div className={s.tableContainer}>
-                            <table className={s.ledgerTable}>
-                                <colgroup>
-                                    <col style={{ width: '85px' }} />
-                                    <col style={{ width: '80px' }} />
-                                    <col style={{ width: '110px' }} />
-                                    <col style={{ width: '125px' }} />
-                                    <col style={{ width: '100px' }} />
-                                    <col style={{ width: '85px' }} />
-                                    <col style={{ width: '55px' }} />
-                                    <col style={{ width: '65px' }} />
-                                    <col style={{ width: 'auto' }} />
-                                    {/* Monetary cols */}
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '100px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '100px' }} />
-                                </colgroup>
-                                <thead className={s.thead}>
-                                    <tr className={s.groupHeader}>
-                                        <th colSpan={9}></th>
-                                        <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Valores en Pesos (ARS)</th>
-                                        <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Valores en Dólares (USD)</th>
-                                    </tr>
-                                    <tr>
-                                        <th className={s.th}>Fecha</th>
-                                        <th className={s.th}>Circuito</th>
-                                        <th className={s.th}>Comprobante</th>
-                                        <th className={s.th}>Número</th>
-                                        <th className={s.th}>Descripción</th>
-                                        <th className={s.th}>Vencimiento</th>
-                                        <th className={s.th}>Moneda</th>
-                                        <th className={s.th}>TC</th>
-                                        <th className={s.th}>Condición</th>
-                                        {/* ARS */}
-                                        <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
-                                        {/* USD */}
-                                        <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredMovements.length > 0 ? filteredMovements.map((m, idx) => (
-                                        <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
-                                            <td className={s.cell}>{fmt(m.date, 'date')}</td>
-                                            <td className={s.cell}>{getCircuitoFallback(m.doc_type, m.circuit)}</td>
-                                            <td className={s.cell}>
-                                                <div className={s.statusBadge} style={{ textTransform: 'none' }}>
-                                                    {m.payment_status === 'PAID' ? <CheckCircle2 size={12} className={s.iconPaid} /> : 
-                                                     m.payment_status === 'PARTIAL' ? <Clock size={12} className={s.iconPartial} /> : 
-                                                     <AlertCircle size={12} className={s.iconOpen} />}
-                                                    <span className={s.docLabel}>{getComprobanteName(m.doc_type)}</span>
-                                                </div>
-                                            </td>
-                                            <td className={s.cell}>{m.number}</td>
-                                            <td className={s.cell} title={getDescripcionFallback(m.doc_type, m.description || m.notes)}>{getDescripcionFallback(m.doc_type, m.description || m.notes)}</td>
-                                            <td className={s.cell}>{m.due_date ? fmt(m.due_date, 'date') : '-'}</td>
-                                            <td className={s.cell}>{m.currency}</td>
-                                            <td className={s.cell}>{m.exchange_rate}</td>
-                                            <td className={s.cell} title={m.sale_condition}>{m.sale_condition || '-'}</td>
-                                            
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars > 0 ? fmt(m.amount_ars, 'ARS') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars < 0 ? fmt(Math.abs(m.amount_ars), 'ARS') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum} ${s.balanceArs}`}>{fmt(m.balance_ars, 'ARS')}</td>
+                        {/* Professional Ledger Table — 3-part layout */}
+                        <div className={s.tableWrapper}>
 
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd > 0 ? fmt(m.amount_usd, 'USD') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd < 0 ? fmt(Math.abs(m.amount_usd), 'USD') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`}>{fmt(m.balance_usd, 'USD')}</td>
+                            {/* 1. Fixed Header */}
+                            <div className={s.tableHead}>
+                                <table className={s.ledgerTable}>
+                                    <colgroup>
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '80px' }} />
+                                        <col style={{ width: '110px' }} />
+                                        <col style={{ width: '125px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '55px' }} />
+                                        <col style={{ width: '65px' }} />
+                                        <col style={{ width: 'auto' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                    </colgroup>
+                                    <thead className={s.thead}>
+                                        <tr className={s.groupHeader}>
+                                            <th colSpan={9}></th>
+                                            <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Valores en Pesos (ARS)</th>
+                                            <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Valores en Dólares (USD)</th>
                                         </tr>
-                                    )) : (
                                         <tr>
-                                            <td colSpan={15} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b', fontSize: '13px' }}>
-                                                {filters.view === 'customer' ? 'No hay movimientos como cliente en el período seleccionado.' : 
-                                                 filters.view === 'supplier' ? 'No hay movimientos como proveedor en el período seleccionado.' : 
-                                                 'No hay movimientos en el período seleccionado.'}
-                                            </td>
+                                            <th className={s.th}>Fecha</th>
+                                            <th className={s.th}>Circuito</th>
+                                            <th className={s.th}>Comprobante</th>
+                                            <th className={s.th}>Número</th>
+                                            <th className={s.th}>Descripción</th>
+                                            <th className={s.th}>Vencimiento</th>
+                                            <th className={s.th}>Moneda</th>
+                                            <th className={s.th}>TC</th>
+                                            <th className={s.th}>Condición</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Debe</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Haber</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Debe</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Haber</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                                <tfoot className={s.tfoot}>
-                                    <tr>
-                                        <td colSpan={9} className={s.totalLabel}>TOTALES ACUMULADOS</td>
-                                        <td className={s.cellTotal}>{fmt(totals.d_ars, 'ARS')}</td>
-                                        <td className={s.cellTotal}>{fmt(totals.h_ars, 'ARS')}</td>
-                                        <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceArs}`}>{fmt(totals.b_ars, 'ARS')}</td>
-                                        
-                                        <td className={s.cellTotal}>{fmt(totals.d_usd, 'USD')}</td>
-                                        <td className={s.cellTotal}>{fmt(totals.h_usd, 'USD')}</td>
-                                        <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceUsd}`}>{fmt(totals.b_usd, 'USD')}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                                    </thead>
+                                </table>
+                            </div>
+
+                            {/* 2. Scrollable Body */}
+                            <div className={s.tableBody}>
+                                <table className={s.ledgerTable}>
+                                    <colgroup>
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '80px' }} />
+                                        <col style={{ width: '110px' }} />
+                                        <col style={{ width: '125px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '55px' }} />
+                                        <col style={{ width: '65px' }} />
+                                        <col style={{ width: 'auto' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                    </colgroup>
+                                    <tbody>
+                                        {filteredMovements.length > 0 ? filteredMovements.map((m, idx) => (
+                                            <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
+                                                <td className={s.cell}>{fmt(m.date, 'date')}</td>
+                                                <td className={s.cell}>{getCircuitoFallback(m.doc_type, m.circuit)}</td>
+                                                <td className={s.cell}>
+                                                    <div className={s.statusBadge} style={{ textTransform: 'none' }}>
+                                                        {m.payment_status === 'PAID' ? <CheckCircle2 size={12} className={s.iconPaid} /> : 
+                                                         m.payment_status === 'PARTIAL' ? <Clock size={12} className={s.iconPartial} /> : 
+                                                         <AlertCircle size={12} className={s.iconOpen} />}
+                                                        <span className={s.docLabel}>{getComprobanteName(m.doc_type)}</span>
+                                                    </div>
+                                                </td>
+                                                <td className={s.cell}>{m.number}</td>
+                                                <td className={s.cell} title={getDescripcionFallback(m.doc_type, m.description || m.notes)}>{getDescripcionFallback(m.doc_type, m.description || m.notes)}</td>
+                                                <td className={s.cell}>{m.due_date ? fmt(m.due_date, 'date') : '-'}</td>
+                                                <td className={s.cell}>{m.currency}</td>
+                                                <td className={s.cell}>{m.exchange_rate}</td>
+                                                <td className={s.cell} title={m.sale_condition}>{m.sale_condition || '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars > 0 ? fmt(m.amount_ars, 'ARS') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars < 0 ? fmt(Math.abs(m.amount_ars), 'ARS') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum} ${s.balanceArs}`}>{fmt(m.balance_ars, 'ARS')}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd > 0 ? fmt(m.amount_usd, 'USD') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd < 0 ? fmt(Math.abs(m.amount_usd), 'USD') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`}>{fmt(m.balance_usd, 'USD')}</td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={15} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b', fontSize: '13px' }}>
+                                                    {filters.view === 'customer' ? 'No hay movimientos como cliente en el período seleccionado.' : 
+                                                     filters.view === 'supplier' ? 'No hay movimientos como proveedor en el período seleccionado.' : 
+                                                     'No hay movimientos en el período seleccionado.'}
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* 3. Fixed Footer — always anchored to bottom of tableWrapper */}
+                            <div className={s.tableFoot}>
+                                <table className={s.ledgerTable}>
+                                    <colgroup>
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '80px' }} />
+                                        <col style={{ width: '110px' }} />
+                                        <col style={{ width: '125px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '55px' }} />
+                                        <col style={{ width: '65px' }} />
+                                        <col style={{ width: 'auto' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                    </colgroup>
+                                    <tfoot className={s.tfoot}>
+                                        <tr>
+                                            <td colSpan={9} className={s.totalLabel}>TOTALES ACUMULADOS</td>
+                                            <td className={s.cellTotal}>{fmt(totals.d_ars, 'ARS')}</td>
+                                            <td className={s.cellTotal}>{fmt(totals.h_ars, 'ARS')}</td>
+                                            <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceArs}`}>{fmt(totals.b_ars, 'ARS')}</td>
+                                            <td className={s.cellTotal}>{fmt(totals.d_usd, 'USD')}</td>
+                                            <td className={s.cellTotal}>{fmt(totals.h_usd, 'USD')}</td>
+                                            <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceUsd}`}>{fmt(totals.b_usd, 'USD')}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
+                            </div>
+
+                        </div>  {/* end tableWrapper */}
 
                         {/* Unbilled Delivery Notes Section */}
                         {showUnbilled && (

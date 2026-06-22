@@ -13,10 +13,9 @@
 }
 
 .topBar {
-    position: sticky;
-    top: 70px;
-    z-index: 90;
-    background: rgba(255, 255, 255, 0.95);
+    position: relative;
+    z-index: 10;
+    background: rgba(255, 255, 255, 0.98);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     border-bottom: 1px solid #e2e8f0;
@@ -25,8 +24,9 @@
     align-items: center;
     justify-content: space-between;
     gap: 16px;
-    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
     flex-wrap: wrap;
+    flex-shrink: 0;
 }
 
 .entitySearchBox {
@@ -74,19 +74,30 @@
 }
 
 .container {
-    padding: 16px 20px;
+    padding: 10px 16px;
     flex: 1;
-    overflow-y: auto;
+    overflow: hidden;
     width: 100%;
-    scroll-behavior: smooth;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
 }
 
 /* KPI Summary Cards */
+.contentPanel {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
 .summaryHeader {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px;
-    margin-bottom: 28px;
+    gap: 10px;
+    margin-bottom: 10px;
+    flex-shrink: 0;
 }
 
 @media (max-width: 1200px) {
@@ -103,23 +114,23 @@
 
 .summaryCard {
     background: white;
-    border-radius: 16px;
-    padding: 20px;
+    border-radius: 10px;
+    padding: 10px 14px;
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 16px;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.02);
+    gap: 10px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
     border: 1px solid #f1f5f9;
-    transition: all 0.2s;
+    transition: transform 0.15s;
     min-width: 0;
 }
 
 .cardIconBox {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    border-radius: 12px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -144,27 +155,27 @@
 }
 
 .summaryCard:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.08);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.07);
 }
 
 .cardTitle {
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 800;
     color: #64748b;
     text-transform: uppercase;
-    letter-spacing: 0.1em;
+    letter-spacing: 0.08em;
 }
 
 .balanceValue {
-    font-size: 20px;
+    font-size: 16px;
     font-weight: 800;
-    letter-spacing: 0.03em;
+    letter-spacing: 0.02em;
     font-family: 'Outfit', sans-serif;
     color: #0f172a;
     display: flex;
     align-items: baseline;
-    gap: 4px;
+    gap: 3px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -173,52 +184,54 @@
 /* Filter Bar */
 .filterBar {
     background: white;
-    padding: 16px;
-    border-radius: 20px;
+    padding: 8px 12px;
+    border-radius: 10px;
     border: 1px solid #e2e8f0;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    margin-bottom: 24px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    margin-bottom: 8px;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 6px;
+    flex-shrink: 0;
 }
 
 .filterGrid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 16px;
-    align-items: flex-start;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 8px;
+    align-items: center;
 }
 
 .filterCol {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 3px;
 }
 
 .filterLabel {
-    font-size: 10px;
-    font-weight: 800;
+    font-size: 9px;
+    font-weight: 700;
     color: #94a3b8;
     text-transform: uppercase;
     letter-spacing: 0.05em;
+    line-height: 1;
 }
 
 .dateRange {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     background: #f8fafc;
-    padding: 0 12px;
-    border-radius: 12px;
-    height: 42px;
+    padding: 0 8px;
+    border-radius: 8px;
+    height: 32px;
     border: 1px solid #e2e8f0;
 }
 
 .dateInp {
     border: none;
     background: transparent;
-    font-size: 12px;
+    font-size: 11px;
     font-weight: 600;
     color: #1e293b;
     outline: none;
@@ -248,12 +261,12 @@
 }
 
 .glassSelect {
-    height: 42px;
+    height: 32px;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    padding: 0 12px;
-    font-size: 12px;
+    border-radius: 8px;
+    padding: 0 8px;
+    font-size: 11px;
     font-weight: 600;
     color: #1e293b;
     outline: none;
@@ -262,9 +275,9 @@
 
 .toggleButtons {
     background: #f1f5f9;
-    padding: 4px;
-    border-radius: 12px;
-    height: 42px;
+    padding: 3px;
+    border-radius: 8px;
+    height: 32px;
     display: flex;
 }
 
@@ -272,13 +285,14 @@
     flex: 1;
     border: none;
     background: transparent;
-    font-size: 10px;
+    font-size: 9px;
     font-weight: 800;
     color: #64748b;
     cursor: pointer;
-    border-radius: 8px;
-    transition: all 0.2s;
+    border-radius: 6px;
+    transition: all 0.15s;
     text-transform: uppercase;
+    padding: 0 6px;
 }
 
 .tglBtn.active {
@@ -297,22 +311,22 @@
     position: relative;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
-    height: 42px;
+    border-radius: 8px;
+    height: 32px;
     display: flex;
     align-items: center;
-    padding: 0 12px 0 40px;
+    padding: 0 8px 0 32px;
     flex: 1;
 }
 
-.searchIcon { position: absolute; left: 14px; color: #94a3b8; }
-.searchInp { border: none; background: transparent; width: 100%; outline: none; font-size: 13px; font-weight: 500; }
+.searchIcon { position: absolute; left: 10px; color: #94a3b8; }
+.searchInp { border: none; background: transparent; width: 100%; outline: none; font-size: 12px; font-weight: 500; }
 
 .clearBtn {
-    width: 42px;
-    height: 42px;
-    min-width: 42px;
-    border-radius: 12px;
+    width: 32px;
+    height: 32px;
+    min-width: 32px;
+    border-radius: 8px;
     border: none;
     background: #fee2e2;
     color: #dc2626;
@@ -320,18 +334,55 @@
     align-items: center;
     justify-content: center;
     cursor: pointer;
-    transition: all 0.2s;
+    transition: all 0.15s;
 }
 
 .clearBtn:hover { background: #dc2626; color: white; }
 
-/* Table Section */
-.tableContainer {
-    background: white;
-    border-radius: 20px;
+/* Table 3-part layout */
+.tableWrapper {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
     overflow: hidden;
     border: 1px solid #e2e8f0;
-    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.tableHead {
+    flex-shrink: 0;
+    overflow: hidden;
+    border-bottom: 1px solid #e2e8f0;
+}
+
+.tableBody {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: auto;
+    min-height: 0;
+}
+
+.tableBody::-webkit-scrollbar { width: 5px; height: 5px; }
+.tableBody::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+.tableFoot {
+    flex-shrink: 0;
+    border-top: 2px solid #cbd5e1;
+    background: #f1f5f9;
+    overflow: hidden;
+}
+
+.tableContainer {
+    background: white;
+    border-radius: 12px;
+    overflow: auto;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+    flex: 1;
+    min-height: 0;
 }
 
 .ledgerTable { width: 100%; border-collapse: collapse; }
@@ -347,8 +398,14 @@
     border-bottom: 1px solid #e2e8f0;
 }
 
+.thead {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+}
+
 .thead .th {
-    padding: 6px 12px;
+    padding: 6px 8px;
     font-size: 10px;
     font-weight: 700;
     color: #475569;
@@ -360,7 +417,7 @@
 .row { border-bottom: 1px solid #f1f5f9; transition: background 0.1s; }
 .row:hover { background: #f8fafc; }
 
-.cell { padding: 4px 12px; font-size: 11px; color: #334155; }
+.cell { padding: 3px 8px; font-size: 11px; color: #334155; }
 .cellNum { 
     text-align: right; 
     font-variant-numeric: tabular-nums; 
@@ -392,13 +449,40 @@
     letter-spacing: 0.05em;
 }
 
-/* Totals Row */
+/* Totals Row — sticky footer */
+.tfoot {
+    position: sticky;
+    bottom: 0;
+    z-index: 2;
+}
+
 .tfoot td {
-    padding: 6px 12px;
+    padding: 5px 8px;
     font-size: 11px;
     font-weight: 900;
-    background: #f8fafc;
-    border-top: 2px solid #e2e8f0;
+    background: #f1f5f9;
+    border-top: 2px solid #cbd5e1;
+}
+
+.totalLabel {
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #475569;
+}
+
+.cellTotal {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-weight: 700;
+    font-family: 'Inter', sans-serif;
+    font-size: 11px;
+}
+
+.finalBalance {
+    font-weight: 900;
+    font-size: 12px;
 }
 
 /* Empty State */
