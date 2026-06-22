@@ -52,28 +52,33 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
     const [showUnbilled, setShowUnbilled] = useState(false);
     const [saleConditions, setSaleConditions] = useState([]);
     
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yearStartStr = `${new Date().getFullYear()}-01-01`;
+
     const [filters, setFilters] = useState({
-        from_date: '',
-        to_date: '',
+        from_date: yearStartStr,
+        to_date: todayStr,
         currency: '',
         doc_type: '',
         sale_condition: '',
         only_unapplied: false,
         only_overdue: false,
-        search: ''
+        search: '',
+        view: 'customer'
     });
 
     const resetFilters = () => {
-        setFilters({
-            from_date: '',
-            to_date: '',
+        setFilters(prev => ({
+            from_date: yearStartStr,
+            to_date: todayStr,
             currency: '',
             doc_type: '',
             sale_condition: '',
             only_unapplied: false,
             only_overdue: false,
-            search: ''
-        });
+            search: '',
+            view: prev.view   // Preserve active view on reset
+        }));
     };
 
     const setDatePreset = (preset) => {
@@ -345,6 +350,10 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         }
     };
 
+    const handleSetView = (v) => {
+        setFilters(prev => ({ ...prev, view: v }));
+    };
+
     return (
         <div className={s.pageLayout}>
             {/* Sticky Professional Header */}
@@ -360,7 +369,32 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                         minChars={0}
                     />
                 </div>
-                
+
+                {/* Segmented View Selector — always visible in topBar */}
+                <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '10px', padding: '4px', gap: '2px', flexShrink: 0 }}>
+                    {[['customer','Cliente'],['supplier','Proveedor'],['consolidated','Consolidado']].map(([val, label]) => (
+                        <button
+                            key={val}
+                            onClick={() => handleSetView(val)}
+                            style={{
+                                padding: '7px 18px',
+                                borderRadius: '7px',
+                                border: 'none',
+                                background: filters.view === val ? 'white' : 'transparent',
+                                fontWeight: filters.view === val ? '700' : '500',
+                                color: filters.view === val ? '#1d4ed8' : '#64748b',
+                                boxShadow: filters.view === val ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                transition: 'all 0.18s',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className={s.actionsGroup}>
                     <Button variant="secondary" size="md" onClick={handleExport} className={s.exportBtn}>
                         <Download size={16} /> Exportar Excel
@@ -373,7 +407,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
 
             <div className={s.container}>
                 {selectedEntity ? (
-                    <div className={s.animate}>
+                    <div>
                         {/* Summary Header Cards */}
                         <div className={s.summaryHeader}>
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #1d4ed8' }}>
@@ -581,7 +615,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {filteredMovements.map((m, idx) => (
+                                    {filteredMovements.length > 0 ? filteredMovements.map((m, idx) => (
                                         <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
                                             <td className={s.cell}>{fmt(m.date, 'date')}</td>
                                             <td className={s.cell}>{getCircuitoFallback(m.doc_type, m.circuit)}</td>
@@ -608,7 +642,15 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                             <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd < 0 ? fmt(Math.abs(m.amount_usd), 'USD') : '-'}</td>
                                             <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`}>{fmt(m.balance_usd, 'USD')}</td>
                                         </tr>
-                                    ))}
+                                    )) : (
+                                        <tr>
+                                            <td colSpan={15} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b', fontSize: '13px' }}>
+                                                {filters.view === 'customer' ? 'No hay movimientos como cliente en el período seleccionado.' : 
+                                                 filters.view === 'supplier' ? 'No hay movimientos como proveedor en el período seleccionado.' : 
+                                                 'No hay movimientos en el período seleccionado.'}
+                                            </td>
+                                        </tr>
+                                    )}
                                 </tbody>
                                 <tfoot className={s.tfoot}>
                                     <tr>

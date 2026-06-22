@@ -55,12 +55,14 @@ def get_entity_ledger(
     only_unapplied: bool = Query(False),
     only_overdue: bool = Query(False),
     sale_condition: Optional[str] = Query(None),
+    view: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """
     Retorna el estado de cuenta (libro mayor) de una entidad.
     Cada movimiento incluye saldo acumulado en ARS y USD.
     Filtra por cost_center si se provee (1: ARCA, 2: Interno).
+    El parámetro opcional `view` (customer, supplier, consolidated) permite separar circuitos.
     """
     from app.modules.entities.account_statement_service import build_entity_ledger
     
@@ -74,7 +76,8 @@ def get_entity_ledger(
         cost_center=cost_center,
         only_unapplied=only_unapplied,
         only_overdue=only_overdue,
-        sale_condition=sale_condition
+        sale_condition=sale_condition,
+        view=view
     )
     
     # El frontend espera los movimientos en orden ASCENDENTE (más viejo arriba, lo más nuevo abajo)

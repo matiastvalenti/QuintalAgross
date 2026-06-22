@@ -20,9 +20,11 @@ def build_entity_ledger(
     only_unapplied: bool = False,
     only_overdue: bool = False,
     sale_condition: Optional[str] = None,
+    view: Optional[str] = None,
 ) -> List[dict]:
     # Importar internamente para evitar dependencias circulares si las hay
     from app.modules.entities.accounts_router import DEBIT_TYPES
+    from app.db.models.models import DocumentType
 
     # 0. Cache for sale conditions to ensure they show up even if relationship is tricky
     all_sc = db.query(SaleCondition).all()
@@ -42,6 +44,19 @@ def build_entity_ledger(
         Document.entity_id == entity_id,
         Document.status != DocumentStatus.CANCELLED
     )
+
+    if view == 'customer':
+        customer_types = {
+            DocumentType.INVOICE, DocumentType.FCE_MIPYME, DocumentType.DEBIT_NOTE,
+            DocumentType.CREDIT_NOTE, DocumentType.RECEIPT
+        }
+        query = query.filter(Document.doc_type.in_(customer_types))
+    elif view == 'supplier':
+        supplier_types = {
+            DocumentType.PURCHASE_INVOICE, DocumentType.PURCHASE_DEBIT_NOTE,
+            DocumentType.PURCHASE_CREDIT_NOTE, DocumentType.PAYMENT, DocumentType.LPG_PRIMARY
+        }
+        query = query.filter(Document.doc_type.in_(supplier_types))
 
     # Filtro por centro de costo
     if cost_center is not None:
@@ -107,7 +122,12 @@ def build_entity_ledger(
 
     for doc in docs:
         # 4.1 Identificación de signo del impacto
-        is_positive_impact = doc.doc_type in DEBIT_TYPES
+        if view == 'customer':
+            is_positive_impact = doc.doc_type in {DocumentType.INVOICE, DocumentType.FCE_MIPYME, DocumentType.DEBIT_NOTE}
+        elif view == 'supplier':
+            is_positive_impact = doc.doc_type in {DocumentType.PURCHASE_INVOICE, DocumentType.PURCHASE_DEBIT_NOTE, DocumentType.LPG_PRIMARY}
+        else:
+            is_positive_impact = doc.doc_type in DEBIT_TYPES
         is_usd = str(doc.currency) in ("USD", "CurrencyType.USD")
 
         total_usd_doc = float(doc.total_amount or 0)
