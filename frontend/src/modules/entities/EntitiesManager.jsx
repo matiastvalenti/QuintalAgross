@@ -129,12 +129,13 @@ export default function EntitiesManager({ initialType = 'client' }) {
                                 initialType={selectedType === 'mixed' ? 'client' : selectedType}
                                 onSave={handleSave}
                                 onCancel={() => setIsEditing(false)}
-                                onSelectExisting={(existing) => {
+                                onSelectExisting={async (existing) => {
                                     if (existing.type) {
                                         setSelectedType(existing.type);
                                     }
                                     setSelectedEntity(existing);
                                     setIsEditing(true);
+                                    fetchEntities(true);
                                 }}
                             />
                         </div>

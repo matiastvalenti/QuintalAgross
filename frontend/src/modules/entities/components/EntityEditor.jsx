@@ -145,6 +145,39 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
 
     const { showToast } = useToast ? useToast() : { showToast: console.log };
 
+    const handleConvertToMixed = async (existingId) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/entities/${existingId}/convert-to-mixed`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || 'Error al convertir la entidad.');
+            }
+            const saved = await res.json();
+            setDuplicateError(null);
+            if (onSelectExisting) {
+                await onSelectExisting(saved);
+            }
+            if (showToast) {
+                showToast("La entidad fue convertida a Mixta.", "success");
+            } else {
+                alert("La entidad fue convertida a Mixta.");
+            }
+        } catch (err) {
+            if (showToast) {
+                showToast(err.message, "error");
+            } else {
+                alert(err.message);
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
         setSaving(true);
@@ -617,8 +650,8 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                         width: '450px',
                         boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
                     }}>
-                        <h3 style={{ margin: '0 0 12px 0', color: '#e11d48', fontSize: '18px', fontWeight: 700 }}>
-                            CUIT Duplicado
+                        <h3 style={{ margin: '0 0 12px 0', color: 'var(--text)', fontSize: '18px', fontWeight: 700 }}>
+                            CUIT ya registrado
                         </h3>
                         <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563' }}>
                             Ya existe una entidad registrada con ese CUIT.
@@ -637,22 +670,23 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                         }}>
                             <div><strong>Nombre:</strong> {duplicateError.existing_entity?.name}</div>
                             <div><strong>Código:</strong> {duplicateError.existing_entity?.code}</div>
-                            <div><strong>Tipo:</strong> {duplicateError.existing_entity?.type === 'client' ? 'Cliente' : duplicateError.existing_entity?.type === 'provider' ? 'Proveedor' : duplicateError.existing_entity?.type === 'mixed' ? 'Mixto' : duplicateError.existing_entity?.type}</div>
+                            <div><strong>Tipo actual:</strong> {duplicateError.existing_entity?.type === 'client' ? 'Cliente' : duplicateError.existing_entity?.type === 'provider' ? 'Proveedor' : duplicateError.existing_entity?.type === 'mixed' ? 'Mixto' : duplicateError.existing_entity?.type}</div>
                             <div><strong>CUIT:</strong> {duplicateError.existing_entity?.tax_id}</div>
                         </div>
 
-                        <div style={{ display: 'flex', justifyContent: 'end', gap: '12px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'end', gap: '8px', flexWrap: 'wrap' }}>
                             <button
                                 type="button"
                                 onClick={() => setDuplicateError(null)}
                                 style={{
-                                    padding: '8px 16px',
+                                    padding: '8px 14px',
                                     background: 'white',
                                     border: '1px solid #d1d5db',
                                     borderRadius: '6px',
                                     cursor: 'pointer',
-                                    fontSize: '13px',
-                                    fontWeight: 600
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#4b5563'
                                 }}
                             >
                                 Cancelar
@@ -666,17 +700,33 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                     setDuplicateError(null);
                                 }}
                                 style={{
-                                    padding: '8px 16px',
+                                    padding: '8px 14px',
+                                    background: '#f1f5f9',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#1e293b'
+                                }}
+                            >
+                                Ver entidad existente
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleConvertToMixed(duplicateError.existing_entity?.id)}
+                                style={{
+                                    padding: '8px 14px',
                                     background: 'var(--primary)',
                                     color: 'white',
                                     border: 'none',
                                     borderRadius: '6px',
                                     cursor: 'pointer',
-                                    fontSize: '13px',
+                                    fontSize: '12px',
                                     fontWeight: 600
                                 }}
                             >
-                                Ver entidad existente
+                                Convertir a Mixto
                             </button>
                         </div>
                     </div>

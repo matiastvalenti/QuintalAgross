@@ -214,6 +214,23 @@ def update_entity(entity_id: str, entity: EntityUpdate, db: Session = Depends(ge
     db.refresh(db_entity)
     return db_entity
 
+@router.patch("/{entity_id}/convert-to-mixed", response_model=EntitySchema, dependencies=[Depends(check_permission("customers", "edit"))])
+def convert_to_mixed(entity_id: str, db: Session = Depends(get_db)):
+    db_entity = db.query(Entity).filter(Entity.id == entity_id).first()
+    if db_entity is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    if db_entity.type == EntityType.MIXED:
+        return db_entity
+    if db_entity.type == EntityType.EMPLOYEE:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede convertir automáticamente un empleado a entidad mixta."
+        )
+    db_entity.type = EntityType.MIXED
+    db.commit()
+    db.refresh(db_entity)
+    return db_entity
+
 @router.get("/{entity_id}/dashboard", response_model=EntityDashboardSummary)
 def get_entity_dashboard(entity_id: str, cost_center: Optional[int] = None, db: Session = Depends(get_db)):
     db_entity = db.query(Entity).filter(Entity.id == entity_id).first()
