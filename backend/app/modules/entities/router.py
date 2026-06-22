@@ -504,10 +504,42 @@ def get_entity_dashboard(entity_id: str, cost_center: Optional[int] = None, db: 
 def delete_entity(entity_id: str, db: Session = Depends(get_db)):
     db_entity = db.query(Entity).filter(Entity.id == entity_id).first()
     if db_entity is None: raise HTTPException(status_code=404, detail="Entity not found")
+    
+    from app.db.models.commercial_models import SalesOrder, PurchaseOrder
+    from app.db.models.models import ExpenseClaim
+
+    docs_count = db.query(Document).filter((Document.entity_id == entity_id) | (Document.salesperson_id == entity_id)).count()
     movements_count = db.query(AccountMovement).filter(AccountMovement.entity_id == entity_id).count()
-    documents_count = db.query(Document).filter(Document.entity_id == entity_id).count()
-    if movements_count > 0 or documents_count > 0:
-        raise HTTPException(status_code=400, detail=f"No se puede eliminar: Tiene movimientos/documentos asociados.")
+    sales_orders_count = db.query(SalesOrder).filter((SalesOrder.entity_id == entity_id) | (SalesOrder.salesperson_id == entity_id)).count()
+    delivery_notes_count = db.query(DeliveryNote).filter((DeliveryNote.entity_id == entity_id) | (DeliveryNote.salesperson_id == entity_id)).count()
+    purchase_orders_count = db.query(PurchaseOrder).filter((PurchaseOrder.entity_id == entity_id) | (PurchaseOrder.salesperson_id == entity_id)).count()
+    cheques_count = db.query(Cheque).filter((Cheque.entity_id == entity_id) | (Cheque.endorsee_id == entity_id)).count()
+    expense_claims_count = db.query(ExpenseClaim).filter(ExpenseClaim.entity_id == entity_id).count()
+
+    total_deps = (
+        docs_count + movements_count + sales_orders_count + 
+        delivery_notes_count + purchase_orders_count + cheques_count + 
+        expense_claims_count
+    )
+
+    if total_deps > 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "ENTITY_HAS_DEPENDENCIES",
+                "message": "No se puede eliminar la entidad porque tiene operaciones asociadas.",
+                "dependencies": {
+                    "documents": docs_count,
+                    "account_movements": movements_count,
+                    "sales_orders": sales_orders_count,
+                    "delivery_notes": delivery_notes_count,
+                    "purchase_orders": purchase_orders_count,
+                    "cheques": cheques_count,
+                    "expense_claims": expense_claims_count
+                }
+            }
+        )
+
     if db_entity.linked_entity_id:
         linked_entity = db.query(Entity).filter(Entity.id == db_entity.linked_entity_id).first()
         if linked_entity: linked_entity.linked_entity_id = None

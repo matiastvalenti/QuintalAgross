@@ -196,6 +196,32 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
             
             if (!res.ok) {
                 if (res.status === 400) {
+                    try {
+                        const errData = await res.json();
+                        if (errData.detail && errData.detail.code === "ENTITY_HAS_DEPENDENCIES") {
+                            const labels = {
+                                documents: "Comprobantes",
+                                account_movements: "Movimientos de cuenta",
+                                sales_orders: "Órdenes de venta",
+                                purchase_orders: "Órdenes de compra",
+                                delivery_notes: "Remitos",
+                                cheques: "Cheques",
+                                expense_claims: "Rendiciones de gastos"
+                            };
+                            const deps = errData.detail.dependencies || {};
+                            const activeDeps = Object.entries(deps)
+                                .filter(([_, count]) => count > 0)
+                                .map(([key, count]) => `${labels[key] || key}: ${count}`)
+                                .join(", ");
+                            
+                            const msg = activeDeps 
+                                ? `No se puede eliminar esta entidad porque tiene operaciones asociadas. (${activeDeps})`
+                                : "No se puede eliminar esta entidad porque tiene operaciones asociadas.";
+                            throw new Error(msg);
+                        }
+                    } catch (pErr) {
+                        console.error("Error parsing validation error", pErr);
+                    }
                     throw new Error('No se puede eliminar esta entidad porque tiene comprobantes, movimientos u operaciones asociadas.');
                 }
                 if (res.status === 403) {
