@@ -73,8 +73,9 @@ export default function DeliveryNoteForm(props) {
   const { costCenter } = useCostCenter();
 
   const [mode, setMode] = useState(initialMode);
-  const [id, setId] = useState(initialId);
   const [loading, setLoading] = useState(mode === "edit");
+  const [saving, setSaving] = useState(false);
+  const [id, setId] = useState(initialId);
   const [items, setItems ] = useState([]);
   const [activeTab, setActiveTab ] = useState("items");
   const [sourceId, setSourceId] = useState(props.initialSourceId || ov_id || '');
@@ -672,7 +673,7 @@ export default function DeliveryNoteForm(props) {
         }
     }
 
-    setLoading(true);
+    setSaving(true);
     const token = localStorage.getItem("token");
     const payload = {
         entity_id: entity.id,
@@ -742,7 +743,7 @@ export default function DeliveryNoteForm(props) {
             showToast(err.detail || "Error al guardar", "error");
         }
     } finally {
-        setLoading(false);
+        setSaving(false);
     }
   };
 
@@ -795,9 +796,9 @@ export default function DeliveryNoteForm(props) {
                   </div>
               </div>
               <div className={s.headerActions}>
-                  <button className={s.saveBtn} onClick={handleSave} disabled={isLocked} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                      <Save size={16} />
-                      Guardar
+                  <button className={s.saveBtn} onClick={handleSave} disabled={isLocked || saving} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                      {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
+                      {saving ? "Guardando..." : "Guardar"}
                   </button>
                   <div className={s.actionGroup}>
                       <button className={s.actionBtn} disabled={!id || isLocked} onClick={async () => {
@@ -982,7 +983,7 @@ export default function DeliveryNoteForm(props) {
                   </div>
 
                   {/* Bloque Operativo / Logística */}
-                  <div className={s.sideBlock} style={{ height: '100%' }}>
+                  <div className={s.sideBlock}>
                       <div className={s.sideBlockTitle}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
                       <div className={s.sideField}>
                           <label>TRANSPORTE</label>

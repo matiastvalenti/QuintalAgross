@@ -80,9 +80,10 @@ export default function SalesOrderForm(props) {
   const { costCenter } = useCostCenter();
 
   const [mode, setMode] = useState(initialMode);
-  const [id, setId] = useState(initialId);
+  const [id, setId] = useState(initialId || null);
   const [loading, setLoading] = useState(initialMode === "edit");
   const [secondaryTab, setSecondaryTab] = useState('billing');
+  const [saving, setSaving] = useState(false);
   // --- Header Data ---
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
@@ -166,7 +167,7 @@ export default function SalesOrderForm(props) {
   }, [initialData, initialLines, mode]);
 
   useEffect(() => {
-    if (mode === "edit" && id) fetchSalesOrder();
+    if (mode === "edit" && id) fetchSalesOrder(id);
     else if (mode === "new") {
         fetchExchangeRate();
         fetchNextNumber(pv);
@@ -175,7 +176,7 @@ export default function SalesOrderForm(props) {
 
   useEffect(() => {
     const refreshOV = () => {
-      if (mode === "edit" && id) fetchSalesOrder();
+      if (mode === "edit" && id) fetchSalesOrder(id);
     };
     window.addEventListener('delivery-note-changed', refreshOV);
     return () => window.removeEventListener('delivery-note-changed', refreshOV);
@@ -321,10 +322,10 @@ export default function SalesOrderForm(props) {
     }
   };
 
-  const fetchSalesOrder = async (overrideId = null) => {
-    const targetId = overrideId || id;
+  const fetchSalesOrder = async (orderId, silent = false) => {
+    const targetId = orderId || id;
     if (!targetId) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     const token = localStorage.getItem("token");
     const headers = { Authorization: `Bearer ${token}` };
     try {
@@ -334,7 +335,7 @@ export default function SalesOrderForm(props) {
     } catch (e) {
       showToast("Error al cargar orden", "error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -394,6 +395,7 @@ export default function SalesOrderForm(props) {
     if (!entity) return showToast("Seleccione un cliente", "warning");
     if (items.length === 0) return showToast("Agregue productos", "warning");
 
+    setSaving(true);
     const payload = {
       entity_id: entity.id,
       number: joinFullNumber(pv, number),
@@ -440,13 +442,15 @@ export default function SalesOrderForm(props) {
         setMode("edit");
         setId(savedId);
         setIsReadOnly(true); // Switch to read-only after save
-        fetchSalesOrder(savedId);
+        fetchSalesOrder(savedId, true);
       } else {
         const err = await res.json();
         showToast(err.detail || "Error al guardar", "error");
       }
     } catch (e) {
       showToast("Error de conexión", "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -798,9 +802,9 @@ export default function SalesOrderForm(props) {
                         {hasProgress ? 'Bloqueado' : 'Editar'}
                     </button>
                   ) : (
-                    <button className={s.saveBtn} onClick={handleSave}>
-                        <Save size={16} />
-                        Guardar
+                    <button className={s.saveBtn} onClick={handleSave} disabled={saving}>
+                        {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
+                        {saving ? "Guardando..." : "Guardar"}
                     </button>
                   )}
                   <div className={s.actionGroup}>
@@ -812,7 +816,6 @@ export default function SalesOrderForm(props) {
                         style={pendingCount > 0 && id ? { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' } : {}}
                       >
                           <Truck size={18} />
-                          {pendingCount > 0 && id && <span style={{ position: 'absolute', top: -6, right: -6, background: '#ef4444', color: 'white', borderRadius: '50%', width: 16, height: 16, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900 }}>{pendingCount}</span>}
                       </button>
                       <button 
                         className={s.actionBtn} 
@@ -822,7 +825,6 @@ export default function SalesOrderForm(props) {
                         style={pendingInvoicedCount > 0 && id ? { background: '#f5f3ff', color: '#7c3aed', border: '1.5px solid #ddd6fe' } : {}}
                       >
                           <Receipt size={18} />
-                          {pendingInvoicedCount > 0 && id && <span style={{ position: 'absolute', top: -6, right: -6, background: '#7c3aed', color: 'white', borderRadius: '50%', width: 16, height: 16, fontSize: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900 }}>{pendingInvoicedCount}</span>}
                       </button>
                       <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/sales/sales-orders/${id}/pdf`, '_blank')} title={!id ? "Guarde para imprimir" : "Imprimir Orden de Venta"}>
                           <Printer size={18} />
@@ -876,7 +878,7 @@ export default function SalesOrderForm(props) {
                       </div>
                   )}
 
-                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden' }}>
+                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden', flex: 1, minHeight: 0 }}>
                       {items.length > 0 ? (
                         <>
                             {isReadOnly ? null : (
@@ -912,7 +914,6 @@ export default function SalesOrderForm(props) {
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                     <div>
                                                         <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.description || item.name || item.product?.name || ''}</div>
-                                                        <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b', marginTop: 2 }}>Marca: {item.brand || item.product?.brand?.name || '-'}</div>
                                                     </div>
                                                     {qtyDelivered > 0 && (
                                                         <div style={{ fontSize: 10, fontWeight: 800, color: qtyDelivered >= qtyOrdered ? '#059669' : '#d97706', background: qtyDelivered >= qtyOrdered ? '#d1fae5' : '#fef3c7', padding: '4px 8px', borderRadius: 4 }}>
@@ -925,7 +926,7 @@ export default function SalesOrderForm(props) {
                                                     {hasPackages ? (
                                                         <>
                                                             <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qtyPackages} envases</div>
-                                                            <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {qtyPackages} envases = {totalQty.toFixed(2)} {item._unit_label || 'u'}</div>
+                                                            <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {totalQty.toFixed(2)} {item._unit_label || 'u'}</div>
                                                         </>
                                                     ) : (
                                                         <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {totalQty.toFixed(2)} {item._unit_label || 'u'}</div>
@@ -933,7 +934,7 @@ export default function SalesOrderForm(props) {
                                                     
                                                     <div><span style={{ fontWeight: 800 }}>Costo:</span> {fmtValue(item.cost_price)}</div>
                                                     <div><span style={{ fontWeight: 800 }}>Precio:</span> {fmtValue(item.unit_price)} / {item._unit_label || 'u'}</div>
-                                                    <div><span style={{ fontWeight: 800 }}>Utilidad:</span> <span style={{ color: '#059669', fontWeight: 700 }}>{fmtValue(utilidad)}</span></div>
+                                                    <div><span style={{ fontWeight: 800 }}>Comisión:</span> <span style={{ color: '#059669', fontWeight: 700 }}>{fmtValue(utilidad)}</span></div>
                                                     
                                                     <div><span style={{ fontWeight: 800 }}>Subtotal:</span> {fmtValue(subtotalNeto)}</div>
                                                     <div><span style={{ fontWeight: 800 }}>IVA:</span> {fmtValue(vatAmount)}</div>
@@ -997,6 +998,24 @@ export default function SalesOrderForm(props) {
                         </div>
                       )}
                   </div>
+
+                  {/* OBSERVACIONES (Debajo de productos, misma columna) */}
+                  <div className={s.sideBlock} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', gap: 6, height: 80, flexShrink: 0 }}>
+                      <div className={s.sideBlockTitle} style={{ margin: 0, padding: 0 }}><FileText size={12}/> OBSERVACIONES</div>
+                      {isReadOnly ? (
+                          <div style={{ flex: 1, overflowY: 'auto', fontSize: 11, color: '#475569', whiteSpace: 'pre-wrap', lineHeight: 1.4, padding: '2px 4px' }}>
+                              {observations || 'Sin observaciones'}
+                          </div>
+                      ) : (
+                          <textarea
+                              className={s.sideInput}
+                              style={{ flex: 1, resize: 'none', width: '100%', padding: '6px 8px', textAlign: 'left', lineHeight: 1.4, background: '#fff', border: '1px solid #cbd5e1' }}
+                              value={observations}
+                              onChange={e => setObservations(e.target.value)}
+                              placeholder="Añadir observaciones..."
+                          />
+                      )}
+                  </div>
               </div>
 
               {/* Columna Derecha: Panel Lateral Administrativo */}
@@ -1007,10 +1026,10 @@ export default function SalesOrderForm(props) {
                       <div className={s.sideField}>
                           <label>NOMBRE</label>
                           {isReadOnly ? (
-                              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text)', textAlign: 'right' }}>{entity?.name || '-'}</div>
+                              <div className={s.sideInput}>{entity?.name || '-'}</div>
                           ) : (
-                              <div style={{ flex: 1 }}>
-                                  <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
+                              <div style={{ width: '60%' }}>
+                                  <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="side" />
                               </div>
                           )}
                       </div>
@@ -1037,7 +1056,7 @@ export default function SalesOrderForm(props) {
                   </div>
 
                   {/* Bloque Comercial */}
-                  <div className={s.sideBlock} style={{ height: '100%' }}>
+                  <div className={s.sideBlock}>
                       <div className={s.sideBlockTitle}><ShoppingBag size={12}/> COMERCIAL</div>
 
                       <div className={s.sideField}>
@@ -1160,12 +1179,6 @@ export default function SalesOrderForm(props) {
                   <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{salespersonId ? '2.00%' : '0%'}</div>
                   {nextLogicalAction === 'COMISION' && <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); }}>Liquidar</button>}
               </div>
-
-              {/* OBSERVACIONES COMPACTAS */}
-              <div className={s.relationCard} style={{ maxWidth: '140px', background: 'transparent', border: 'none', paddingLeft: 8, cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
-                  <div className={s.nodeTitle} style={{ color: '#64748b' }}>OBSERVACIONES</div>
-                  <div className={s.obsText} style={{ marginTop: 4 }}>{observations || 'Sin observaciones'}</div>
-              </div>
           </div>
           {/* Operational Summary */}
           <div className={s.summaryPanel}>
@@ -1266,22 +1279,21 @@ export default function SalesOrderForm(props) {
 
       {/* Remito Selection Modal */}
       <Modal open={showRemitoModal} title="Seleccionar ítems a remitir" onClose={() => setShowRemitoModal(false)} wide>
-          <div style={{ padding: '0 24px 24px' }}>
-            <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20, fontWeight: 600 }}>
-              Seleccioná los productos y cantidades que querés incluir en este remito.
-              Lo que no remitas quedará como <strong>pendiente</strong> en la orden.
+          <div style={{ padding: '0 20px 20px' }}>
+            <p style={{ fontSize: 12, color: '#64748b', marginBottom: 16, marginTop: 0 }}>
+              Seleccioná los productos y cantidades a incluir en este remito. Lo restante quedará como pendiente.
             </p>
 
             {/* Item list */}
-            <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{ borderRadius: 12, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 16 }}>
               {/* Header */}
-              <div style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '10px 16px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', alignItems: 'center' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '32px 2.5fr 100px 100px 100px 120px', gap: 8, padding: '8px 12px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontSize: 10, fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', alignItems: 'center' }}>
                 <div></div>
                 <div>PRODUCTO</div>
                 <div style={{ textAlign: 'center' }}>PEDIDO</div>
                 <div style={{ textAlign: 'center' }}>YA REMIT.</div>
                 <div style={{ textAlign: 'center' }}>PENDIENTE</div>
-                <div style={{ textAlign: 'center' }}>A REMITIR AHORA</div>
+                <div style={{ textAlign: 'center' }}>A REMITIR</div>
               </div>
               {items.map(item => {
                 const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || item._unit_content || 1);
@@ -1299,7 +1311,7 @@ export default function SalesOrderForm(props) {
                 const isSelected = currentQty > 0;
 
                 return (
-                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '14px 16px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', background: isSelected ? '#eff6ff' : '#fff', transition: 'background 0.15s' }}>
+                  <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '32px 2.5fr 100px 100px 100px 120px', gap: 8, padding: '10px 12px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', background: isSelected ? '#f8fafc' : '#fff', borderLeft: isSelected ? '3px solid #3b82f6' : '3px solid transparent', transition: 'all 0.15s' }}>
                     <div style={{ display: 'flex', justifyContent: 'center' }}>
                       {pendingBaseQty > 0 ? (
                         <button
@@ -1318,25 +1330,27 @@ export default function SalesOrderForm(props) {
                         <AlertCircle size={18} style={{ color: '#059669' }} title="Totalmente remitido" />
                       )}
                     </div>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>{item.product?.name || item.name || item.description || 'Sin nombre'}</div>
-                      {(item.product?.brand?.name || item.brand) && <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{item.product?.brand?.name || item.brand}</div>}
-                      {pendingBaseQty <= 0 && <div style={{ fontSize: 10, fontWeight: 700, color: '#059669' }}>✓ Totalmente remitido</div>}
+                    <div style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#1e293b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {item.product?.name || item.name || item.description || 'Sin nombre'}
+                        {(item.product?.brand?.name || item.brand) && <span style={{ color: '#94a3b8', fontWeight: 600 }}> {item.product?.brand?.name || item.brand}</span>}
+                      </div>
+                      {pendingBaseQty <= 0 && <div style={{ fontSize: 10, fontWeight: 700, color: '#059669', marginTop: 2 }}>✓ Totalmente remitido</div>}
                     </div>
                     {/* PEDIDO */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{factor > 1 ? `${orderedPackages.toString().replace(/\.00$/, '')} env.` : `${orderedBaseQty} und.`}</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{orderedBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>{factor > 1 ? `${orderedPackages.toString().replace(/\.00$/, '')} env.` : `${orderedBaseQty} und.`}</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{orderedBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* YA REMIT. */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{factor > 1 ? `${deliveredPackages.toString().replace(/\.00$/, '')} env.` : `${deliveredBaseQty} und.`}</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{deliveredBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{factor > 1 ? `${deliveredPackages.toString().replace(/\.00$/, '')} env.` : `${deliveredBaseQty} und.`}</div>
+                      <div style={{ fontSize: 10, color: '#94a3b8' }}>{deliveredBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* PENDIENTE */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: pendingBaseQty > 0 ? '#d97706' : '#059669' }}>{factor > 1 ? `${pendingPackages.toString().replace(/\.00$/, '')} env.` : `${pendingBaseQty} und.`}</div>
-                      <div style={{ fontSize: 10, fontWeight: 600, color: pendingBaseQty > 0 ? '#d97706' : '#059669' }}>{pendingBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: pendingBaseQty > 0 ? '#1e293b' : '#059669' }}>{factor > 1 ? `${pendingPackages.toString().replace(/\.00$/, '')} env.` : `${pendingBaseQty} und.`}</div>
+                      <div style={{ fontSize: 10, color: pendingBaseQty > 0 ? '#64748b' : '#059669' }}>{pendingBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
                       {pendingBaseQty > 0 ? (
@@ -1351,9 +1365,9 @@ export default function SalesOrderForm(props) {
                               const val = Math.min(parseFloat(e.target.value) || 0, pendingPackages);
                               setRemitoQtys(prev => ({ ...prev, [item.id]: val }));
                             }}
-                            style={{ width: 90, padding: '6px 10px', borderRadius: 10, border: `2px solid ${isSelected ? '#3b82f6' : '#e2e8f0'}`, textAlign: 'center', fontWeight: 800, fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none' }}
+                            style={{ width: 80, height: 32, padding: '0 8px', borderRadius: 6, border: `1px solid ${isSelected ? '#3b82f6' : '#cbd5e1'}`, textAlign: 'center', fontWeight: 700, fontSize: 12, color: '#1e293b', background: '#fff', outline: 'none' }}
                           />
-                          <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2).replace(/\.00$/, '')} {unitLabel}</div>
+                          <div style={{ fontSize: 9, color: '#64748b' }}>= {(currentQty * factor).toFixed(2).replace(/\.00$/, '')} {unitLabel}</div>
                         </>
                       ) : (
                         <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>—</span>
@@ -1366,17 +1380,17 @@ export default function SalesOrderForm(props) {
             </div>
 
             {/* Footer actions */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>
-                {Object.values(remitoQtys).filter(q => q > 0).length} de {items.filter(i => parseFloat(i.qty || 0) - parseFloat(i.qty_delivered || 0) > 0).length} ítems pendientes seleccionados
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
+              <div style={{ fontSize: 12, color: '#64748b', fontWeight: 600 }}>
+                {Object.values(remitoQtys).filter(q => q > 0).length} de {items.filter(i => parseFloat(i.qty || 0) - parseFloat(i.qty_delivered || 0) > 0).length} ítems seleccionados
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
-                <button onClick={() => setShowRemitoModal(false)} style={{ padding: '10px 22px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+                <button onClick={() => setShowRemitoModal(false)} style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 12 }}>Cancelar</button>
                 <button
                   onClick={handleConfirmRemito}
-                  style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: '#1d4ed8', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+                  style={{ padding: '8px 16px', borderRadius: 8, border: 'none', background: '#2563eb', color: 'white', fontWeight: 700, cursor: 'pointer', fontSize: 12, display: 'flex', alignItems: 'center', gap: 6 }}
                 >
-                  <Truck size={16} /> Generar Remito
+                  <Truck size={14} /> Generar Remito
                 </button>
               </div>
             </div>

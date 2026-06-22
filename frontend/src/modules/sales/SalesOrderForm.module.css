@@ -1,6 +1,19 @@
 /* Definitive Sales Order Design - Simplified */
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Serif:wght@700;800;900&display=swap');
 
+.spinnerSmall {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #ffffff;
+    animation: spin 0.8s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
 .formCard {
     background: #ffffff;
     width: 100%;
@@ -22,9 +35,10 @@
     border-radius: 0;
     box-shadow: none;
     padding: 16px 24px;
-    height: 100vh;
+    min-height: 100vh;
+    height: auto;
     box-sizing: border-box;
-    overflow: hidden;
+    overflow: visible;
 }
 
 /* Header Area */
@@ -254,20 +268,20 @@
     display: grid;
     grid-template-columns: 70% calc(30% - 16px);
     gap: 16px;
-    min-height: 0;
-    overflow: hidden;
+    align-items: stretch;
 }
 
 .leftCol {
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    gap: 12px;
     min-height: 0;
+    height: 100%;
 }
 
 .rightCol {
-    display: grid;
-    grid-template-rows: auto 1fr;
+    display: flex;
+    flex-direction: column;
     gap: 16px;
     height: 100%;
     overflow: hidden;
@@ -328,13 +342,15 @@
     border: none;
     border-radius: 6px;
     padding: 2px 6px;
-    height: 22px;
+    height: 28px;
+    line-height: 24px;
     font-family: var(--font-sans);
-    font-size: 10px;
-    font-weight: 800;
+    font-size: 11px;
+    font-weight: 700;
     color: #1e293b;
     width: 60%;
     text-align: right;
+    box-sizing: border-box;
 }
 .sideSelect {
     text-align: left;
@@ -379,14 +395,16 @@
     display: flex;
     flex-direction: column;
     border: 1px solid #e2e8f0;
-    height: 316px;
+    min-height: 140px;
     overflow: hidden;
-    flex-shrink: 0;
+    flex: 1;
+    min-height: 0;
 }
 
 .itemsList {
-    height: 288px;
-    max-height: 288px;
+    height: auto;
+    min-height: 60px;
+    max-height: 220px;
     overflow-y: auto;
     padding-right: 8px;
     flex-shrink: 0;
@@ -456,18 +474,19 @@
     box-shadow: 0 2px 8px rgba(0,0,0,0.02);
 }
 
-/* Footer Section */
 .footerCompact {
-    margin-top: auto;
+    margin-top: 6px;
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 32px;
-    padding: 8px 24px;
+    gap: 24px;
+    padding: 4px 16px;
     background: #ffffff;
     border-top: 1px solid var(--border-color);
     border-radius: 12px;
-    height: 60px;
+    height: 48px;
+    min-height: 48px;
+    flex-shrink: 0;
 }
 
 .footerCompactItem {
@@ -481,7 +500,7 @@
     font-weight: 700;
     color: var(--text-secondary);
     text-transform: uppercase;
-    margin-bottom: 2px;
+    margin-bottom: 0px;
 }
 
 .footerCompactValue {
@@ -491,7 +510,7 @@
 }
 
 .footerCompactTotal {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 900;
     color: var(--primary);
 }
@@ -501,17 +520,18 @@
 }
 
 .relationsBar {
-    margin-top: 12px;
+    margin-top: 8px;
     background: #ffffff;
     border: 1px solid #dce3ed;
     border-radius: 12px;
     display: flex;
     overflow: hidden;
     flex-shrink: 0;
-    height: 110px;
-    padding: 8px 16px;
+    height: auto;
+    min-height: 80px;
+    padding: 6px 12px;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
 .relationCard {
@@ -519,7 +539,7 @@
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 10px;
-    padding: 10px 12px;
+    padding: 6px 8px;
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -602,21 +622,21 @@
 
 /* Operational Summary */
 .summaryPanel {
-    margin-top: 12px;
-    padding: 12px 24px;
+    margin-top: 6px;
+    padding: 6px 12px;
     background: #f8fafc;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-    gap: 16px;
+    gap: 8px;
     align-items: center;
 }
 
 .summaryItem {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 2px;
 }
 
 .summaryLabel {

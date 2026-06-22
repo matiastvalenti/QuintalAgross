@@ -35,6 +35,7 @@ export default function InvoiceForm(props) {
   const [mode, setMode] = useState(initialMode);
   const [id, setId] = useState(initialId);
   const [loading, setLoading] = useState(initialMode === "edit");
+  const [saving, setSaving] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
 
   // Header State
@@ -353,7 +354,7 @@ export default function InvoiceForm(props) {
     // El backend intenta resolverlo automáticamente desde el producto.
     // Si no puede resolverlo, el backend rechaza con mensaje específico.
 
-    setLoading(true);
+    setSaving(true);
     const token = localStorage.getItem("token");
     const finalNumber = joinFullNumber(pv, number);
     const payload = {
@@ -416,7 +417,7 @@ export default function InvoiceForm(props) {
         console.error("NETWORK ERROR:", e);
         showToast("Error de conexión al guardar", "error");
     } finally {
-        setLoading(false);
+        setSaving(false);
     }
   };
 
@@ -499,8 +500,9 @@ export default function InvoiceForm(props) {
                       <Pencil size={16} /> Editar
                   </button>
                 ) : (
-                  <button className={s.saveBtn} onClick={handleSave}>
-                      <Save size={16} /> Guardar
+                  <button className={s.saveBtn} onClick={handleSave} disabled={saving}>
+                      {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
+                      {saving ? "Guardando..." : "Guardar"}
                   </button>
                 )}
                 <div className={s.actionGroup}>
