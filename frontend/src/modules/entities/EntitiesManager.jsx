@@ -124,11 +124,18 @@ export default function EntitiesManager({ initialType = 'client' }) {
                             zIndex: 10,
                             overflow: 'hidden'
                         }}>
-                            <EntityEditor 
+                                                        <EntityEditor 
                                 entity={selectedEntity}
                                 initialType={selectedType === 'mixed' ? 'client' : selectedType}
                                 onSave={handleSave}
                                 onCancel={() => setIsEditing(false)}
+                                onSelectExisting={(existing) => {
+                                    if (existing.type) {
+                                        setSelectedType(existing.type);
+                                    }
+                                    setSelectedEntity(existing);
+                                    setIsEditing(true);
+                                }}
                             />
                         </div>
                     )}

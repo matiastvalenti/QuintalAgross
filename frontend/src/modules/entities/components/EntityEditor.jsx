@@ -45,10 +45,11 @@ const inputBlurStyle = (e) => {
     e.target.style.boxShadow = 'none';
 };
 
-export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client' }) {
+export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client', onSelectExisting }) {
     const [activeTab, setActiveTab] = useState('general');
     const [saving, setSaving] = useState(false);
     const [salespeople, setSalespeople] = useState([]);
+    const [duplicateError, setDuplicateError] = useState(null);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -142,6 +143,8 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
         setFormData(prev => ({ ...prev, [field]: finalValue }));
     };
 
+    const { showToast } = useToast ? useToast() : { showToast: console.log };
+
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
         setSaving(true);
@@ -167,11 +170,28 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                 body: JSON.stringify(payload)
             });
             
-            if (!res.ok) throw new Error('Error al guardar');
+            if (!res.ok) {
+                if (res.status === 409) {
+                    try {
+                        const errData = await res.json();
+                        if (errData.detail && errData.detail.code === "DUPLICATE_TAX_ID") {
+                            setDuplicateError(errData.detail);
+                            return;
+                        }
+                    } catch (pErr) {
+                        console.error("Error parsing conflict error", pErr);
+                    }
+                }
+                throw new Error('Error al guardar');
+            }
             const saved = await res.json();
             onSave(saved);
         } catch (err) {
-            showToast(err.message, "error");
+            if (showToast) {
+                showToast(err.message, "error");
+            } else {
+                alert(err.message);
+            }
         } finally {
             setSaving(false);
         }
@@ -579,6 +599,89 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                     )}
                 </form>
             </div>
+
+            {duplicateError && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        background: 'white',
+                        padding: '24px',
+                        borderRadius: '8px',
+                        width: '450px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        <h3 style={{ margin: '0 0 12px 0', color: '#e11d48', fontSize: '18px', fontWeight: 700 }}>
+                            CUIT Duplicado
+                        </h3>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563' }}>
+                            Ya existe una entidad registrada con ese CUIT.
+                        </p>
+                        
+                        <div style={{
+                            background: '#f3f4f6',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            color: '#374151',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px'
+                        }}>
+                            <div><strong>Nombre:</strong> {duplicateError.existing_entity?.name}</div>
+                            <div><strong>Código:</strong> {duplicateError.existing_entity?.code}</div>
+                            <div><strong>Tipo:</strong> {duplicateError.existing_entity?.type === 'client' ? 'Cliente' : duplicateError.existing_entity?.type === 'provider' ? 'Proveedor' : duplicateError.existing_entity?.type === 'mixed' ? 'Mixto' : duplicateError.existing_entity?.type}</div>
+                            <div><strong>CUIT:</strong> {duplicateError.existing_entity?.tax_id}</div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'end', gap: '12px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setDuplicateError(null)}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: 'white',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (onSelectExisting) {
+                                        onSelectExisting(duplicateError.existing_entity);
+                                    }
+                                    setDuplicateError(null);
+                                }}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: 'var(--primary)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600
+                                }}
+                            >
+                                Ver entidad existente
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
