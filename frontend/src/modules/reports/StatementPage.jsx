@@ -204,18 +204,51 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         return t;
     }, [filteredMovements]);
 
-    const docMapping = {
-        'INVOICE': 'Factura',
-        'RECEIPT': 'Recibo',
-        'CREDIT_NOTE': 'Nota de Crédito',
-        'DEBIT_NOTE': 'Nota de Débito',
-        'PAYMENT': 'Orden de Pago',
-        'PURCHASE_INVOICE': 'Factura Compra',
-        'PURCHASE_DEBIT_NOTE': 'ND Compra',
-        'PURCHASE_CREDIT_NOTE': 'NC Compra',
-        'LPG_PRIMARY': 'Liq. Primaria',
-        'LPG_SECONDARY': 'Liq. Secundaria',
-        'DELIVERY_NOTE': 'Remito'
+    // Helpers for display
+    const getCircuitoFallback = (docType, circuit) => {
+        if (circuit && circuit !== '-') return circuit;
+        const dt = docType?.toUpperCase();
+        if (['INVOICE', 'FCE_MIPYME', 'DEBIT_NOTE', 'CREDIT_NOTE'].includes(dt)) return 'Venta';
+        if (dt === 'RECEIPT') return 'Cobranza';
+        if (['PURCHASE_INVOICE', 'PURCHASE_DEBIT_NOTE', 'PURCHASE_CREDIT_NOTE'].includes(dt)) return 'Compra';
+        if (dt === 'PAYMENT') return 'Pago';
+        return '-';
+    };
+
+    const getDescripcionFallback = (docType, desc) => {
+        if (desc && desc !== '-') return desc;
+        const dt = docType?.toUpperCase();
+        switch (dt) {
+            case 'INVOICE':
+            case 'FCE_MIPYME': return 'Factura de Venta';
+            case 'DEBIT_NOTE': return 'Nota de Débito de Venta';
+            case 'CREDIT_NOTE': return 'Nota de Crédito de Venta';
+            case 'RECEIPT': return 'Recibo de Cliente';
+            case 'PURCHASE_INVOICE': return 'Factura de Compra';
+            case 'PURCHASE_DEBIT_NOTE': return 'Nota de Débito de Compra';
+            case 'PURCHASE_CREDIT_NOTE': return 'Nota de Crédito de Compra';
+            case 'PAYMENT': return 'Orden de Pago';
+            default: return '-';
+        }
+    };
+
+    const getComprobanteName = (docType) => {
+        const dt = docType?.toUpperCase();
+        switch (dt) {
+            case 'INVOICE':
+            case 'FCE_MIPYME': return 'Factura';
+            case 'RECEIPT': return 'Recibo';
+            case 'PAYMENT': return 'Orden de Pago';
+            case 'DEBIT_NOTE':
+            case 'PURCHASE_DEBIT_NOTE': return 'Nota de Débito';
+            case 'CREDIT_NOTE':
+            case 'PURCHASE_CREDIT_NOTE': return 'Nota de Crédito';
+            case 'PURCHASE_INVOICE': return 'Factura de Compra';
+            case 'LPG_PRIMARY': return 'Liq. Primaria';
+            case 'LPG_SECONDARY': return 'Liq. Secundaria';
+            case 'DELIVERY_NOTE': return 'Remito';
+            default: return docType || '-';
+        }
     };
 
     // Actions
@@ -240,8 +273,10 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
 
             return {
                 'Fecha': formatDateStr(m.date),
-                'Comprobante': docMapping[m.doc_type] || m.doc_type || '-',
+                'Circuito': getCircuitoFallback(m.doc_type, m.circuit),
+                'Comprobante': getComprobanteName(m.doc_type),
                 'Número': m.number || '-',
+                'Descripción': getDescripcionFallback(m.doc_type, m.description || m.notes),
                 'Vencimiento': formatDateStr(m.due_date),
                 'Moneda': m.currency || '-',
                 'TC': m.exchange_rate || '',
@@ -258,8 +293,10 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         // Add Totals row
         exportData.push({
             'Fecha': 'TOTALES',
+            'Circuito': '',
             'Comprobante': '',
             'Número': '',
+            'Descripción': '',
             'Vencimiento': '',
             'Moneda': '',
             'TC': '',
@@ -342,29 +379,40 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #1d4ed8' }}>
                                 <div className={s.cardIconBox} style={{ background: '#eff6ff', color: '#1d4ed8' }}><Receipt size={20}/></div>
                                 <div className={s.cardContentBox}>
-                                    <div className={s.cardTitle}>Saldo Global ARS</div>
-                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
-                                        {fmt(dashboard?.total_balance || totals.b_ars, 'ARS')}
+                                    <div className={s.cardTitle}>Saldo ARS</div>
+                                    <div className={s.balanceValue} style={{ color: totals.b_ars < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                        {fmt(totals.b_ars, 'ARS')}
                                     </div>
-                                    <div className={s.cardSubLabel}>Saldo total histórico de la cuenta</div>
+                                    <div className={s.cardSubLabel}>Saldo real en pesos</div>
                                 </div>
                             </div>
 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #7c3aed' }}>
                                 <div className={s.cardIconBox} style={{ background: '#f5f3ff', color: '#7c3aed' }}><Wallet size={20}/></div>
                                 <div className={s.cardContentBox}>
-                                    <div className={s.cardTitle}>Saldo Global USD</div>
-                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance_usd || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
-                                        {fmt(dashboard?.total_balance_usd || totals.b_usd, 'USD')}
+                                    <div className={s.cardTitle}>Saldo USD</div>
+                                    <div className={s.balanceValue} style={{ color: totals.b_usd < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                        {fmt(totals.b_usd, 'USD')}
                                     </div>
-                                    <div className={s.cardSubLabel}>Saldo total en moneda extranjera</div>
+                                    <div className={s.cardSubLabel}>Saldo real en dólares</div>
+                                </div>
+                            </div>
+
+                            <div className={s.summaryCard} style={{ borderLeft: '4px solid #0f766e' }}>
+                                <div className={s.cardIconBox} style={{ background: '#f0fdfa', color: '#0f766e' }}><Activity size={20}/></div>
+                                <div className={s.cardContentBox}>
+                                    <div className={s.cardTitle}>Total convertido a ARS</div>
+                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                        {fmt(dashboard?.total_balance || 0, 'ARS')}
+                                    </div>
+                                    <div className={s.cardSubLabel}>Total informativo convertido</div>
                                 </div>
                             </div>
 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #ea580c' }}>
                                 <div className={s.cardIconBox} style={{ background: '#fff7ed', color: '#ea580c' }}><Clock size={20}/></div>
                                 <div className={s.cardContentBox}>
-                                    <div className={s.cardTitle}>Pendiente Invoicing</div>
+                                    <div className={s.cardTitle}>Pendiente de facturar</div>
                                     <div className={s.balanceValue} style={{ color: '#ea580c' }}>
                                         {fmt(dashboard?.unbilled_balance_usd || 0, 'USD')}
                                     </div>
@@ -490,8 +538,10 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             <table className={s.ledgerTable}>
                                 <colgroup>
                                     <col style={{ width: '85px' }} />
+                                    <col style={{ width: '80px' }} />
                                     <col style={{ width: '110px' }} />
                                     <col style={{ width: '125px' }} />
+                                    <col style={{ width: '100px' }} />
                                     <col style={{ width: '85px' }} />
                                     <col style={{ width: '55px' }} />
                                     <col style={{ width: '65px' }} />
@@ -506,14 +556,16 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                 </colgroup>
                                 <thead className={s.thead}>
                                     <tr className={s.groupHeader}>
-                                        <th colSpan={7}></th>
+                                        <th colSpan={9}></th>
                                         <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Valores en Pesos (ARS)</th>
                                         <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Valores en Dólares (USD)</th>
                                     </tr>
                                     <tr>
                                         <th className={s.th}>Fecha</th>
+                                        <th className={s.th}>Circuito</th>
                                         <th className={s.th}>Comprobante</th>
                                         <th className={s.th}>Número</th>
+                                        <th className={s.th}>Descripción</th>
                                         <th className={s.th}>Vencimiento</th>
                                         <th className={s.th}>Moneda</th>
                                         <th className={s.th}>TC</th>
@@ -532,15 +584,17 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                     {filteredMovements.map((m, idx) => (
                                         <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
                                             <td className={s.cell}>{fmt(m.date, 'date')}</td>
+                                            <td className={s.cell}>{getCircuitoFallback(m.doc_type, m.circuit)}</td>
                                             <td className={s.cell}>
-                                                <div className={s.statusBadge}>
+                                                <div className={s.statusBadge} style={{ textTransform: 'none' }}>
                                                     {m.payment_status === 'PAID' ? <CheckCircle2 size={12} className={s.iconPaid} /> : 
                                                      m.payment_status === 'PARTIAL' ? <Clock size={12} className={s.iconPartial} /> : 
                                                      <AlertCircle size={12} className={s.iconOpen} />}
-                                                    <span className={s.docLabel}>{docMapping[m.doc_type] || m.doc_type}</span>
+                                                    <span className={s.docLabel}>{getComprobanteName(m.doc_type)}</span>
                                                 </div>
                                             </td>
                                             <td className={s.cell}>{m.number}</td>
+                                            <td className={s.cell} title={getDescripcionFallback(m.doc_type, m.description || m.notes)}>{getDescripcionFallback(m.doc_type, m.description || m.notes)}</td>
                                             <td className={s.cell}>{m.due_date ? fmt(m.due_date, 'date') : '-'}</td>
                                             <td className={s.cell}>{m.currency}</td>
                                             <td className={s.cell}>{m.exchange_rate}</td>
@@ -558,7 +612,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                 </tbody>
                                 <tfoot className={s.tfoot}>
                                     <tr>
-                                        <td colSpan={7} className={s.totalLabel}>TOTALES ACUMULADOS</td>
+                                        <td colSpan={9} className={s.totalLabel}>TOTALES ACUMULADOS</td>
                                         <td className={s.cellTotal}>{fmt(totals.d_ars, 'ARS')}</td>
                                         <td className={s.cellTotal}>{fmt(totals.h_ars, 'ARS')}</td>
                                         <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceArs}`}>{fmt(totals.b_ars, 'ARS')}</td>
@@ -583,8 +637,10 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                     <table className={s.ledgerTable}>
                                         <colgroup>
                                             <col style={{ width: '85px' }} />
+                                            <col style={{ width: '80px' }} />
                                             <col style={{ width: '110px' }} />
                                             <col style={{ width: '125px' }} />
+                                            <col style={{ width: '100px' }} />
                                             <col style={{ width: '85px' }} />
                                             <col style={{ width: '55px' }} />
                                             <col style={{ width: '65px' }} />
@@ -599,14 +655,16 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         </colgroup>
                                         <thead className={s.thead}>
                                             <tr className={s.groupHeader}>
-                                                <th colSpan={7}></th>
+                                                <th colSpan={9}></th>
                                                 <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Estimado ARS</th>
                                                 <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Estimado USD</th>
                                             </tr>
                                             <tr>
                                                 <th className={s.th}>Fecha</th>
+                                                <th className={s.th}>Circuito</th>
                                                 <th className={s.th}>Tipo</th>
                                                 <th className={s.th}>Número</th>
+                                                <th className={s.th}>Descripción</th>
                                                 <th className={s.th}>Vencimiento</th>
                                                 <th className={s.th}>Moneda</th>
                                                 <th className={s.th}>TC</th>
@@ -623,13 +681,15 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                             {filteredUnbilledMovements.length > 0 ? filteredUnbilledMovements.map((m, idx) => (
                                                 <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick({ ...m, doc_type: 'DELIVERY_NOTE' })}>
                                                     <td className={s.cell}>{fmt(m.date, 'date')}</td>
+                                                    <td className={s.cell}>{getCircuitoFallback('DELIVERY_NOTE', m.circuit)}</td>
                                                     <td className={s.cell}>
-                                                        <div className={s.statusBadge}>
+                                                        <div className={s.statusBadge} style={{ textTransform: 'none' }}>
                                                             <Clock size={12} style={{ color: '#d97706' }} />
-                                                            <span className={s.docLabel}>REMITO</span>
+                                                            <span className={s.docLabel}>{getComprobanteName('DELIVERY_NOTE')}</span>
                                                         </div>
                                                     </td>
                                                     <td className={s.cell}>{m.number}</td>
+                                                    <td className={s.cell} title={getDescripcionFallback('DELIVERY_NOTE', m.description || m.notes)}>{getDescripcionFallback('DELIVERY_NOTE', m.description || m.notes)}</td>
                                                     <td className={s.cell}>-</td>
                                                     <td className={s.cell}>{m.currency}</td>
                                                     <td className={s.cell}>{m.exchange_rate}</td>
@@ -643,7 +703,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                                 </tr>
                                             )) : (
                                                 <tr>
-                                                    <td colSpan={13} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No hay remitos pendientes con los filtros aplicados.</td>
+                                                    <td colSpan={15} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No hay remitos pendientes con los filtros aplicados.</td>
                                                 </tr>
                                             )}
                                         </tbody>
