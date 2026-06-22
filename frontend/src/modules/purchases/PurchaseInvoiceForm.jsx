@@ -11,22 +11,22 @@ import { TraceabilityStatusBadge } from "../../components/ui/TraceabilityStatusB
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import {
   Save, Trash2, Printer, X, Receipt, ShoppingBag, Truck, CreditCard,
-  Building, User, Link2, Plus, Pencil, CheckCircle, Clock, Activity, FileText, ArrowRight, Search
+  Building, User, Link2, Plus, Pencil, CheckCircle, Clock, Activity, FileText, ArrowRight, Landmark, Search
 } from "lucide-react";
-import s from "./SalesOrderForm.module.css";
+import s from "../sales/SalesOrderForm.module.css";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
-export default function InvoiceForm(props) {
+export default function PurchaseInvoiceForm(props) {
   const {
     mode: initialMode = "new",
     id: initialId = null,
     windowId,
     initialSourceType = null,
-    initialSourceId = null,
+    initialSourceId = null, // Can be oc_id or remito_entrada_id
     preselectedLines = null,
     draftId = null,
     isStandalone = false,
-    initialDocType = "INVOICE"
+    initialDocType = "PURCHASE_INVOICE" // Changed to PURCHASE_INVOICE
   } = props;
 
   const { closeWindow, openWindow } = useWindow();
@@ -40,7 +40,7 @@ export default function InvoiceForm(props) {
   // Header State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
-  const [entity, setEntity] = useState(null);
+  const [entity, setEntity] = useState(null); // This is now SUPPLIER
   const [pv, setPv] = useState("0001");
   const [number, setNumber] = useState("");
   const [currency, setCurrency] = useState("ARS");
@@ -50,24 +50,24 @@ export default function InvoiceForm(props) {
   const [letter, setLetter] = useState("A");
   const [observations, setObservations] = useState("");
   const [selectedConditionId, setSelectedConditionId] = useState("");
-  const [salespersonId, setSalespersonId] = useState("");
+  const [buyerId, setBuyerId] = useState(""); // Changed from salespersonId
   const [ctroCosto, setCtroCosto] = useState("1");
   const [sourceNumber, setSourceNumber] = useState("");
   const [reasonType, setReasonType] = useState("");
-  const [returnStock, setReturnStock] = useState(false);
+  const [returnStock, setReturnStock] = useState(false); // Relevant for credit notes
   
   // Lines
   const [items, setItems] = useState([]);
   
   // Selectors
-  const [saleConditions, setSaleConditions] = useState([]);
+  const [purchaseConditions, setPurchaseConditions] = useState([]); // Changed from saleConditions
   const [pointsOfSale, setPointsOfSale] = useState([]);
-  const [sellers, setSellers] = useState([]);
+  const [buyers, setBuyers] = useState([]); // Changed from sellers
 
   useEffect(() => {
     fetchInitialData();
     if (mode === "edit" && id) fetchInvoice();
-    else if (mode === "new" && initialSourceType === "sales-order" && initialSourceId) {
+    else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note") && initialSourceId) { // Changed sales-order
         fetchFromSource();
     }
   }, []);
@@ -75,48 +75,18 @@ export default function InvoiceForm(props) {
   const fetchInitialData = async () => {
     const token = localStorage.getItem("token");
     const headers = { Authorization: `Bearer ${token}` };
-    const [scRes, posRes, spRes] = await Promise.all([
-      fetch(`${API_URL}/sales/sale-conditions/`, { headers }),
+    const [pcRes, posRes, buyRes] = await Promise.all([ // Changed scRes, spRes
+      fetch(`${API_URL}/purchases/purchase-conditions/`, { headers }), // Changed to purchases
       fetch(`${API_URL}/config/pos`, { headers }),
-      fetch(`${API_URL}/entities/?is_salesperson=true`, { headers }),
+      fetch(`${API_URL}/entities/?is_buyer=true`, { headers }), // Changed to is_buyer
     ]);
-    if (scRes.ok) setSaleConditions(await scRes.json());
-    if (posRes.ok) {
-        const pvs = await posRes.json();
-        // Filtrar PVs que tengan FA o FC en sus document_configs
-        const docTag = docType === 'PURCHASE_INVOICE' ? 'FC' : 'FA';
-        const configuredPvs = pvs.filter(p => p.document_configs?.some(c => c.document_type === docTag || c.document_type === 'INVOICE' || c.document_type === 'PURCHASE_INVOICE' || c.document_type.startsWith('F')));
-        // Si no hay ninguno configurado formalmente, buscamos por nombre como fallback
-        const fallbackPvs = pvs.filter(p => (!p.document_configs || p.document_configs.length === 0) && p.name.toLowerCase().includes('factura'));
-        
-        const finalPvs = configuredPvs.length > 0 ? configuredPvs : fallbackPvs;
-        setPointsOfSale(finalPvs);
-        
-        if (mode === "new" && !initialSourceId && finalPvs.length > 0) {
-            setPv(finalPvs[0].pv);
-        }
-    }
-    if (spRes.ok) setSellers(await spRes.json());
+    if (pcRes.ok) setPurchaseConditions(await pcRes.json()); // Changed setSaleConditions
+    
+    // For Purchase Invoices, we DO NOT use our own Points of Sale for the document number, 
+    // because the number is provided by the supplier.
+    // We still fetch posRes if needed for other things, but we won't set a default PV from it for the document number.
+    if (buyRes.ok) setBuyers(await buyRes.json()); // Changed setSellers
   };
-
-  const fetchNextNumber = async (currentPv) => {
-      if (mode !== "new" || !currentPv) return;
-      try {
-          const docTag = docType === 'PURCHASE_INVOICE' ? 'FC' : 'FA';
-          const token = localStorage.getItem("token");
-          const res = await fetch(`${API_URL}/accounting/documents/next-number?pv=${currentPv}&doc_type=${docTag}`, { headers: { Authorization: `Bearer ${token}` }});
-          if (res.ok) {
-              const data = await res.json();
-              setNumber(data.next_number);
-          }
-      } catch (e) {
-          console.error("Error fetching next number:", e);
-      }
-  };
-
-  useEffect(() => {
-      fetchNextNumber(pv);
-  }, [pv, docType]);
 
   const fetchInvoice = async () => {
     setLoading(true);
@@ -124,7 +94,7 @@ export default function InvoiceForm(props) {
     const res = await fetch(`${API_URL}/accounting/documents/${id}`, { headers: { Authorization: `Bearer ${token}` }});
     if (res.ok) {
         const data = await res.json();
-        setEntity(data.entity_id ? { id: data.entity_id, name: data.entity_name } : null);
+        setEntity(data.entity_id ? { id: data.entity_id, name: data.entity_name } : null); // This is SUPPLIER
         setDate(data.date.split("T")[0]);
         setDueDate((data.due_date || data.date).split("T")[0]);
         const parsedNum = splitFullNumber(data.number);
@@ -132,12 +102,12 @@ export default function InvoiceForm(props) {
         setNumber(parsedNum.num);
         setCurrency(data.currency || "ARS");
         setExchangeRate(data.exchange_rate || 1);
-        setSelectedConditionId(data.sale_condition_id || "");
-        setSalespersonId(data.salesperson_id || "");
+        setSelectedConditionId(data.purchase_condition_id || ""); // Changed sale_condition_id
+        setBuyerId(data.buyer_id || ""); // Changed salesperson_id
         setCtroCosto(data.cost_center || "1");
         setObservations(data.notes || "");
         setStatus(data.status || "DRAFT");
-        setDocType(data.doc_type || "INVOICE");
+        setDocType(data.doc_type || "PURCHASE_INVOICE"); // Default to PURCHASE_INVOICE
         setLetter(data.line || "A");
         
         // Para cada línea con producto, recuperar el contenido por envase
@@ -188,50 +158,56 @@ export default function InvoiceForm(props) {
 
       const token = localStorage.getItem("token");
 
-      if (initialSourceType === 'invoice' && initialSourceId) {
+      if (initialSourceType === 'invoice' && initialSourceId) { // Check if source is another invoice (e.g. for debit/credit notes)
           const res = await fetch(`${API_URL}/accounting/documents/${initialSourceId}`, { headers: { Authorization: `Bearer ${token}` } });
           if (res.ok) {
               const data = await res.json();
-              if (data.entity_id) setEntity({ id: data.entity_id, name: data.entity_name || "Cliente Origen" });
+              if (data.entity_id) setEntity({ id: data.entity_id, name: data.entity_name || "Proveedor Origen" }); // Changed Cliente
               setSourceNumber(data.number);
               setCurrency(data.currency || "ARS");
               setExchangeRate(data.exchange_rate || 1);
-              setSelectedConditionId(data.sale_condition_id || "");
-              setSalespersonId(data.salesperson_id || "");
+              setSelectedConditionId(data.purchase_condition_id || ""); // Changed sale_condition_id
+              setBuyerId(data.buyer_id || ""); // Changed salesperson_id
               setCtroCosto(data.cost_center || "1");
-              // Líneas vacías para la nota de débito, el usuario carga los conceptos manualmente.
-              setItems([]);
+              setItems([]); // Empty lines for debit/credit note, user loads concepts manually.
           }
           setLoading(false);
           return;
       }
 
-      // Lógica existente para sales-order
+      // Logic for purchase-order or delivery-note (remito de entrada)
       let draft = null;
       if (draftId) {
           const draftStr = localStorage.getItem(`invoice_draft_${draftId}`);
           if (draftStr) {
               draft = JSON.parse(draftStr);
           } else {
-              showToast("No se encontró la selección de la Orden de Venta. Volvé a generar la factura.", "error");
+              showToast("No se encontró la selección de la Orden de Compra. Volvé a generar la factura.", "error"); // Changed Orden de Venta
               setLoading(false);
               return;
           }
       }
 
-      const res = await fetch(`${API_URL}/sales/sales-orders/${initialSourceId}`, { headers: { Authorization: `Bearer ${token}` } });
-      if (res.ok) {
-          const data = await res.json();
-          if (data.entity_id) setEntity({ id: data.entity_id, name: draft?.customerName || data.entity_name || "Cliente Origen" });
+      let sourceData = null;
+      if (initialSourceType === 'purchase-order') {
+          const res = await fetch(`${API_URL}/purchases/purchase-orders/${initialSourceId}`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales-orders
+          if (res.ok) sourceData = await res.json();
+      } else if (initialSourceType === 'delivery-note') {
+          const res = await fetch(`${API_URL}/purchases/delivery-notes/${initialSourceId}`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales-orders
+          if (res.ok) sourceData = await res.json();
+      }
+      
+      if (sourceData) {
+          if (sourceData.entity_id) setEntity({ id: sourceData.entity_id, name: draft?.supplierName || sourceData.entity_name || "Proveedor Origen" }); // Changed customerName, Cliente Origen
           
           if (draft) {
-              setSourceNumber(draft.salesOrderNumber || data.number);
+              setSourceNumber(draft.purchaseOrderNumber || draft.deliveryNoteNumber || sourceData.number); // Changed salesOrderNumber
               setPv(draft.pointOfSale || "0001");
-              setCurrency(draft.currency || data.currency || "ARS");
-              setExchangeRate(draft.exchangeRate || data.exchange_rate || 1);
-              setSelectedConditionId(draft.paymentCondition || data.sale_condition_id || "");
-              setSalespersonId(draft.sellerId || data.salesperson_id || "");
-              setCtroCosto(draft.costCenter || data.cost_center || "1");
+              setCurrency(draft.currency || sourceData.currency || "ARS");
+              setExchangeRate(draft.exchangeRate || sourceData.exchange_rate || 1);
+              setSelectedConditionId(draft.paymentCondition || sourceData.purchase_condition_id || ""); // Changed sale_condition_id
+              setBuyerId(draft.buyerId || sourceData.buyer_id || ""); // Changed sellerId, salesperson_id
+              setCtroCosto(draft.costCenter || sourceData.cost_center || "1");
               
               setItems(draft.lines.map(l => {
                   const factor = parseFloat(l._unit_content || l.package_size || 1);
@@ -252,22 +228,18 @@ export default function InvoiceForm(props) {
                       unit_price: l.unit_price,
                       discount_pct: 0,
                       vat_rate: l.vat_rate || 0.21,
-                      source_sales_line_id: l.source_sales_line_id,
+                      source_purchase_line_id: l.source_purchase_line_id, // Changed source_sales_line_id
                       _account_code: l._account_code || null,
                   };
               }));
           } else {
-              setSourceNumber(data.number);
-              setCurrency(data.currency || "ARS");
+              setSourceNumber(sourceData.number);
+              setCurrency(sourceData.currency || "ARS");
+              setExchangeRate(sourceData.exchange_rate || 1); // Set Exchange Rate from source if exists
 
-              // preselectedLines puede ser:
-              // a) array de objetos completos (viene del modal OV con qty_packages, _unit_content, etc.)
-              // b) array de strings/IDs
-              // c) null
               const hasFullObjects = preselectedLines && preselectedLines.length > 0 && typeof preselectedLines[0] === 'object';
 
               if (hasFullObjects) {
-                  // Usar los objetos pre-seleccionados directamente (ya traen qty_packages, _unit_content, etc.)
                   setItems(preselectedLines.map(l => {
                       const factor = parseFloat(l._unit_content || l.package_size || 1);
                       const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
@@ -287,14 +259,14 @@ export default function InvoiceForm(props) {
                           unit_price: parseFloat(l.unit_price || 0),
                           discount_pct: parseFloat(l.discount_pct || 0),
                           vat_rate: parseFloat(l.vat_rate || 0.21),
-                          source_sales_line_id: l.source_sales_line_id || l.id,
+                          source_purchase_line_id: l.source_purchase_line_id || l.id, // Changed source_sales_line_id
                           accounting_account_id: l.accounting_account_id || null,
-                          _account_code: l._account_code || l.sales_account_code || null,
+                          _account_code: l._account_code || null,
                       };
                   }));
               } else {
-                  let linesToInvoice = data.lines.filter(l => (l.qty - (l.qty_invoiced || 0)) > 0);
-                  if (preselectedLines && preselectedLines.length > 0) {
+                  let linesToInvoice = sourceData.lines.filter(l => (l.qty - (l.qty_invoiced || 0)) > 0);
+                  if (preselectedLines && preselectedLines.length > 0) { // preselectedLines should be IDs in this case
                       linesToInvoice = linesToInvoice.filter(l => preselectedLines.includes(l.id));
                   }
                   setItems(linesToInvoice.map(l => {
@@ -316,9 +288,9 @@ export default function InvoiceForm(props) {
                           unit_price: l.unit_price,
                           discount_pct: l.discount_pct || 0,
                           vat_rate: l.vat_rate || 0.21,
-                          source_sales_line_id: l.id,
+                          source_purchase_line_id: l.id, // Changed source_sales_line_id
                           accounting_account_id: null,
-                          _account_code: l.product?.sales_account_code || null,
+                          _account_code: l.product?.purchase_account_code || null, // Changed sales_account_code
                       };
                   }));
               }
@@ -344,7 +316,7 @@ export default function InvoiceForm(props) {
   }, [items]);
 
   const handleSave = async () => {
-    if (!entity) return showToast("Falta Cliente", "error");
+    if (!entity) return showToast("Falta Proveedor", "error"); // Changed Cliente
     if (currency === "USD" && exchangeRate <= 1) {
         return showToast("Para moneda USD el Tipo de Cambio debe ser mayor a 1", "error");
     }
@@ -362,9 +334,9 @@ export default function InvoiceForm(props) {
         number: finalNumber || "0001-00000000",
         date: date,
         entity_id: entity.id,
-        salesperson_id: salespersonId || null,
+        buyer_id: buyerId || null, // Changed salesperson_id
         warehouse_id: null,
-        sale_condition_id: selectedConditionId,
+        purchase_condition_id: selectedConditionId, // Changed sale_condition_id
         currency: currency,
         exchange_rate: exchangeRate,
         notes: observations,
@@ -385,8 +357,8 @@ export default function InvoiceForm(props) {
             discount_pct: l.discount_pct,
             vat_rate: l.vat_rate,
             accounting_account_id: l.accounting_account_id,
-            source_sales_line_id: l.source_sales_line_id,
-            source_dn_line_id: l.source_dn_line_id
+            source_purchase_line_id: l.source_purchase_line_id, // Changed source_sales_line_id
+            source_dn_line_id: l.source_dn_line_id // Still source_dn_line_id for now, might need change
         }))
     };
     
@@ -400,7 +372,7 @@ export default function InvoiceForm(props) {
             body: JSON.stringify(payload)
         });
         if (res.ok) {
-            showToast("Factura guardada correctamente", "success");
+            showToast("Factura de Compra guardada correctamente", "success"); // Changed Factura
             const evtName = docType === 'PURCHASE_INVOICE' ? 'purchase-invoice-changed' : 'invoice-changed';
             window.dispatchEvent(new Event(evtName));
             if (window.opener) window.opener.dispatchEvent(new Event(evtName));
@@ -410,7 +382,7 @@ export default function InvoiceForm(props) {
         } else {
             const err = await res.json();
             console.error("ERROR FROM BACKEND:", err);
-            showToast(err.detail || err.message || "Error al guardar la factura", "error");
+            showToast(err.detail || err.message || "Error al guardar la factura de compra", "error"); // Changed Factura
         }
     } catch (e) {
         console.error("NETWORK ERROR:", e);
@@ -421,7 +393,7 @@ export default function InvoiceForm(props) {
   };
 
   const searchEntities = async (q) => {
-    const res = await fetch(`${API_URL}/entities/?q=${q}&type=client`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+    const res = await fetch(`${API_URL}/entities/?q=${q}&type=supplier`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } }); // Changed type to supplier
     return res.json();
   };
   
@@ -445,6 +417,15 @@ export default function InvoiceForm(props) {
             const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
             if (unitContent) {
                 updated.qty = numericVal * unitContent;
+            } else { // If no unit content, qty_packages is same as qty
+                updated.qty = numericVal;
+            }
+        } else if (field === 'qty') { // If qty is changed directly and there's unit content, update qty_packages
+            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
+            if (unitContent && unitContent > 0) {
+                updated.qty_packages = numericVal / unitContent;
+            } else { // If no unit content, qty is same as qty_packages
+                updated.qty_packages = numericVal;
             }
         }
         
@@ -457,7 +438,7 @@ export default function InvoiceForm(props) {
   const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val || 0);
   const fmtValue = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency }).format(val || 0);
 
-  if (loading) return <LoadingScreen message="Cargando Factura..." />;
+  if (loading) return <LoadingScreen message="Cargando Factura de Compra..." />; // Changed Factura
 
   return (
     <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`}>
@@ -468,7 +449,7 @@ export default function InvoiceForm(props) {
                 <div className={s.compactHeaderTitle}>
                     <h1>
                         <Receipt size={24} style={{ color: 'var(--primary)' }} />
-                        <span>{mode === 'edit' ? `${docType === 'CREDIT_NOTE' ? 'Nota de Crédito' : docType === 'DEBIT_NOTE' ? 'Nota de Débito' : 'Factura'} ${joinFullNumber(pv, number)}` : docType === 'CREDIT_NOTE' ? 'Nueva Nota de Crédito' : docType === 'DEBIT_NOTE' ? 'Nueva Nota de Débito' : 'Nueva Factura'}</span>
+                        <span>{mode === 'edit' ? `${docType === 'PURCHASE_CREDIT_NOTE' ? 'Nota de Crédito de Compra' : docType === 'PURCHASE_DEBIT_NOTE' ? 'Nota de Débito de Compra' : 'Factura de Compra'} ${joinFullNumber(pv, number)}` : docType === 'PURCHASE_CREDIT_NOTE' ? 'Nueva Nota de Crédito de Compra' : docType === 'PURCHASE_DEBIT_NOTE' ? 'Nueva Nota de Débito de Compra' : 'Nueva Factura de Compra'}</span>
                     </h1>
                     <div className={s.headerMeta}>
                         {reasonType === 'EXCHANGE_DIFFERENCE' && (
@@ -478,9 +459,9 @@ export default function InvoiceForm(props) {
                             </>
                         )}
                         <span className={s.metaDate}>{new Date(date).toLocaleDateString('es-AR')}</span>
-                        {initialSourceType === 'sales-order' && sourceNumber && (
+                        {(initialSourceType === 'purchase-order' || initialSourceType === 'delivery-note') && sourceNumber && ( // Changed sales-order
                             <>
-                                <span style={{ color: '#24389c', fontWeight: 800 }}>OV {sourceNumber} &middot; {entity?.name || 'Cliente'}</span>
+                                <span style={{ color: '#24389c', fontWeight: 800 }}>{initialSourceType === 'purchase-order' ? 'OC' : 'RE'} {sourceNumber} &middot; {entity?.name || 'Proveedor'}</span> {/* Changed OV, Cliente */}
                                 <span>&middot;</span>
                             </>
                         )}
@@ -504,7 +485,7 @@ export default function InvoiceForm(props) {
                   </button>
                 )}
                 <div className={s.actionGroup}>
-                    <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title="Imprimir Factura">
+                    <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title="Imprimir Factura de Compra">
                         <Printer size={18} />
                     </button>
                 </div>
@@ -535,11 +516,11 @@ export default function InvoiceForm(props) {
                                         qty: hasContainer ? qtyPerContainer : 1, 
                                         _unit_content: qtyPerContainer,
                                         _unit_label: p.unit_of_measure || 'u',
-                                        unit_price: p.cost_price || 0, 
+                                        unit_price: p.cost_price || 0, // Use cost_price for purchases
                                         vat_rate: p.tax_type?.rate ?? 0.21, 
                                         discount_pct: 0,
-                                        // Cuenta contable de venta del producto (puede ser null si no está configurada)
-                                        accounting_account_id: p.sales_account_id || null,
+                                        // Cuenta contable de compra del producto (puede ser null si no está configurada)
+                                        accounting_account_id: p.purchase_account_id || null, // Changed sales_account_id
                                     }]);
                                 }}
                                 placeholder="Escriba para buscar productos para añadir..."
@@ -561,20 +542,20 @@ export default function InvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden' }}>
+                <div className={s.bentoContainer} style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
                     {items.length > 0 ? (
-                        <>
+                        <div style={{ minWidth: '100%' }}>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(250px, 1fr) 80px 100px 80px 90px 90px 60px 100px 30px' }}>
+                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px' }}>
                                     <div className={s.th}>PRODUCTO / CONCEPTO</div>
                                     <div className={s.th}>ENVASES</div>
                                     <div className={s.th}>CANTIDAD</div>
                                     <div className={s.th}>UNIDAD</div>
-                                    <div className={s.th}>P. UNIT</div>
+                                    <div className={s.th}>COSTO UNIT.</div>
                                     <div className={s.th}>DTO%</div>
                                     <div className={s.th}>IVA%</div>
                                     <div className={s.th} style={{ textAlign: 'right' }}>SUBTOTAL</div>
-                                    <div></div>
+                                    <div className={s.th} style={{ textAlign: 'center' }}>ACCIONES</div>
                                 </div>
                             )}
                             <div className={s.itemsList}>
@@ -599,7 +580,7 @@ export default function InvoiceForm(props) {
                                                     ) : (
                                                         <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qty.toFixed(2)} {item._unit_label || 'u'}</div>
                                                     )}
-                                                    <div><span style={{ fontWeight: 800 }}>Precio:</span> {fmtValue(item.unit_price)} / {item._unit_label || 'u'}</div>
+                                                    <div><span style={{ fontWeight: 800 }}>Costo:</span> {fmtValue(item.unit_price)} / {item._unit_label || 'u'}</div> {/* Changed Precio */}
                                                     <div><span style={{ fontWeight: 800 }}>Subtotal:</span> {fmtValue(subtotal)}</div>
                                                     <div><span style={{ fontWeight: 800 }}>IVA:</span> {fmtValue(vatAmount)}</div>
                                                     <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Total:</span> {fmtValue(totalAmount)}</div>
@@ -609,7 +590,7 @@ export default function InvoiceForm(props) {
                                     }
                                     
                                     return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(250px, 1fr) 80px 100px 80px 90px 90px 60px 100px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
+                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden' }}>
                                             <input 
                                                 type="text" 
@@ -618,6 +599,7 @@ export default function InvoiceForm(props) {
                                                 onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)} 
                                                 placeholder="Ingrese concepto..."
                                                 style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: 'transparent' }}
+
                                             />
                                             {item._unit_content && (
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginTop: 2 }}>
@@ -656,21 +638,23 @@ export default function InvoiceForm(props) {
                                                 title={item._unit_content ? 'Calculado automáticamente (envases × contenido)' : 'Cantidad'}
                                             />
                                         </div>
-                                        <div style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#64748b' }}>{item._unit_label || 'u'}</div>
+                                        <div style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#64748b', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item._unit_label || 'u'}</div>
                                         <input type="number" className={s.tableInput} value={item.unit_price ?? 0} onChange={(e) => handleUpdateItem(item.id, 'unit_price', e.target.value)} />
                                         <input type="number" className={s.tableInput} value={item.discount_pct ?? 0} onChange={(e) => handleUpdateItem(item.id, 'discount_pct', e.target.value)} />
-                                        <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center' }}>{((item.vat_rate || 0.21) * 100).toFixed(0)}%</div>
-                                        <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--primary)', textAlign: 'right' }}>
+                                        <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{((item.vat_rate || 0.21) * 100).toFixed(0)}%</div>
+                                        <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--primary)', textAlign: 'right', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                                             {fmtValue((item.qty * item.unit_price * (1 - (item.discount_pct||0)/100)) * (1 + (item.vat_rate||0.21)))}
                                         </div>
-                                        <button style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => setItems(items.filter(i => i.id !== item.id))}>
-                                            <Trash2 size={16} />
-                                        </button>
+                                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '36px' }}>
+                                            <button type="button" style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }} onClick={() => setItems(items.filter(i => i.id !== item.id))} title="Eliminar línea">
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </div>
                                     );
                                 })}
                             </div>
-                        </>
+                        </div>
                     ) : (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 0', minHeight: 80 }}>
                             <Search size={24} style={{ marginBottom: 8, opacity: 0.3, color: 'var(--text-secondary)' }} />
@@ -685,7 +669,7 @@ export default function InvoiceForm(props) {
             <div className={s.rightCol}>
                 {/* Bloque Cliente */}
                 <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><User size={12}/> CLIENTE</div>
+                    <div className={s.sideBlockTitle}><Building size={12}/> PROVEEDOR</div>
                     <div className={s.sideField}>
                         <label>NOMBRE</label>
                         {isReadOnly ? (
@@ -699,22 +683,30 @@ export default function InvoiceForm(props) {
                     <div className={s.sideField}>
                         <label>PTO. VENTA</label>
                         {isReadOnly ? <div className={s.sideInput}>{pv}</div> : (
-                            <select className={s.sideSelect} value={pv} onChange={(e) => setPv(e.target.value)}>
-                                {pointsOfSale.map(p => <option key={p.pv} value={p.pv}>{p.pv}</option>)}
-                            </select>
+                            <input 
+                                type="text" 
+                                className={s.sideInput} 
+                                value={pv} 
+                                onChange={(e) => setPv(e.target.value)}
+                                placeholder="0000"
+                                maxLength={5}
+                                style={{ textAlign: 'right', fontWeight: 600, width: '100px' }}
+                            />
                         )}
                     </div>
                     <div className={s.sideField}>
                         <label>NÚMERO</label>
-                        <input 
-                            type="text" 
-                            className={s.sideInput} 
-                            value={number} 
-                            onChange={(e) => setNumber(e.target.value)}
-                            placeholder="Autogenerado"
-                            disabled={isReadOnly}
-                            style={{ textAlign: 'right', fontWeight: 600, width: '100px' }}
-                        />
+                        {isReadOnly ? <div className={s.sideInput}>{number}</div> : (
+                            <input 
+                                type="text" 
+                                className={s.sideInput} 
+                                value={number} 
+                                onChange={(e) => setNumber(e.target.value)}
+                                placeholder="00000000"
+                                maxLength={8}
+                                style={{ textAlign: 'right', fontWeight: 600, width: '100px' }}
+                            />
+                        )}
                     </div>
                 </div>
 
@@ -722,7 +714,7 @@ export default function InvoiceForm(props) {
                 <div className={s.sideBlock}>
                     <div className={s.sideBlockTitle}><ShoppingBag size={12}/> COMERCIAL</div>
 
-                    {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE') && (
+                    {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE' || docType === 'PURCHASE_DEBIT_NOTE' || docType === 'PURCHASE_CREDIT_NOTE') && (
                         <div className={s.sideField}>
                             <label>MOTIVO</label>
                             {isReadOnly ? <div className={s.sideInput}>{reasonType || 'Otro'}</div> : (
@@ -768,20 +760,20 @@ export default function InvoiceForm(props) {
                     
                     <div className={s.sideField}>
                         <label>CONDICIÓN</label>
-                        {isReadOnly ? <div className={s.sideInput}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div> : (
+                        {isReadOnly ? <div className={s.sideInput}>{purchaseConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div> : (
                             <select className={s.sideSelect} value={selectedConditionId ?? ''} onChange={e => setSelectedConditionId(e.target.value)}>
                                 <option value="">Seleccione...</option>
-                                {saleConditions.map(sc => <option key={sc.id} value={sc.id}>{sc.description}</option>)}
+                                {purchaseConditions.map(sc => <option key={sc.id} value={sc.id}>{sc.description}</option>)}
                             </select>
                         )}
                     </div>
                     
                     <div className={s.sideField}>
-                        <label>VENDEDOR</label>
-                        {isReadOnly ? <div className={s.sideInput}>{sellers.find(s => s.id === salespersonId)?.name || '-'}</div> : (
-                            <select className={s.sideSelect} value={salespersonId ?? ''} onChange={e => setSalespersonId(e.target.value)}>
+                        <label>COMPRADOR</label>
+                        {isReadOnly ? <div className={s.sideInput}>{buyers.find(s => s.id === buyerId)?.name || '-'}</div> : (
+                            <select className={s.sideSelect} value={buyerId ?? ''} onChange={e => setBuyerId(e.target.value)}>
                                 <option value="">Ninguno</option>
-                                {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                {buyers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                             </select>
                         )}
                     </div>
@@ -856,16 +848,16 @@ export default function InvoiceForm(props) {
               <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
               <div className={s.relationCard}>
-                  <div className={s.nodeTitle} style={{ color: '#0b132b' }}>COBRO</div>
+                  <div className={s.nodeTitle} style={{ color: '#0b132b' }}>PAGO</div>
                   <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
                   <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0%</div>
               </div>
 
-              {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE') && (
+              {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE' || docType === 'PURCHASE_DEBIT_NOTE' || docType === 'PURCHASE_CREDIT_NOTE') && (
                   <>
                       <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
                       <div className={s.relationCard}>
-                          <div className={s.nodeTitle} style={{ color: '#0b132b' }}>CTA. CORRIENTE</div>
+                          <div className={s.nodeTitle} style={{ color: '#0b132b' }}>CTA. PROVEEDOR</div>
                           <div className={s.nodeStatus} style={{ color: '#eab308' }}>Actualizado</div>
                           <div className={s.nodeMetric} style={{ color: '#0f172a' }}>-</div>
                       </div>
@@ -884,12 +876,12 @@ export default function InvoiceForm(props) {
         {/* Operational Summary */}
         <div className={s.summaryPanel}>
             <div className={s.summaryItem}>
-                <div className={s.summaryLabel}>CLIENTE</div>
+                <div className={s.summaryLabel}>PROVEEDOR</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
             </div>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>CONDICIÓN</div>
-                <div className={s.summaryValue}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div>
+                <div className={s.summaryValue}>{purchaseConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div>
             </div>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>ITEMS</div>
@@ -900,8 +892,8 @@ export default function InvoiceForm(props) {
                 <div className={s.summaryValue} style={{ color: '#10b981' }}>{status}</div>
             </div>
             <div className={s.summaryItem}>
-                <div className={s.summaryLabel}>VENDEDOR</div>
-                <div className={s.summaryValue}>{sellers.find(sl => sl.id === salespersonId)?.name || 'Ninguno'}</div>
+                <div className={s.summaryLabel}>COMPRADOR</div>
+                <div className={s.summaryValue}>{buyers.find(sl => sl.id === buyerId)?.name || 'Ninguno'}</div>
             </div>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>MODIFICACIÓN</div>

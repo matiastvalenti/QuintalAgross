@@ -42,16 +42,21 @@ export function openStandaloneWindow(path, name = '_blank', options = {}) {
 // ── Shortcuts para formularios frecuentes ──
 
 export function openNuevaOrdenVenta(options = {}) {
-  return openStandaloneWindow("/standalone/ordenes-venta/nueva", "orden-venta-nueva", options);
+  const { draft_id, ...windowOptions } = options;
+  let path = "/standalone/ordenes-venta/nueva";
+  if (draft_id) path += `?draft_id=${draft_id}`;
+  return openStandaloneWindow(path, draft_id ? `ov-draft-${draft_id}` : "orden-venta-nueva", windowOptions);
 }
 
 export function openNuevoRemito(ovId, options = {}) {
-  const { draft_key, ...windowOptions } = options;
+  const { draft_key, draft_id, ...windowOptions } = options;
   let path = ovId
     ? `/standalone/remitos/nuevo?ov_id=${ovId}`
     : "/standalone/remitos/nuevo";
   if (draft_key) path += `&draft_key=${encodeURIComponent(draft_key)}`;
-  return openStandaloneWindow(path, ovId ? `remito-ov-${ovId}` : "remito-nuevo", windowOptions);
+  if (draft_id) path += (path.includes('?') ? '&' : '?') + `draft_id=${draft_id}`;
+  
+  return openStandaloneWindow(path, ovId ? `remito-ov-${ovId}` : (draft_id ? `remito-draft-${draft_id}` : "remito-nuevo"), windowOptions);
 }
 
 export function openNuevaFactura(params = {}, options = {}) {
@@ -82,9 +87,9 @@ export function openEditRemito(id, options = {}) {
 export function openEditFactura(id, options = {}) {
   return openStandaloneWindow(`/standalone/facturas/${id}`, `factura-${id}`, options);
 }
-
 // === NOTAS DE DÉBITO ===
-export function openNuevaNotaDebito({ factura_id } = {}, options = {}) {
+export function openNuevaNotaDebito(options = {}) {
+  const { factura_id, ...windowOptions } = options;
   let path = '/standalone/notas-debito/nueva';
   let windowName = 'nueva-nota-debito';
 
@@ -92,10 +97,180 @@ export function openNuevaNotaDebito({ factura_id } = {}, options = {}) {
     path += `?factura_id=${factura_id}`;
     windowName = `nota-debito-factura-${factura_id}`;
   }
-  
-  return openStandaloneWindow(path, windowName, options);
+
+  return openStandaloneWindow(path, windowName, windowOptions);
 }
 
 export function openEditNotaDebito(id, options = {}) {
   return openStandaloneWindow(`/standalone/notas-debito/${id}`, `nota-debito-${id}`, options);
 }
+
+// === NOTAS DE CRÉDITO ===
+export function openNuevaNotaCredito(options = {}) {
+  const { factura_id, ...windowOptions } = options;
+  let path = '/standalone/notas-credito/nueva';
+  let windowName = 'nueva-nota-credito';
+
+  if (factura_id) {
+    path += `?factura_id=${factura_id}`;
+    windowName = `nota-credito-factura-${factura_id}`;
+  }
+
+  return openStandaloneWindow(path, windowName, windowOptions);
+}
+
+export function openEditNotaCredito(id, options = {}) {
+  return openStandaloneWindow(`/standalone/notas-credito/${id}`, `nota-credito-${id}`, options);
+}
+
+// === NOTAS DE DÉBITO DE COMPRA ===
+export function openNuevaNotaDebitoCompra(options = {}) {
+  const { factura_id, ...windowOptions } = options;
+  let path = '/standalone/notas-debito-compra/nueva';
+  let windowName = 'nueva-nota-debito-compra';
+
+  if (factura_id) {
+    path += `?factura_id=${factura_id}`;
+    windowName = `nota-debito-compra-factura-${factura_id}`;
+  }
+
+  return openStandaloneWindow(path, windowName, windowOptions);
+}
+
+export function openEditNotaDebitoCompra(id, options = {}) {
+  return openStandaloneWindow(`/standalone/notas-debito-compra/${id}`, `nota-debito-compra-${id}`, options);
+}
+
+// === NOTAS DE CRÉDITO DE COMPRA ===
+export function openNuevaNotaCreditoCompra(options = {}) {
+  const { factura_id, ...windowOptions } = options;
+  let path = '/standalone/notas-credito-compra/nueva';
+  let windowName = 'nueva-nota-credito-compra';
+
+  if (factura_id) {
+    path += `?factura_id=${factura_id}`;
+    windowName = `nota-credito-compra-factura-${factura_id}`;
+  }
+
+  return openStandaloneWindow(path, windowName, windowOptions);
+}
+
+export function openEditNotaCreditoCompra(id, options = {}) {
+  return openStandaloneWindow(`/standalone/notas-credito-compra/${id}`, `nota-credito-compra-${id}`, options);
+}
+// === ÓRDENES DE COMPRA ===
+export function openNuevaOrdenCompra(options = {}) {
+  return openStandaloneWindow("/standalone/ordenes-compra/nueva", "orden-compra-nueva", options);
+}
+
+export function openEditPurchaseOrder(id, options = {}) {
+  return openStandaloneWindow(`/standalone/ordenes-compra/${id}`, `orden-compra-${id}`, options);
+}
+
+
+export function openEditOrdenCompra(id, options = {}) {
+  return openStandaloneWindow(`/standalone/ordenes-compra/${id}`, `orden-compra-${id}`, options);
+}
+
+// === REMITOS DE ENTRADA ===
+export function openNuevoRemitoEntrada(ocId, options = {}) {
+  const { draft_key, ...windowOptions } = options;
+  let path = ocId
+    ? `/standalone/remitos-entrada/nuevo?oc_id=${ocId}`
+    : "/standalone/remitos-entrada/nuevo";
+  if (draft_key) path += `&draft_key=${encodeURIComponent(draft_key)}`;
+  return openStandaloneWindow(path, ocId ? `remito-entrada-oc-${ocId}` : "remito-entrada-nuevo", windowOptions);
+}
+
+export function openEditRemitoEntrada(id, options = {}) {
+  return openStandaloneWindow(`/standalone/remitos-entrada/${id}`, `remito-entrada-${id}`, options);
+}
+
+// === FACTURAS DE COMPRA ===
+export function openNuevaFacturaCompra(params = {}, options = {}) {
+  const { oc_id, lines, draft_id } = params; // Changed ov_id to oc_id
+  let path = "/standalone/facturas-compra/nueva";
+  let windowName = "factura-compra-nueva";
+  
+  if (draft_id) {
+    path += `?draft_id=${draft_id}`;
+    windowName = `factura-compra-draft-${draft_id}`;
+  } else if (oc_id) { // Changed ov_id to oc_id
+    path += `?oc_id=${oc_id}`; // Changed ov_id to oc_id
+    if (lines) path += `&lines=${lines}`;
+    windowName = `factura-compra-oc-${oc_id}`; // Changed ov_id to oc_id
+  }
+  
+  return openStandaloneWindow(path, windowName, options);
+}
+
+export function openEditFacturaCompra(id, options = {}) {
+  return openStandaloneWindow(`/standalone/facturas-compra/${id}`, `factura-compra-${id}`, options);
+}
+
+// === RECIBOS Y PAGOS ===
+export function openNuevoRecibo(options = {}) {
+  const entityId = options.entityId ? `?entityId=${options.entityId}` : "";
+  return openStandaloneWindow(`/standalone/recibos/nuevo${entityId}`, "recibo-nuevo", options);
+}
+
+export function openEditRecibo(id, options = {}) {
+  const mode = options.mode || "view";
+  return openStandaloneWindow(`/standalone/recibos/${id}?mode=${mode}`, `recibo-${id}`, options);
+}
+
+export function openNuevoPago(options = {}) {
+  let path = "/standalone/pagos/nuevo?isPayment=true";
+  if (options.entityId) path += `&entityId=${options.entityId}`;
+  if (options.draft_id) path += `&draft_id=${options.draft_id}`;
+  return openStandaloneWindow(path, "pago-nuevo", options);
+}
+
+export function openEditPago(id, options = {}) {
+  const mode = options.mode || "view";
+  return openStandaloneWindow(`/standalone/pagos/${id}?mode=${mode}&isPayment=true`, `pago-${id}`, options);
+}
+
+// === RENDICIÓN DE GASTOS ===
+export function openNuevaRendicion(options = {}) {
+  return openStandaloneWindow("/standalone/gastos/nuevo", "rendicion-nueva", options);
+}
+
+export function openEditRendicion(id, options = {}) {
+  return openStandaloneWindow(`/standalone/gastos/${id}`, `rendicion-${id}`, options);
+}
+
+// === RESUMEN DE CUENTA ===
+export function openResumenCuenta(entityId = null, options = {}) {
+  const path = entityId ? `/standalone/resumen-cuenta/${entityId}` : "/standalone/resumen-cuenta";
+  return openStandaloneWindow(path, entityId ? `resumen-${entityId}` : "resumen-cuenta", options);
+}
+
+// === ENTIDADES Y CRM ===
+export function openEntitiesManager(options = {}) {
+  return openStandaloneWindow("/standalone/entidades", "entidades-manager", options);
+}
+
+export function openEntityDashboard(id, options = {}) {
+  return openStandaloneWindow(`/standalone/crm/entidad/${id}`, `entity-dashboard-${id}`, options);
+}
+
+// === AUTH Y AUDITORÍA ===
+export function openUsersManager(options = {}) {
+  return openStandaloneWindow("/standalone/usuarios", "users-manager", options);
+}
+
+export function openAuditLogs(options = {}) {
+  return openStandaloneWindow("/standalone/auditoria", "audit-logs", options);
+}
+
+// === FLOTA ===
+export function openFleetManager(options = {}) {
+  return openStandaloneWindow("/standalone/flota", "fleet-manager", options);
+}
+
+
+
+
+
+

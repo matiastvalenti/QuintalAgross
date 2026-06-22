@@ -25,6 +25,12 @@ import styles from './Accounting.module.css';
 import { useToast } from '../../context/ToastContext';
 import * as XLSX from 'xlsx';
 import { useWindow } from '../../context/WindowContext';
+import { 
+  openEditFactura, 
+  openEditRecibo, 
+  openEditPago, 
+  openEditRemito 
+} from '../../utils/openStandaloneWindow';
 import { downloadLedgerPdf, downloadVatPdf } from '../../services/AccountingPdf';
 import { useCostCenter } from '../../context/CostCenterContext';
 
@@ -219,15 +225,15 @@ export default function Accounting() {
   };
 
   const openDocInWindow = (doc) => {
-    let type = 'invoice-form';
-    if (doc.doc_type === 'RECEIPT' || doc.doc_type === 'PAYMENT') type = 'receipt-form';
-    
-    openWindow(type, { id: doc.id, mode: 'edit' }, {
-      title: `${doc.doc_type} ${doc.number}`,
-      width: 1100,
-      height: 700,
-      singletonKey: `doc-${doc.id}`
-    });
+    if (doc.doc_type === 'RECEIPT') {
+      openEditRecibo(doc.id, { mode: 'edit', title: `Recibo ${doc.number}` });
+    } else if (doc.doc_type === 'PAYMENT') {
+      openEditPago(doc.id, { mode: 'edit', title: `Pago ${doc.number}` });
+    } else if (doc.doc_type === 'DELIVERY_NOTE') {
+      openEditRemito(doc.id, { mode: 'edit', title: `Remito ${doc.number}` });
+    } else {
+      openEditFactura(doc.id, { mode: 'edit', title: `${doc.doc_type} ${doc.number}` });
+    }
   };
 
   // --- STATS / KPIs ---

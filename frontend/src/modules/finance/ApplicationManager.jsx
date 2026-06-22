@@ -24,6 +24,13 @@ import {
   ArrowUpCircle
 } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
+import { 
+  openEditFactura, 
+  openEditRecibo, 
+  openEditPago, 
+  openEditRemito, 
+  openEditOrdenVenta 
+} from '../../utils/openStandaloneWindow';
 import t from '../../components/ui/Table.module.css';
 import s from './ApplicationManager.module.css';
 
@@ -135,23 +142,19 @@ function FinancialApplicationTool({ entity }) {
 
   const handleOpenDoc = (id, number, type) => {
     if (!id) return;
-    let windowType = 'invoice-form';
-    let props = { id, mode: 'edit' };
-    if (type === 'RECEIPT' || type === 'PAYMENT') {
-      windowType = 'receipt-form';
-      props.isPayment = (type === 'PAYMENT');
+    if (type === 'RECEIPT') {
+      openEditRecibo(id, { mode: 'edit', title: `Recibo ${number}` });
+    } else if (type === 'PAYMENT') {
+      openEditPago(id, { mode: 'edit', title: `Pago ${number}` });
     } else if (type === 'DELIVERY_NOTE') {
-      windowType = 'delivery-note';
+      openEditRemito(id, { mode: 'edit', title: `Remito ${number}` });
     } else if (type === 'SALES_ORDER') {
-      windowType = 'sales-order';
+      openEditOrdenVenta(id, { mode: 'edit', title: `Orden Venta ${number}` });
     } else if (type === 'LPG_PRIMARY' || type === 'LPG_SECONDARY') {
-      windowType = 'grain-settlement';
+      openWindow('grain-settlement', { id, mode: 'edit' }, { title: `${type || 'DOC'} ${number}` });
+    } else {
+      openEditFactura(id, { mode: 'edit', title: `Factura ${number}` });
     }
-    openWindow(windowType, props, {
-      title: `${type || 'DOC'} ${number}`,
-      width: 1100,
-      height: 700
-    });
   };
 
   useEffect(() => {
@@ -714,7 +717,8 @@ function OriginLinkTool({ entity }) {
         setSelectedIds([]);
         fetchDns();
         // Abrir la factura generada
-        openWindow('invoice-form', { id: data.id, mode: 'edit' }, {
+        openEditFactura(data.id, {
+          mode: 'edit',
           title: `Factura ${data.number}`,
           width: 1100,
           height: 700
@@ -957,23 +961,19 @@ function CommissionApplication() {
 
   const handleOpenDoc = (id, number, type) => {
     if (!id) return;
-    let windowType = 'invoice-form';
-    let props = { id, mode: 'edit' };
-    if (type === 'RECEIPT' || type === 'PAYMENT') {
-      windowType = 'receipt-form';
-      props.isPayment = (type === 'PAYMENT');
+    if (type === 'RECEIPT') {
+      openEditRecibo(id, { mode: 'edit', title: `Recibo ${number}` });
+    } else if (type === 'PAYMENT') {
+      openEditPago(id, { mode: 'edit', title: `Pago ${number}` });
     } else if (type === 'DELIVERY_NOTE') {
-      windowType = 'delivery-note';
+      openEditRemito(id, { mode: 'edit', title: `Remito ${number}` });
     } else if (type === 'SALES_ORDER') {
-      windowType = 'sales-order';
+      openEditOrdenVenta(id, { mode: 'edit', title: `Orden Venta ${number}` });
     } else if (type === 'LPG_PRIMARY' || type === 'LPG_SECONDARY') {
-      windowType = 'grain-settlement';
+      openWindow('grain-settlement', { id, mode: 'edit' }, { title: `${type || 'DOC'} ${number}` });
+    } else {
+      openEditFactura(id, { mode: 'edit', title: `Factura ${number}` });
     }
-    openWindow(windowType, props, {
-      title: `${type || 'DOC'} ${number}`,
-      width: 1100,
-      height: 700
-    });
   };
 
   const handleApply = async () => {

@@ -10,6 +10,7 @@ import {
 import { useToast } from '../../context/ToastContext';
 import { useWindow } from '../../context/WindowContext';
 import { useCostCenter } from '../../context/CostCenterContext';
+import { openResumenCuenta } from '../../utils/openStandaloneWindow';
 
 import ContentHeader from '../../components/layout/ContentHeader';
 import api from '../../services/api';
@@ -85,7 +86,7 @@ export default function BalancesPage() {
     };
 
     const handleOpenStatement = (entityId, name) => {
-        openWindow('statement-page', { entityId, defaultFilters: { only_unapplied: true } }, { 
+        openResumenCuenta(entityId, { 
             title: `Saldos Pendientes: ${name}`, 
             width: 1200, 
             height: 700 

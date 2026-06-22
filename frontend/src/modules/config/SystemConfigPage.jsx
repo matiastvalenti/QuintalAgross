@@ -6,6 +6,11 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useWindow } from '../../context/WindowContext';
+import { 
+  openEntitiesManager, 
+  openFleetManager, 
+  openUsersManager 
+} from '../../utils/openStandaloneWindow';
 import s from './SystemConfigPage.module.css';
 
 const CONFIG_GROUPS = [
@@ -118,14 +123,22 @@ export default function SystemConfigPage() {
   const { openWindow } = useWindow();
 
   const handleOpen = (opt) => {
-    openWindow(opt.window, opt.props || {}, {
-      title: opt.title,
-      width: 1050,
-      height: 700,
-      minWidth: 1000,
-      minHeight: 600,
-      singletonKey: `config-${opt.id}`
-    });
+    if (opt.window === 'entities-manager') {
+      openEntitiesManager({ title: opt.title });
+    } else if (opt.window === 'fleet-manager') {
+      openFleetManager({ title: opt.title });
+    } else if (opt.window === 'users-manager') {
+      openUsersManager({ title: opt.title });
+    } else {
+      openWindow(opt.window, opt.props || {}, {
+        title: opt.title,
+        width: 1050,
+        height: 700,
+        minWidth: 1000,
+        minHeight: 600,
+        singletonKey: `config-${opt.id}`
+      });
+    }
   };
 
   return (

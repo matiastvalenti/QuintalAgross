@@ -8,7 +8,7 @@ import Drawer from "../../components/ui/Drawer";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { useWindow } from '../../context/WindowContext';
-import { openEditOrdenVenta } from '../../utils/openStandaloneWindow';
+import { openEditPurchaseOrder } from '../../utils/openStandaloneWindow';
 import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
@@ -51,24 +51,23 @@ import {
   AlertCircle,
   ArrowRight
 } from "lucide-react";
-import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/ui/TraceabilityStatusBadge";
-import s from "./SalesOrderForm.module.css";
+import s from "../sales/SalesOrderForm.module.css"; // Using SalesOrderForm.module.css for consistent styling
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
-import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
+import ManualLinkInvoiceModal from "../sales/ManualLinkInvoiceModal"; // Needs to be adapted or removed for purchases
 
-export default function DeliveryNoteForm(props) {
+export default function PurchaseDeliveryNoteForm(props) {
   const {
     mode: initialMode = "new",
     id: initialId = null,
     windowId,
-    ov_id = null,
+    oc_id = null, // Changed from ov_id to oc_id
     autoOpenSelector = false,
     preselectedLines = null,
     initialData = null,
     isStandalone = false,
   } = props;
-  const { closeWindow, openWindow } = useWindow();
+  const { closeWindow, openWindow } = useWindow(); // Keep for now, might be removed if standalone
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -76,10 +75,10 @@ export default function DeliveryNoteForm(props) {
   const [id, setId] = useState(initialId);
   const [loading, setLoading] = useState(mode === "edit");
   const [items, setItems ] = useState([]);
-  const [activeTab, setActiveTab ] = useState("items");
-  const [sourceId, setSourceId] = useState(props.initialSourceId || ov_id || '');
-  const [sourceType, setSourceType] = useState(props.initialSourceType || (ov_id ? 'sales-order' : ''));
-  const [sourceOrderId, setSourceOrderId] = useState(ov_id || '');
+  const [activeTab, setActiveTab ] = useState("items"); // Remove later
+  const [sourceId, setSourceId] = useState(props.initialSourceId || oc_id || ''); // Changed from ov_id
+  const [sourceType, setSourceType] = useState(props.initialSourceType || (oc_id ? 'purchase-order' : '')); // Changed from sales-order
+  const [sourceOrderId, setSourceOrderId] = useState(oc_id || ''); // Changed from ov_id
   const [traceability, setTraceability] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [relatedDeliveryNotes, setRelatedDeliveryNotes] = useState([]);
@@ -97,16 +96,16 @@ export default function DeliveryNoteForm(props) {
   // --- Header Data ---
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [ctroCosto, setCtroCosto] = useState(String(costCenter || 1));
-  const [entity, setEntity] = useState(null);
+  const [entity, setEntity] = useState(null); // This will be supplier
   const [pv, setPv] = useState("0001");
   const [number, setNumber] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [observations, setObservations] = useState("");
   const [status, setStatus] = useState("DRAFT");
   const [dueDate, setDueDate] = useState("");
-  const [vendedor, setVendedor] = useState("");
-  const [salespersonId, setSalespersonId] = useState("");
-  const [selectedConditionId, setSelectedConditionId] = useState("");
+  const [buyer, setBuyer] = useState(""); // Changed from vendedor
+  const [buyerId, setBuyerId] = useState(""); // Changed from salespersonId
+  const [selectedConditionId, setSelectedConditionId] = useState(""); // This will be purchase condition
   const [currency, setCurrency] = useState("USD");
   const [exchangeRate, setExchangeRate] = useState(1);
   const [drawerState, setDrawerState] = useState({ open: false, type: null });
@@ -119,8 +118,8 @@ export default function DeliveryNoteForm(props) {
   // --- Lists ---
   const [warehouses, setWarehouses] = useState([]);
   const [pointsOfSale, setPointsOfSale] = useState([]);
-  const [sellers, setSellers] = useState([]);
-  const [saleConditions, setSaleConditions] = useState([]);
+  const [buyers, setBuyers] = useState([]); // Changed from sellers
+  const [purchaseConditions, setPurchaseConditions] = useState([]); // Changed from saleConditions
 
   // --- Calculations ---
   const totals = useMemo(() => {
@@ -145,8 +144,8 @@ export default function DeliveryNoteForm(props) {
   const orderedLts = useMemo(() => items.reduce((acc, item) => acc + ((parseFloat(item.qty) || 0) * (parseFloat(item._unit_content) || 1)), 0), [items]);
 
   useEffect(() => {
-    if (ov_id) {
-      console.log("ovId recibido en form:", ov_id);
+    if (oc_id) {
+      console.log("oc_id recibido en form:", oc_id);
     }
     fetchInitialData();
   }, []);
@@ -155,7 +154,7 @@ export default function DeliveryNoteForm(props) {
     if (!initialData || mode !== 'new') return;
     const load = async () => {
       const token = localStorage.getItem('token');
-      const headers = { Authorization: `Bearer ${token}` };
+      const headers = { 'Authorization': `Bearer ${token}` };
       if (initialData.entity_id) {
         try {
           const res = await fetch(`${API_URL}/entities/${initialData.entity_id}`, { headers });
@@ -196,43 +195,43 @@ export default function DeliveryNoteForm(props) {
         fetchDeliveryNote();
         fetchDeliveryNoteTraceability();
     }
-    else if (mode === "new" && ov_id) {
-        console.log("Cargando OV por ID:", ov_id);
+    else if (mode === "new" && oc_id) { // Changed from ov_id
+        console.log("Cargando OC por ID:", oc_id); // Changed from OV
         if (preselectedLines && preselectedLines.length > 0) {
-            fetchHeaderFromSalesOrder();
+            fetchHeaderFromPurchaseOrder(); // Changed from SalesOrder
             setItems(preselectedLines.map(l => ({
                 id: Math.random(),
                 product_id: l.product_id,
                 description: l.product?.name || l.name || l.description || '',
-                qty: parseFloat(l.qty_to_remit || l.qty || 1),
+                qty: parseFloat(l.qty_to_receive || l.qty || 1), // Changed from remit
                 qty_packages: parseFloat(l.qty_packages || 0) || undefined,
                 unit_price: parseFloat(l.unit_price || 0),
                 discount_pct: parseFloat(l.discount_pct || 0),
                 vat_rate: parseFloat(l.vat_rate || 0.21),
-                _account_code: l.sales_account_code || l._account_code || 'S/C',
+                _account_code: l.purchase_account_code || l._account_code || 'S/C', // Changed from sales_account_code
                 _unit_content: parseFloat(l._unit_content || 1),
                 _container_name: l._container_name || 'Unidad',
                 _unit_label: l._unit_label || 'u',
-                source_sales_line_id: l.id,
+                source_purchase_line_id: l.id, // Changed from source_sales_line_id
                 _parent_number: l.parent_number || '',
             })));
         } else if (autoOpenSelector) {
-            fetchHeaderFromSalesOrder();
+            fetchHeaderFromPurchaseOrder(); // Changed from SalesOrder
         } else {
-            fetchFromSalesOrder();
+            fetchFromPurchaseOrder(); // Changed from SalesOrder
         }
     }
-  }, [mode, id, ov_id, autoOpenSelector]);
+  }, [mode, id, oc_id, autoOpenSelector]);
 
   useEffect(() => {
-    if (sourceId && sourceType === 'sales-order') {
+    if (sourceId && sourceType === 'purchase-order') { // Changed from sales-order
         const orderIdToTrace = sourceOrderId || sourceId;
         fetchTraceability(orderIdToTrace);
     }
   }, [sourceId, sourceType, sourceOrderId]);
 
   useEffect(() => {
-    if (mode === "new" && !ov_id && pointsOfSale.length > 0) {
+    if (mode === "new" && !oc_id && pointsOfSale.length > 0) { // Changed from ov_id
       const targetPvCode = ctroCosto === "1" ? "0001" : "0002";
       const initialPv = pointsOfSale.find(p => p.pv === targetPvCode)?.pv || pointsOfSale[0].pv;
       setPv(initialPv);
@@ -245,7 +244,7 @@ export default function DeliveryNoteForm(props) {
     const headers = { Authorization: `Bearer ${token}` };
     
     // Si estamos en standalone y creando un remito, no bloqueamos la interfaz cargando vendedores ni condiciones.
-    const skipHeavyLists = mode === "new" && (ov_id || isStandalone);
+    const skipHeavyLists = mode === "new" && (oc_id || isStandalone); // Changed from ov_id
 
     const queries = [
       fetch(`${API_URL}/inventory/warehouses/`, { headers }),
@@ -253,11 +252,11 @@ export default function DeliveryNoteForm(props) {
     ];
 
     if (!skipHeavyLists) {
-      queries.push(fetch(`${API_URL}/entities/?is_salesperson=true`, { headers }));
-      queries.push(fetch(`${API_URL}/sales/sale-conditions/`, { headers }));
+      queries.push(fetch(`${API_URL}/entities/?is_buyer=true`, { headers })); // Changed from is_salesperson
+      queries.push(fetch(`${API_URL}/purchases/purchase-conditions/`, { headers })); // Changed from sales/sale-conditions
     }
 
-    const [whRes, posRes, spRes, scRes] = await Promise.all(queries);
+    const [whRes, posRes, buyRes, condRes] = await Promise.all(queries); // Changed from spRes, scRes
 
     if (whRes?.ok) {
         const whs = await whRes.json();
@@ -265,8 +264,8 @@ export default function DeliveryNoteForm(props) {
         if (whs.length > 0 && mode === "new") setWarehouseId(whs[0].id);
     }
     
-    if (spRes?.ok) setSellers(await spRes.json());
-    if (scRes?.ok) setSaleConditions(await scRes.json());
+    if (buyRes?.ok) setBuyers(await buyRes.json()); // Changed from setSellers
+    if (condRes?.ok) setPurchaseConditions(await condRes.json()); // Changed from setSaleConditions
     
     if (posRes?.ok) {
        const pvs = await posRes.json();
@@ -287,7 +286,7 @@ export default function DeliveryNoteForm(props) {
 
   const fetchNextNumber = async (v_pv) => {
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/config/pos/next-number?pv=${v_pv}&doc_type=RE`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/config/pos/next-number?pv=${v_pv}&doc_type=PE`, { headers: { Authorization: `Bearer ${token}` } }); // Changed doc_type to PE
     if (res.ok) {
         const data = await res.json();
         setNumber(data.full_number || data.number || `${v_pv}-${data.next_number}`);
@@ -297,7 +296,7 @@ export default function DeliveryNoteForm(props) {
   const fetchDeliveryNote = async () => {
     setLoading(true);
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/sales/delivery-notes/${id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/purchases/delivery-notes/${id}`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
     if (res.ok) {
         const data = await res.json();
         if (data.entity_id) {
@@ -311,15 +310,15 @@ export default function DeliveryNoteForm(props) {
         setWarehouseId(data.warehouse_id || '');
         setStatus(data.status || 'DRAFT');
         setObservations(data.notes || '');
-        setSourceId(data.sales_order_id ? data.origin_reference : (data.purchase_order_id ? data.origin_reference : ''));
-        setSourceType(data.sales_order_id ? 'sales-order' : (data.purchase_order_id ? 'purchase-order' : ''));
-        if (data.sales_order_id) {
-            setSourceOrderId(data.sales_order_id);
-            fetchTraceability(data.sales_order_id);
+        setSourceId(data.purchase_order_id ? data.origin_reference : ''); // Changed from sales_order_id
+        setSourceType(data.purchase_order_id ? 'purchase-order' : ''); // Changed from sales-order_id
+        if (data.purchase_order_id) { // Changed from sales_order_id
+            setSourceOrderId(data.purchase_order_id); // Changed from sales_order_id
+            fetchTraceability(data.purchase_order_id); // Changed from sales_order_id
         }
-        setVendedor(data.vendedor || '');
-        setSalespersonId(data.salesperson_id || '');
-        setSelectedConditionId(data.sale_condition_id || '');
+        setBuyer(data.buyer || ''); // Changed from vendedor
+        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -331,36 +330,35 @@ export default function DeliveryNoteForm(props) {
         setVehiclePlate(data.plate || '');
         setTransporter(data.transporter || '');
 
-        let ovLinesMap = {};
-        if (data.sales_order_id) {
+        let ocLinesMap = {}; // Changed from ovLinesMap
+        if (data.purchase_order_id) { // Changed from sales_order_id
             try {
-                const ovRes = await fetch(`${API_URL}/sales/sales-orders/${data.sales_order_id}`, { headers: { Authorization: `Bearer ${token}` } });
-                if (ovRes.ok) {
-                    const ovData = await ovRes.json();
-                    ovData.lines.forEach(l => { ovLinesMap[l.id] = l; });
+                const ocRes = await fetch(`${API_URL}/purchases/purchase-orders/${data.purchase_order_id}`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
+                if (ocRes.ok) {
+                    const ocData = await ocRes.json();
+                    ocData.lines.forEach(l => { ocLinesMap[l.id] = l; });
                 }
             } catch(e) {}
         }
 
         setItems(data.lines.map(l => {
-            const ovL = ovLinesMap[l.source_sales_line_id] || {};
+            const ocL = ocLinesMap[l.source_purchase_line_id] || {}; // Changed from ovL and source_sales_line_id
             return {
                 ...l,
                 id: l.id,
                 product_id: l.product_id,
                 description: l.description,
-                qty_ordered: ovL.qty || 0,
-                qty_delivered: ovL.qty_delivered || 0,
-                qty_pending: Math.max(0, (ovL.qty || 0) - (ovL.qty_delivered || 0)),
+                qty_ordered: ocL.qty || 0, // This is qty_ordered from purchase order
+                qty_received: ocL.qty_received || 0, // Changed from qty_delivered
+                qty_pending: Math.max(0, (ocL.qty || 0) - (ocL.qty_received || 0)), // Changed from qty_delivered
                 qty: l.qty,
-                unit_price: l.unit_price,
+                unit_price: l.unit_price, // This is COST
                 discount_pct: l.discount_pct,
                 vat_rate: l.vat_rate,
-                _account_code: l.product?.sales_account_code || 'S/C',
+                _account_code: l.product?.purchase_account_code || 'S/C', // Changed from sales_account_code
                 _unit_content: l.product?.quantity_per_container || 1,
                 _container_name: l.product?.container?.name || 'Unidad',
                 _unit_label: l.product?.container?.unit?.short_name || 'u',
-                source_sales_line_id: l.source_sales_line_id,
                 source_purchase_line_id: l.source_purchase_line_id,
                 qty_invoiced: l.qty_invoiced || 0
             };
@@ -369,30 +367,30 @@ export default function DeliveryNoteForm(props) {
     setLoading(false);
   };
 
-  const fetchHeaderFromSalesOrder = async () => {
+  const fetchHeaderFromPurchaseOrder = async () => { // Changed from SalesOrder
     setLoading(true);
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/sales/sales-orders/${ov_id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/purchases/purchase-orders/${oc_id}`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
     if (res.ok) {
         const data = await res.json();
-        console.log("OV cargada:", data);
+        console.log("OC cargada:", data); // Changed from OV
         if (data.entity_id) {
           const entityRes = await fetch(`${API_URL}/entities/${data.entity_id}`, { headers: { Authorization: `Bearer ${token}` }});
           if (entityRes.ok) {
             const entData = await entityRes.json();
-            setEntity(entData);
+            setEntity(entData); // This is supplier
             handleOpenItemSelector(null, data.id, entData.id);
           }
         }
         const costCenterStr = String(data.cost_center || 1);
         setCtroCosto(costCenterStr);
         setSourceId(data.number);
-        setSourceType('sales-order');
+        setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
         fetchTraceability(data.id);
-        setVendedor(data.vendedor || '');
-        setSalespersonId(data.salesperson_id || '');
-        setSelectedConditionId(data.sale_condition_id || '');
+        setBuyer(data.buyer || ''); // Changed from vendedor
+        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -405,26 +403,26 @@ export default function DeliveryNoteForm(props) {
     setLoading(false);
   };
 
-  const fetchFromSalesOrder = async () => {
+  const fetchFromPurchaseOrder = async () => { // Changed from SalesOrder
     setLoading(true);
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/sales/sales-orders/${ov_id}`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/purchases/purchase-orders/${oc_id}`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
     if (res.ok) {
         const data = await res.json();
-        console.log("OV cargada:", data);
+        console.log("OC cargada:", data); // Changed from OV
         if (data.entity_id) {
           const entityRes = await fetch(`${API_URL}/entities/${data.entity_id}`, { headers: { Authorization: `Bearer ${token}` }});
-          if (entityRes.ok) setEntity(await entityRes.json());
+          if (entityRes.ok) setEntity(await entityRes.json()); // This is supplier
         }
         const costCenterStr = String(data.cost_center || 1);
         setCtroCosto(costCenterStr);
         setSourceId(data.number);
-        setSourceType('sales-order');
+        setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
         fetchTraceability(data.id);
-        setVendedor(data.vendedor || '');
-        setSalespersonId(data.salesperson_id || '');
-        setSelectedConditionId(data.sale_condition_id || '');
+        setBuyer(data.buyer || ''); // Changed from vendedor
+        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -435,28 +433,28 @@ export default function DeliveryNoteForm(props) {
         setPv(pvCode);
         fetchNextNumber(pvCode);
 
-        const linesRes = await fetch(`${API_URL}/sales/pending-items/sales-orders?entity_id=${data.entity_id}`, {
+        const linesRes = await fetch(`${API_URL}/purchases/pending-items/purchase-orders?entity_id=${data.entity_id}`, { // Changed sales to purchases
            headers: { Authorization: `Bearer ${token}` }
         });
         if (linesRes.ok) {
            const pendingLines = await linesRes.json();
-           const filteredLines = pendingLines.filter(l => String(l.parent_id) === String(ov_id));
+           const filteredLines = pendingLines.filter(l => String(l.parent_id) === String(oc_id)); // Changed ov_id
            setItems(filteredLines.map(l => ({
               id: Math.random(),
               product_id: l.product_id,
               description: l.product_name,
               qty_ordered: l.qty,
-              qty_delivered: l.qty_fulfilled,
+              qty_received: l.qty_fulfilled, // Changed from qty_fulfilled
               qty_pending: l.qty_pending,
               qty: l.qty_pending, // User requested total pendiente by default
-              unit_price: l.unit_price,
+              unit_price: l.unit_price, // This is COST
               discount_pct: l.discount_pct,
               vat_rate: l.vat_rate,
-              _account_code: l.sales_account_code || 'S/C',
+              _account_code: l.purchase_account_code || 'S/C', // Changed from sales_account_code
               _unit_content: l.quantity_per_container || 1,
               _container_name: l.container_name || 'Unidad',
               _unit_label: l.unit_short_name || 'u',
-              source_sales_line_id: l.id,
+              source_purchase_line_id: l.id, // Changed from source_sales_line_id
               _parent_number: l.parent_number
            })));
         }
@@ -467,7 +465,7 @@ export default function DeliveryNoteForm(props) {
   const fetchTraceability = async (orderId) => {
     if (!orderId) return;
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/sales/sales-orders/${orderId}/traceability`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/purchases/purchase-orders/${orderId}/traceability`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
     if (res.ok) {
         setTraceability(await res.json());
     }
@@ -477,7 +475,7 @@ export default function DeliveryNoteForm(props) {
     if (!id) return;
     try {
         const token = localStorage.getItem("token");
-        const res = await fetch(`${API_URL}/sales/delivery-notes/${id}/traceability`, { headers: { Authorization: `Bearer ${token}` } });
+        const res = await fetch(`${API_URL}/purchases/delivery-notes/${id}/traceability`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
         if (res.ok) {
             setDnTraceability(await res.json());
         }
@@ -488,7 +486,7 @@ export default function DeliveryNoteForm(props) {
 
   const searchEntities = async (q) => {
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/entities/?q=${q}&type=client`, { headers: { Authorization: `Bearer ${token}` } });
+    const res = await fetch(`${API_URL}/entities/?q=${q}&type=supplier`, { headers: { Authorization: `Bearer ${token}` } }); // Changed type to supplier
     return res.json();
   };
 
@@ -504,21 +502,22 @@ export default function DeliveryNoteForm(props) {
       id: Math.random(),
       product_id: product.id,
       description: product.name,
-      qty: 1,
-      unit_price: product.cost_price || 0,
+      qty: 1 * (product.quantity_per_container || 1), // Apply purchase order fix
+      qty_packages: 1, // Apply purchase order fix
+      unit_price: product.cost_price || 0, // Use cost_price for purchases
       discount_pct: 0,
       vat_rate: product.tax_type?.rate || 0.21,
-      _account_code: product.sales_account_code || 'S/C',
+      _account_code: product.purchase_account_code || 'S/C', // Changed from sales_account_code
       _unit_content: product.quantity_per_container || 1,
       _container_name: product.container?.name || 'Unidad',
       _unit_label: product.container?.unit?.short_name || 'u',
     }]);
   };
 
-  const handleOpenItemSelector = async (itemId = null, specificOvId = null, specificEntityId = null) => {
+  const handleOpenItemSelector = async (itemId = null, specificOcId = null, specificEntityId = null) => { // Changed specificOvId to specificOcId
     const targetEntityId = specificEntityId || entity?.id;
     if (!targetEntityId) {
-        showToast("Seleccione un cliente para ver pedidos pendientes", "warning");
+        showToast("Seleccione un proveedor para ver órdenes de compra pendientes", "warning"); // Changed cliente to proveedor
         return;
     }
     setLinkingItemId(itemId);
@@ -526,14 +525,14 @@ export default function DeliveryNoteForm(props) {
     setSelectorLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_URL}/sales/pending-items/sales-orders?entity_id=${targetEntityId}`, {
+      const res = await fetch(`${API_URL}/purchases/pending-items/purchase-orders?entity_id=${targetEntityId}`, { // Changed sales to purchases
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         const data = await res.json();
         let filteredData = data;
-        if (specificOvId) {
-             filteredData = data.filter(i => String(i.parent_id) === String(specificOvId));
+        if (specificOcId) { // Changed specificOvId
+             filteredData = data.filter(i => String(i.parent_id) === String(specificOcId)); // Changed specificOvId
         }
         setSelectableItems(filteredData);
         const qties = {};
@@ -541,7 +540,7 @@ export default function DeliveryNoteForm(props) {
              qties[i.id] = i.qty_pending;
         });
         setSelectorQuantities(qties);
-        if (specificOvId) {
+        if (specificOcId) { // Changed specificOvId
              setSelectedSelectorItems(filteredData);
         }
       }
@@ -557,7 +556,7 @@ export default function DeliveryNoteForm(props) {
       if (!sourceId && item.parent_id) {
           setSourceOrderId(item.parent_id);
           setSourceId(item.parent_number);
-          setSourceType('sales-order');
+          setSourceType('purchase-order'); // Changed from sales-order
           fetchTraceability(item.parent_id);
       }
       if (item.currency === 'USD' && currency === 'ARS') {
@@ -570,14 +569,14 @@ export default function DeliveryNoteForm(props) {
         product_id: item.product_id,
         description: item.product_name || item.description,
         qty: selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0),
-        unit_price: finalUnitPrice,
+        unit_price: finalUnitPrice, // This is COST
         discount_pct: item.discount_pct || 0,
         vat_rate: item.vat_rate || 0.21,
-        _account_code: item.sales_account_code || 'S/C',
+        _account_code: item.purchase_account_code || 'S/C', // Changed from sales_account_code
         _unit_content: item.quantity_per_container || 1,
         _container_name: item.container_name || 'Unidad',
         _unit_label: item.unit_short_name || item.unit_label || 'u',
-        source_sales_line_id: item.id,
+        source_purchase_line_id: item.id, // Changed from source_sales_line_id
         _parent_number: item.parent_number,
         currency: item.currency
       };
@@ -619,7 +618,7 @@ export default function DeliveryNoteForm(props) {
                 newItem.qty_packages = Number(value) / factor;
             }
         }
-        if (field === 'equiv') {
+        if (field === 'equiv') { // Check if this is needed
             const factor = i._unit_content || 1;
             newItem.qty = Number(value) / factor;
         }
@@ -636,13 +635,13 @@ export default function DeliveryNoteForm(props) {
     setLoading(true);
     try {
       const token = localStorage.getItem("token");
-      const res = await fetch(`${API_URL}/sales/delivery-notes/${id}/unlink`, {
+      const res = await fetch(`${API_URL}/purchases/delivery-notes/${id}/unlink`, { // Changed sales to purchases
         method: "POST",
         headers: { Authorization: `Bearer ${token}` }
       });
       if (res.ok) {
         showToast("Desvinculado correctamente", "success");
-        window.dispatchEvent(new CustomEvent("delivery-note-changed"));
+        window.dispatchEvent(new CustomEvent("purchase-delivery-note-changed")); // Changed event name
         setSourceId(null);
         setSourceType(null);
         setSourceOrderId(null);
@@ -656,16 +655,16 @@ export default function DeliveryNoteForm(props) {
   };
 
   const handleSave = async () => {
-    if (!entity) return showToast("Falta cliente", "error");
+    if (!entity) return showToast("Falta proveedor", "error"); // Changed cliente
     if (!warehouseId) return showToast("Falta depósito", "error");
     
     const validItems = items.filter(l => Number(l.qty) > 0);
-    if (validItems.length === 0) return showToast("Agregue al menos un producto con cantidad a remitir mayor a cero", "error");
+    if (validItems.length === 0) return showToast("Agregue al menos un producto con cantidad a recibir mayor a cero", "error"); // Changed remitir
 
     if (mode === 'new') {
         const exceedingItems = validItems.filter(l => l.qty_pending !== undefined && Number(l.qty) > l.qty_pending);
         if (exceedingItems.length > 0) {
-            return showToast("Existen productos donde la cantidad a remitir supera la cantidad pendiente", "error");
+            return showToast("Existen productos donde la cantidad a recibir supera la cantidad pendiente", "error"); // Changed remitir
         }
     }
 
@@ -679,9 +678,9 @@ export default function DeliveryNoteForm(props) {
         due_date: dueDate,
         currency: currency,
         exchange_rate: exchangeRate,
-        vendedor: vendedor,
-        salesperson_id: salespersonId,
-        sale_condition_id: selectedConditionId,
+        buyer: buyer, // Changed from vendedor
+        buyer_id: buyerId, // Changed from salesperson_id
+        purchase_condition_id: selectedConditionId, // Changed from sale_condition_id
         cost_center: parseInt(ctroCosto),
         notes: observations,
         vehicle_driver: vehicleDriver,
@@ -696,23 +695,20 @@ export default function DeliveryNoteForm(props) {
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
             vat_rate: l.vat_rate,
-            source_sales_line_id: l.source_sales_line_id,
-            source_purchase_line_id: l.source_purchase_line_id
+            source_purchase_line_id: l.source_purchase_line_id // Changed from source_sales_line_id
         }))
     };
 
     try {
         const isEdit = mode === 'edit' && id;
         const method = isEdit ? "PUT" : "POST";
-        let url = `${API_URL}/sales/delivery-notes/`;
+        let url = `${API_URL}/purchases/delivery-notes/`; // Changed sales to purchases
         if (isEdit) {
-            url = `${API_URL}/sales/delivery-notes/${id}`;
+            url = `${API_URL}/purchases/delivery-notes/${id}`; // Changed sales to purchases
         } else if (sourceId) {
             const actualSourceId = sourceOrderId || sourceId;
-            if (sourceType === 'sales-order') {
-                url = `${API_URL}/sales/delivery-notes/from-ov/${actualSourceId}`;
-            } else if (sourceType === 'purchase-order') {
-                url = `${API_URL}/sales/delivery-notes/from-oc/${actualSourceId}`;
+            if (sourceType === 'purchase-order') { // Changed sales-order
+                url = `${API_URL}/purchases/delivery-notes/from-oc/${actualSourceId}`; // Changed sales to purchases, from-ov to from-oc
             }
         }
         
@@ -730,8 +726,8 @@ export default function DeliveryNoteForm(props) {
         if (res.ok) {
             const data = await res.json();
             const savedId = data.id || id;
-            showToast("Remito guardado exitosamente", "success");
-            window.dispatchEvent(new CustomEvent("delivery-note-changed"));
+            showToast("Remito de Entrada guardado exitosamente", "success"); // Changed Remito
+            window.dispatchEvent(new CustomEvent("purchase-delivery-note-changed")); // Changed event name
             setMode("edit");
             setId(savedId);
         } else {
@@ -744,11 +740,11 @@ export default function DeliveryNoteForm(props) {
   };
 
   const handlePrint = () => {
-    window.open(`${API_URL}/sales/delivery-notes/${id}/pdf`, '_blank');
+    window.open(`${API_URL}/purchases/delivery-notes/${id}/pdf`, '_blank'); // Changed sales to purchases
   };
   const handlePrintPreprinted = () => {
     const token = localStorage.getItem("token");
-    window.open(`${API_URL}/sales/delivery-notes/${id}/pdf?format=preprinted&token=${token}`, "_blank");
+    window.open(`${API_URL}/purchases/delivery-notes/${id}/pdf?format=preprinted&token=${token}`, "_blank"); // Changed sales to purchases
   };
 
   const fmtValue = (val) => {
@@ -780,7 +776,7 @@ export default function DeliveryNoteForm(props) {
               <div className={s.compactHeaderTitle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <h1 style={{ fontSize: '15px', margin: 0, fontWeight: 900, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {mode === 'new' ? 'Nuevo Remito de Venta' : `Remito de Venta`}
+                          {mode === 'new' ? 'Nuevo Remito de Entrada' : `Remito de Entrada`}
                           {isReadOnly && <span className={s.readOnlyBadge}>MODO VISTA</span>}
                       </h1>
                       <div className={s.headerMeta}>
@@ -801,11 +797,11 @@ export default function DeliveryNoteForm(props) {
                           if (!window.confirm("¿Estás seguro de anular este remito? Esta acción no se puede deshacer.")) return;
                           try {
                               const token = localStorage.getItem("token");
-                              const res = await fetch(`${API_URL}/sales/delivery-notes/${id}/cancel`, { 
+                              const res = await fetch(`${API_URL}/purchases/delivery-notes/${id}/cancel`, { // Changed sales to purchases
                                   method: "POST", headers: { Authorization: `Bearer ${token}` } 
                               });
                               if (res.ok) {
-                                  window.dispatchEvent(new CustomEvent("delivery-note-changed"));
+                                  window.dispatchEvent(new CustomEvent("purchase-delivery-note-changed")); // Changed event name
                                   closeWindow(windowId);
                               }
                           } catch (e) {
@@ -835,9 +831,9 @@ export default function DeliveryNoteForm(props) {
                                 <div className={s.tableHeader} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
                                     <div className={s.th}>Producto</div>
                                     <div className={s.th} style={{ textAlign: 'left' }}>Cant.</div>
-                                    <div className={s.th} style={{ textAlign: 'right' }}>Remitir</div>
+                                    <div className={s.th} style={{ textAlign: 'right' }}>Recibir</div> {/* Changed from Remitir */}
                                     <div className={s.th} style={{ textAlign: 'center' }}>Un.</div>
-                                    <div className={s.th} style={{ textAlign: 'right' }}>P.Unit</div>
+                                    <div className={s.th} style={{ textAlign: 'right' }}>Costo U.</div> {/* Changed from P.Unit */}
                                     <div className={s.th} style={{ textAlign: 'right' }}>Subtotal</div>
                                     <div></div>
                                 </div>
@@ -846,7 +842,7 @@ export default function DeliveryNoteForm(props) {
                                 {items.map(item => {
                                     if (isReadOnly) {
                                         const qtyOrdered = parseFloat(item.qty_ordered) || 0;
-                                        const qtyDelivered = parseFloat(item.qty_delivered) || 0;
+                                        const qtyReceived = parseFloat(item.qty_received) || 0; // Changed from qtyDelivered
                                         const qtyPending = parseFloat(item.qty_pending) || 0;
                                         
                                         const qtyPackages = item.qty_packages;
@@ -860,7 +856,7 @@ export default function DeliveryNoteForm(props) {
                                                     <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.name || item.product?.name || item.description}</div>
                                                     <div style={{ display: 'flex', gap: 12, fontSize: 11, background: '#f8fafc', padding: '4px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
                                                         <div style={{ color: '#64748b' }}><span style={{ fontWeight: 800 }}>Ped:</span> {qtyOrdered.toFixed(2)}</div>
-                                                        <div style={{ color: 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Rem:</span> {qtyDelivered.toFixed(2)}</div>
+                                                        <div style={{ color: 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Rec:</span> {qtyReceived.toFixed(2)}</div> {/* Changed from Rem */}
                                                         <div style={{ color: qtyPending > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {qtyPending.toFixed(2)}</div>
                                                     </div>
                                                 </div>
@@ -873,7 +869,7 @@ export default function DeliveryNoteForm(props) {
                                                     ) : (
                                                         <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qty.toFixed(2)} {item._unit_label || 'u'}</div>
                                                     )}
-                                                    <div><span style={{ fontWeight: 800 }}>Precio:</span> {Number(item.unit_price || 0).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })} / {item._unit_label || 'u'}</div>
+                                                    <div><span style={{ fontWeight: 800 }}>Costo:</span> {Number(item.unit_price || 0).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })} / {item._unit_label || 'u'}</div> {/* Changed from Precio */}
                                                     <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Subtotal:</span> {Number(subtotal).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })}</div>
                                                 </div>
                                             </div>
@@ -882,7 +878,7 @@ export default function DeliveryNoteForm(props) {
                                     
                                   const isExceeding = mode === 'new' && item.qty > (item.qty_pending || 0);
                                   return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border-box' }}>
+                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border_box' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
                                             <div style={{ fontSize: 11, fontWeight: 900, color: '#1e293b', lineHeight: 1.1, whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {item.name || item.product?.name || item.description}
@@ -890,7 +886,7 @@ export default function DeliveryNoteForm(props) {
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', fontSize: 11, lineHeight: 1.15, height: '100%' }}>
                                             <div style={{ color: '#64748b' }}><span style={{ fontWeight: 800 }}>Ped:</span> {item.qty_ordered || 0}</div>
-                                            <div style={{ color: 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Rem:</span> {item.qty_delivered || 0}</div>
+                                            <div style={{ color: 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Rec:</span> {item.qty_received || 0}</div> {/* Changed from Rem */}
                                             <div style={{ color: (item.qty_pending || 0) > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {(item.qty_pending || 0).toFixed(2)}</div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
@@ -934,9 +930,9 @@ export default function DeliveryNoteForm(props) {
               {/* Columna Derecha: Panel Lateral Administrativo */}
               {/* Columna Derecha: Panel Lateral Administrativo */}
               <div className={s.rightCol}>
-                  {/* Bloque Cliente */}
+                  {/* Bloque Proveedor */}
                   <div className={s.sideBlock}>
-                      <div className={s.sideBlockTitle}><User size={12}/> CLIENTE</div>
+                      <div className={s.sideBlockTitle}><User size={12}/> PROVEEDOR</div> {/* Changed from CLIENTE */}
                       <div className={s.sideField}>
                           <label>NOMBRE</label>
                           {isReadOnly || sourceId ? (
@@ -948,7 +944,7 @@ export default function DeliveryNoteForm(props) {
                           )}
                       </div>
                       <div className={s.sideField}>
-                          <label>PTO. VENTA</label>
+                          <label>PTO. EMISIÓN</label> {/* Changed from PTO. VENTA */}
                           {isReadOnly || sourceId ? <div className={s.sideInput}>{pv}</div> : (
                               <select className={s.sideSelect} value={pv} onChange={(e) => { setPv(e.target.value); fetchNextNumber(e.target.value); }}>
                                   {pointsOfSale.map(p => <option key={p.pv} value={p.pv}>{p.pv}</option>)}
@@ -1014,22 +1010,22 @@ export default function DeliveryNoteForm(props) {
           </div>
 
 
-          {/* Relations Bar: OV → REMITO → FACTURA → STOCK → OBSERVACIONES */}
+          {/* Relations Bar: OC → REMITO ENTRADA → FACTURA COMPRA → PAGO → STOCK → OBSERVACIONES */}
           <div className={s.relationsBar}>
 
-            {/* ORDEN DE VENTA */}
+            {/* ORDEN DE COMPRA */}
             {sourceId ? (
               <div
                 className={s.relationCard}
-                onClick={() => { if (sourceOrderId) openEditOrdenVenta(sourceOrderId, { title: `Pedido ${sourceId}`, width: 1200 }); }}
+                onClick={() => { if (sourceOrderId) openEditPurchaseOrder(sourceOrderId, { title: `Orden de Compra ${sourceId}`, width: 1200 }); }}
               >
-                <div className={s.nodeTitle} style={{ color: '#2563eb' }}>ORDEN DE VENTA</div>
+                <div className={s.nodeTitle} style={{ color: '#2563eb' }}>ORDEN DE COMPRA</div>
                 <div className={s.nodeBadge}>● Vinculada</div>
                 <div className={s.nodeMetric} style={{ color: '#0f172a', marginTop: 'auto' }}>{sourceId}</div>
               </div>
             ) : (
               <div className={s.relationCard} style={{ cursor: 'default' }}>
-                <div className={s.nodeTitle} style={{ color: '#94a3b8' }}>ORDEN DE VENTA</div>
+                <div className={s.nodeTitle} style={{ color: '#94a3b8' }}>ORDEN DE COMPRA</div>
                 <div className={s.nodeBadge} style={{ color: '#94a3b8', background: '#f1f5f9' }}>Sin vinculación</div>
                 <div className={s.nodeMetric} style={{ color: '#cbd5e1', marginTop: 'auto' }}>Remito directo</div>
               </div>
@@ -1037,9 +1033,9 @@ export default function DeliveryNoteForm(props) {
 
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
-            {/* REMITO — documento actual */}
+            {/* REMITO ENTRADA — documento actual */}
             <div className={s.relationCard} style={{ border: '1.5px solid #2563eb', background: '#eff6ff' }}>
-              <div className={s.nodeTitle} style={{ color: '#2563eb' }}>REMITO</div>
+              <div className={s.nodeTitle} style={{ color: '#2563eb' }}>REMITO ENTRADA</div>
               <div className={s.nodeBadge} style={{ color: '#2563eb', background: '#dbeafe' }}>● Documento Actual</div>
               <div className={s.nodeMetric} style={{ color: '#0f172a', marginTop: 'auto' }}>{number || '(nuevo)'}</div>
               <div className={s.nodeMetric}>{date ? date.split('-').reverse().join('/') : 'S/F'}</div>
@@ -1047,9 +1043,9 @@ export default function DeliveryNoteForm(props) {
 
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
-            {/* FACTURA */}
+            {/* FACTURA COMPRA */}
             <div className={s.relationCard}>
-              <div className={s.nodeTitle} style={{ color: invoices.length > 0 ? '#f97316' : '#0b132b' }}>FACTURA</div>
+              <div className={s.nodeTitle} style={{ color: invoices.length > 0 ? '#f97316' : '#0b132b' }}>FACTURA COMPRA</div>
               <div className={s.nodeStatus} style={{ color: progressInvoiced >= 100 ? '#10b981' : progressInvoiced > 0 ? '#f97316' : '#eab308' }}>
                 {progressInvoiced >= 100 ? 'Completa' : progressInvoiced > 0 ? 'Parcial' : 'Pendiente'}
               </div>
@@ -1058,11 +1054,22 @@ export default function DeliveryNoteForm(props) {
 
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
+            {/* PAGO */}
+            <div className={s.relationCard}>
+              <div className={s.nodeTitle} style={{ color: progressPaid >= 100 ? '#10b981' : '#0b132b' }}>PAGO</div>
+              <div className={s.nodeStatus} style={{ color: progressPaid >= 100 ? '#10b981' : '#eab308' }}>
+                {progressPaid >= 100 ? 'Pagado' : 'Pendiente'}
+              </div>
+              <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0 pagos</div> {/* Needs actual payment logic */}
+            </div>
+
+            <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+
             {/* STOCK */}
             <div className={s.relationCard}>
               <div className={s.nodeTitle} style={{ color: status === 'DISPATCHED' || status === 'INVOICED' ? '#10b981' : '#0b132b' }}>STOCK</div>
               <div className={s.nodeStatus} style={{ color: status === 'DISPATCHED' || status === 'INVOICED' ? '#10b981' : '#eab308' }}>
-                {status === 'DISPATCHED' || status === 'INVOICED' ? 'Descontado' : mode === 'new' ? 'Se descontará al guardar' : 'Pendiente'}
+                {status === 'DISPATCHED' || status === 'INVOICED' ? 'Actualizado' : mode === 'new' ? 'Se actualizará al guardar' : 'Pendiente'}
               </div>
               <div className={s.nodeMetric} style={{ color: '#0f172a' }}>
                 {items.reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0).toFixed(2)} u. · {warehouses.find(w => w.id === warehouseId)?.name || 'S/D'}
@@ -1079,7 +1086,7 @@ export default function DeliveryNoteForm(props) {
           {/* Operational Summary Panel */}
           <div className={s.summaryPanel}>
             <div className={s.summaryItem}>
-              <div className={s.summaryLabel}>CLIENTE</div>
+              <div className={s.summaryLabel}>PROVEEDOR</div> {/* Changed from CLIENTE */}
               <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
             </div>
             <div className={s.summaryItem}>
@@ -1098,7 +1105,7 @@ export default function DeliveryNoteForm(props) {
             </div>
             <div className={s.summaryItem}>
               <div className={s.summaryLabel}>ORIGEN</div>
-              <div className={s.summaryValue}>{sourceId ? `OV ${sourceId}` : 'Directo'}</div>
+              <div className={s.summaryValue}>{sourceId ? `OC ${sourceId}` : 'Directo'}</div> {/* Changed from OV */}
             </div>
             <div className={s.summaryItem}>
               <div className={s.summaryLabel}>TRANSPORTE</div>
@@ -1121,26 +1128,26 @@ export default function DeliveryNoteForm(props) {
               <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
             </div>
             <div className={s.footerCompactItem}>
-              <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>SUBTOTAL VALORIZADO</span>
+              <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>TOTAL REMITO</span> {/* Changed from SUBTOTAL VALORIZADO */}
               <span className={s.footerCompactTotal}>{fmt(totals.total)}</span>
             </div>
           </div>
       </div>
 
 
-      {/* Item Selector Modal omitted for brevity if it's identical, wait I must include it because it was in the original */}
+      {/* Item Selector Modal */}
       {showItemSelector && (
           <Modal title="Vincular Ítems de Origen" onClose={() => setShowItemSelector(false)} width="1100px">
              <div style={{ padding: '0 24px 24px' }}>
                 {selectorLoading ? (
-                   <div style={{ padding: 60, textAlign: 'center', color: '#64748b', fontWeight: 600 }}>Sincronizando pedidos abiertos...</div>
+                   <div style={{ padding: 60, textAlign: 'center', color: '#64748b', fontWeight: 600 }}>Sincronizando órdenes de compra abiertas...</div>
                 ) : (
                    <>
                       <div style={{ display: 'flex', gap: 16, marginBottom: 16, alignItems: 'center' }}>
                          <div style={{ flex: 1, position: 'relative' }}>
                             <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
                             <Input 
-                                placeholder="🔍 Filtrar por producto o pedido..." 
+                                placeholder="🔍 Filtrar por producto u orden..."
                                 style={{ paddingLeft: 40 }}
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)} 
@@ -1169,10 +1176,10 @@ export default function DeliveryNoteForm(props) {
                               </tr>
                               <tr style={{ background: '#f8fafc', fontSize: 9 }}>
                                  <th style={{ textAlign: 'center', width: 75, background: '#f1f5f9', fontWeight: 800 }}>PEDIDO</th>
-                                 <th style={{ textAlign: 'center', width: 75, background: '#f1f5f9', fontWeight: 800 }}>REMITIDO</th>
+                                 <th style={{ textAlign: 'center', width: 75, background: '#f1f5f9', fontWeight: 800 }}>RECIBIDO</th> {/* Changed from REMITIDO */}
                                  <th style={{ textAlign: 'center', width: 75, background: '#f1f5f9', color: '#2563eb', fontWeight: 900 }}>DISP.</th>
                                  <th style={{ textAlign: 'center', width: 75, background: '#eff6ff', fontWeight: 800 }}>PEDIDO</th>
-                                 <th style={{ textAlign: 'center', width: 75, background: '#eff6ff', fontWeight: 800 }}>REMITIDO</th>
+                                 <th style={{ textAlign: 'center', width: 75, background: '#eff6ff', fontWeight: 800 }}>RECIBIDO</th> {/* Changed from REMITIDO */}
                                  <th style={{ textAlign: 'center', width: 75, background: '#eff6ff', color: '#2563eb', fontWeight: 900 }}>DISP.</th>
                               </tr>
                            </thead>
@@ -1185,7 +1192,7 @@ export default function DeliveryNoteForm(props) {
                                     <td colSpan="10" style={{ padding: 80, textAlign: 'center', color: '#94a3b8' }}>
                                        <ShoppingCart size={64} style={{ opacity: 0.1, marginBottom: 20 }} />
                                        <div style={{ fontSize: 16, fontWeight: 700 }}>No hay ítems pendientes</div>
-                                       <div style={{ fontSize: 12 }}>Asegúrese de que el cliente tenga pedidos confirmados.</div>
+                                       <div style={{ fontSize: 12 }}>Asegúrese de que el proveedor tenga órdenes de compra confirmadas.</div> {/* Changed cliente/pedidos */}
                                     </td>
                                  </tr>
                               ) : (
@@ -1195,7 +1202,7 @@ export default function DeliveryNoteForm(props) {
                                  ).map((item) => {
                                     const factor = item.quantity_per_container || 1;
                                     const c_total = item.qty / factor;
-                                    const c_rem = item.qty_fulfilled / factor;
+                                    const c_rec = item.qty_fulfilled / factor; // Changed c_rem
                                     const c_disp = item.qty_pending / factor;
                                     
                                     return (
@@ -1227,7 +1234,7 @@ export default function DeliveryNoteForm(props) {
                                           <td style={{ textAlign: 'center', background: '#f8fafc', color: '#94a3b8', fontWeight: 800 }}>{item.qty_fulfilled.toLocaleString()}</td>
                                           <td style={{ textAlign: 'center', background: '#f1f5f9', color: '#2563eb', fontWeight: 950 }}>{item.qty_pending.toLocaleString()}</td>
                                           <td style={{ textAlign: 'center', background: '#fafbfc', color: '#64748b', fontWeight: 800 }}>{c_total.toLocaleString()}</td>
-                                          <td style={{ textAlign: 'center', background: '#fafbfc', color: '#94a3b8', fontWeight: 800 }}>{c_rem.toLocaleString()}</td>
+                                          <td style={{ textAlign: 'center', background: '#fafbfc', color: '#94a3b8', fontWeight: 800 }}>{c_rem.toLocaleString()}</td> {/* Changed c_rec */}
                                           <td style={{ textAlign: 'center', background: '#eff6ff', color: '#2563eb', fontWeight: 950 }}>{c_disp.toLocaleString()}</td>
                                        </tr>
                                     );

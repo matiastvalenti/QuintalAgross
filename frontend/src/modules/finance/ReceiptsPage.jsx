@@ -10,6 +10,7 @@ import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
+import { openNuevoRecibo, openEditRecibo } from '../../utils/openStandaloneWindow';
 import api from '../../services/api';
 import t from '../../components/ui/Table.module.css';
 import TableSkeleton from "../../components/ui/TableSkeleton";
@@ -107,16 +108,16 @@ export default function ReceiptsPage() {
   const totalPages = Math.ceil(filtered.length / pageSize);
 
   const handleHandleNew = () => {
-    openWindow('receipt-form', { mode: 'new' }, { 
+    openNuevoRecibo({ 
       title: 'Nuevo Recibo', 
       width: 1100, 
       height: 800,
-      singletonKey: 'receipt-new'
     });
   };
 
   const handleOpen = (id) => {
-    openWindow('receipt-form', { receiptId: id, mode: 'view' }, { 
+    openEditRecibo(id, { 
+      mode: 'view',
       title: `Recibo ${receipts.find(r => r.id === id)?.number || ''}`, 
       width: 1100, 
       height: 800 

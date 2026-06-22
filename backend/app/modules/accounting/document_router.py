@@ -119,8 +119,8 @@ def _recalc_document_commission(doc: Document, db: Session):
 
     # 2. Calcular Monto Pagado (status)
     # Sumar comisiones liquidadas para esta factura/remito/OV
-    # (Usamos amount_usd como moneda base para el control de pago)
-    total_paid = db.query(func.sum(CommissionPayment.amount_usd)).filter(
+    # (Usamos applied_amount como moneda base para el control de pago, que suele ser USD)
+    total_paid = db.query(func.sum(CommissionPayment.applied_amount)).filter(
         or_(
             CommissionPayment.document_id == doc.id,
             CommissionPayment.delivery_note_id == doc.id 
@@ -200,7 +200,7 @@ def _recalc_document_status(doc: models.Document, db: Session):
             ).scalar() or 0.0
             
             # Sumar comisiones en USD
-            total_comm = db.query(func.sum(CommissionPayment.amount_usd)).filter(
+            total_comm = db.query(func.sum(CommissionPayment.applied_amount)).filter(
                 CommissionPayment.source_document_id == doc.id
             ).scalar() or 0.0
             
@@ -212,7 +212,7 @@ def _recalc_document_status(doc: models.Document, db: Session):
             ).scalar() or 0.0
             
             # Sumar comisiones en ARS
-            total_comm = db.query(func.sum(CommissionPayment.amount_ars)).filter(
+            total_comm = db.query(func.sum(CommissionPayment.amount)).filter(
                 CommissionPayment.source_document_id == doc.id
             ).scalar() or 0.0
             
@@ -483,22 +483,37 @@ def create_document(
     # 1. Calcular monto en ARS al momento del alta
     total_amount_ars = doc.total_amount * doc.exchange_rate if doc.currency == models.CurrencyType.USD else doc.total_amount
     
-    # 2. Numeración automática para Recibos y Pagos (Mover de antes de flush)
+    # 2. Numeración automática
+    from app.modules.sales import numbering_service
     doc_number = doc.number
     pv_to_inc = None
     doc_tag_to_inc = None
 
-    if doc.doc_type in [models.DocumentType.RECEIPT, models.DocumentType.PAYMENT]:
-        from app.modules.sales import numbering_service
-        doc_tag = "RECIBO" if doc.doc_type == models.DocumentType.RECEIPT else "PAGO"
-        default_pv = "0001"
+    # Determinar Tag de numeración para el servicio de correlativos
+    doc_tag = None
+    letter = (doc.line or "A").upper()
+    
+    if doc.doc_type == models.DocumentType.INVOICE: doc_tag = f"F{letter}"
+    elif doc.doc_type == models.DocumentType.FCE_MIPYME: doc_tag = f"FCE{letter}"
+    elif doc.doc_type == models.DocumentType.CREDIT_NOTE: doc_tag = f"NC{letter}"
+    elif doc.doc_type == models.DocumentType.DEBIT_NOTE: doc_tag = f"ND{letter}"
+    elif doc.doc_type == models.DocumentType.RECEIPT: doc_tag = "RECIBO"
+    elif doc.doc_type == models.DocumentType.PAYMENT: doc_tag = "PAGO"
+    # No asignamos doc_tag para PURCHASE_INVOICE, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE 
+    # ya que su numeración pertenece al proveedor externo y no debe avanzar un contador propio.
+
+    if doc_tag:
+        # Extraer PV del número si viene como "0003-AUTO"
+        pv_code = "0001"
+        if doc_number and "-" in doc_number:
+            pv_code = doc_number.split("-")[0]
         
-        if not doc_number or doc_number == "AUTO":
-           doc_number = numbering_service.get_next_number(db, default_pv, doc_tag)
+        if not doc_number or "AUTO" in doc_number or doc_number.endswith("-"):
+            doc_number = numbering_service.get_next_number(db, pv_code, doc_tag)
         
-        if "-" in (doc_number or ""):
-            pv_to_inc = doc_number.split("-")[0]
-            doc_tag_to_inc = doc_tag
+        # Guardar para incrementar después del flush exitoso
+        pv_to_inc = pv_code
+        doc_tag_to_inc = doc_tag
 
     if doc_number and doc_number.endswith("-00000000"):
         raise HTTPException(status_code=400, detail="El número de comprobante no puede ser 00000000. Genere un número válido.")
@@ -510,6 +525,9 @@ def create_document(
 
     # 3. Excluir campos que no pertenecen al modelo Document 
     doc_data = doc.model_dump(exclude={"lines", "payments", "applications", "vehicle_expenses", "perceptions", "retentions", "reimbursement_entity_id", "number"})
+    
+    # net_amount existe en el schema para cálculo de comisión pero no en la tabla Document
+    net_amount = doc_data.pop("net_amount", 0) or 0
     
     db_doc = models.Document(
         **doc_data,
@@ -524,9 +542,9 @@ def create_document(
         if seller:
             pct = seller.commission_pct or 0
             if doc.doc_type == models.DocumentType.INVOICE or (doc.doc_type == models.DocumentType.DEBIT_NOTE and doc.reason_type == models.DocumentReasonType.COMMERCIAL_ADJUSTMENT):
-                db_doc.commission_amount = (doc.net_amount * pct) / 100.0
+                db_doc.commission_amount = (net_amount * pct) / 100.0
             elif doc.doc_type == models.DocumentType.CREDIT_NOTE:
-                db_doc.commission_amount = -((doc.net_amount * pct) / 100.0)
+                db_doc.commission_amount = -((net_amount * pct) / 100.0)
 
     try:
         db.add(db_doc)
@@ -953,9 +971,9 @@ def create_document(
                             document_id=to_doc.id,
                             source_document_id=db_doc.id, # Link back to this OP
                             salesperson_id=to_doc.salesperson_id or db_doc.entity_id,
-                            amount_usd=app_data.amount_applied,
+                            applied_amount=app_data.amount_applied,
                             exchange_rate=app_rate,
-                            amount_ars=app_data.amount_applied * app_rate,
+                            amount=app_data.amount_applied * app_rate,
                             notes=f"Liquidación comisión desde {db_doc.number}",
                             date=datetime.now()
                         ))
@@ -973,9 +991,9 @@ def create_document(
                             delivery_note_id=dn.id,
                             source_document_id=db_doc.id, # Link back to this OP
                             salesperson_id=dn.salesperson_id or entity.id,
-                            amount_usd=app_data.amount_applied,
+                            applied_amount=app_data.amount_applied,
                             exchange_rate=db_doc.exchange_rate,
-                            amount_ars=app_data.amount_applied * db_doc.exchange_rate,
+                            amount=app_data.amount_applied * db_doc.exchange_rate,
                             notes=f"Liquidación desde {db_doc.number}",
                             date=datetime.now()
                         ))
@@ -991,9 +1009,9 @@ def create_document(
                             db.add(models.CommissionPayment(
                                 source_document_id=db_doc.id, # Link back to this OP
                                 salesperson_id=ov.salesperson_id or entity.id,
-                                amount_usd=app_data.amount_applied,
+                                applied_amount=app_data.amount_applied,
                                 exchange_rate=db_doc.exchange_rate,
-                                amount_ars=app_data.amount_applied * db_doc.exchange_rate,
+                                amount=app_data.amount_applied * db_doc.exchange_rate,
                                 notes=f"Liquidación desde {db_doc.number} (OV)",
                                 date=datetime.now()
                             ))
@@ -1391,13 +1409,13 @@ def delete_document(id: str, db: Session = Depends(get_db), current_user: models
         if cp.document_id:
             target_doc = db.query(models.Document).filter(models.Document.id == cp.document_id).first()
             if target_doc:
-                target_doc.commission_paid_amount = max(0.0, float(target_doc.commission_paid_amount or 0) - float(cp.amount_usd))
+                target_doc.commission_paid_amount = max(0.0, float(target_doc.commission_paid_amount or 0) - float(cp.applied_amount))
                 target_doc.commission_paid = False
                 targets_to_recalc.add(target_doc.id)
         if cp.delivery_note_id:
             target_dn = db.query(DeliveryNote).filter(DeliveryNote.id == cp.delivery_note_id).first()
             if target_dn:
-                target_dn.commission_paid_amount = max(0.0, float(target_dn.commission_paid_amount or 0) - float(cp.amount_usd))
+                target_dn.commission_paid_amount = max(0.0, float(target_dn.commission_paid_amount or 0) - float(cp.applied_amount))
                 target_dn.commission_paid = False
         db.delete(cp)
 
@@ -1435,6 +1453,22 @@ def delete_document(id: str, db: Session = Depends(get_db), current_user: models
 
     db.commit()
     return {"ok": True}
+
+
+@router.get("/next-number")
+def get_next_document_number(pv: str, doc_type: str, db: Session = Depends(get_db)):
+    """
+    Retorna el próximo número sugerido para un comprobante y punto de venta.
+    """
+    doc_tag = doc_type
+    if doc_type in ['INVOICE']: doc_tag = 'FA' # Default to FA for now or whatever doc_type is passed
+    if doc_type == 'PURCHASE_INVOICE': doc_tag = 'FC'
+    # Use exact doc_type passed by frontend, since frontend can pass 'FA', 'FB', etc.
+    if len(doc_type) <= 4:
+        doc_tag = doc_type
+    
+    next_num = numbering_service.get_next_number(db, pv, doc_tag)
+    return {"next_number": next_num.split('-')[-1], "full_number": next_num}
 
 
 @router.get("/{id}", response_model=document_schemas.DocumentWithLinesResponse, dependencies=[Depends(check_permission("sales_invoices", "view"))])
@@ -1583,9 +1617,9 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
             document_id=to_doc.id,
             source_document_id=from_doc.id, # Link back to the payment
             salesperson_id=to_doc.salesperson_id or from_doc.entity_id,
-            amount_usd=app.amount_applied,
+            applied_amount=app.amount_applied,
             exchange_rate=app_exchange_rate,
-            amount_ars=app.amount_applied * app_exchange_rate,
+            amount=app.amount_applied * app_exchange_rate,
             notes=f"Liquidación comisión manual desde {from_doc.number}",
             date=datetime.now()
         ))
@@ -1752,16 +1786,46 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
         if doc.cae:
             raise HTTPException(status_code=403, detail="No se puede editar un documento autorizado en ARCA (posee CAE)")
 
-        if data.number and data.number.endswith("-00000000"):
-            raise HTTPException(status_code=400, detail="El número de comprobante no puede ser 00000000. Genere un número válido.")
-            
-        if data.number and data.number != doc.number:
-            existing = db.query(models.Document).filter(models.Document.doc_type == doc.doc_type, models.Document.number == data.number).first()
-            if existing:
-                raise HTTPException(status_code=400, detail=f"Ya existe un comprobante con el número {data.number}.")
-
         update_data = data.model_dump(exclude_unset=True)
-        
+
+        if data.number and data.number != doc.number:
+            # Lógica de numeración automática en UPDATE si se solicita "AUTO" o viene vacío
+            if "AUTO" in data.number or data.number.endswith("-"):
+                from app.modules.sales import numbering_service
+                pv_code = data.number.split("-")[0] if "-" in data.number else "0001"
+
+                # Determinar Tag
+                doc_tag = None
+                letter = (data.line or doc.line or "A").upper()
+                if doc.doc_type == models.DocumentType.INVOICE: doc_tag = f"F{letter}"
+                elif doc.doc_type == models.DocumentType.FCE_MIPYME: doc_tag = f"FCE{letter}"
+                elif doc.doc_type == models.DocumentType.CREDIT_NOTE: doc_tag = f"NC{letter}"
+                elif doc.doc_type == models.DocumentType.DEBIT_NOTE: doc_tag = f"ND{letter}"
+                elif doc.doc_type == models.DocumentType.RECEIPT: doc_tag = "RECIBO"
+                elif doc.doc_type == models.DocumentType.PAYMENT: doc_tag = "PAGO"
+                elif doc.doc_type == models.DocumentType.PURCHASE_INVOICE: doc_tag = "FC"
+
+                if doc_tag:
+                    new_num = numbering_service.get_next_number(db, pv_code, doc_tag)
+                    update_data["number"] = new_num
+                    numbering_service.increment_last_number(db, pv_code, doc_tag)
+
+            # Verificar duplicados tras posible auto-numeración
+            final_num = update_data.get("number", data.number)
+
+            if final_num and final_num.endswith("-00000000"):
+                raise HTTPException(status_code=400, detail="El número de comprobante no puede ser 00000000. Genere un número válido.")
+
+            existing = db.query(models.Document).filter(
+                models.Document.doc_type == doc.doc_type, 
+                models.Document.number == final_num,
+                models.Document.id != id
+            ).first()
+            if existing:
+                raise HTTPException(status_code=400, detail=f"Ya existe un comprobante con el número {final_num}.")
+
+        # net_amount no pertenece al modelo Document
+        net_amount_update = update_data.pop("net_amount", None)
         # Validar Diferencia de Cambio en Update
         reason_type = update_data.get('reason_type', doc.reason_type)
         if reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE:
@@ -1780,12 +1844,17 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
 
         for key, value in update_data.items():
             setattr(doc, key, value)
-        
+
         if doc.currency == models.CurrencyType.USD:
             doc.total_amount_ars = doc.total_amount * doc.exchange_rate
         else:
             doc.total_amount_ars = doc.total_amount
 
+        # Usar el net_amount_update si vino, o calcularlo de las líneas existentes
+        if net_amount_update is not None:
+            current_net = net_amount_update
+        else:
+            current_net = sum(float(l.net_amount or 0) for l in doc.lines)
         if lines_data is not None:
             # Si tiene vínculos a OV/OC, bloqueamos el cambio de cantidades por integridad
             is_linked = any(line.source_sales_line_id is not None for line in doc.lines)
@@ -1913,9 +1982,9 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
             if seller:
                 pct = seller.commission_pct or 0
                 if doc.doc_type == models.DocumentType.INVOICE or (doc.doc_type == models.DocumentType.DEBIT_NOTE and doc.reason_type == models.DocumentReasonType.COMMERCIAL_ADJUSTMENT):
-                    doc.commission_amount = (doc.net_amount * pct) / 100.0
+                    doc.commission_amount = (current_net * pct) / 100.0
                 elif doc.doc_type == models.DocumentType.CREDIT_NOTE:
-                    doc.commission_amount = -((doc.net_amount * pct) / 100.0)
+                    doc.commission_amount = -((current_net * pct) / 100.0)
                 else:
                     doc.commission_amount = 0
         else:
@@ -2471,9 +2540,9 @@ def get_entity_commissions_history(entity_id: str, db: Session = Depends(get_db)
                 source_document_id=c.source_document_id,
                 salesperson_id=c.salesperson_id,
                 date=c.date,
-                amount_usd=c.amount_usd,
+                applied_amount=c.applied_amount,
                 exchange_rate=c.exchange_rate,
-                amount_ars=c.amount_ars,
+                amount=c.amount,
                 notes=c.notes,
                 created_at=c.created_at or c.date,
                 doc_number=doc_num,

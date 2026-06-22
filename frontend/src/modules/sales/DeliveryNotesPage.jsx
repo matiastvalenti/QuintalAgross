@@ -378,11 +378,15 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
        return;
     }
 
-    openWindow('invoice-form', { initialDnIds: selectedIds }, { 
+    const draftId = crypto.randomUUID();
+    localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify({
+        initialDnIds: selectedIds
+    }));
+
+    openNuevaFactura({ draft_id: draftId }, { 
         title: 'Facturar Remitos', 
         width: 1100, 
-        height: 650,
-        singletonKey: `invoice-bulk-${selectedIds.join('-')}`
+        height: 650
     });
   };
 

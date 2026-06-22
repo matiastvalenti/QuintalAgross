@@ -8,6 +8,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
+import { openNuevaRendicion, openEditRendicion } from '../../utils/openStandaloneWindow';
 import s from './ExpenseClaimsPage.module.css';
 import api from '../../services/api';
 
@@ -42,20 +43,18 @@ export default function ExpenseClaimsPage() {
     };
 
     const handleNewClaim = () => {
-        openWindow('expense-claim-form', { onSave: fetchClaims }, {
+        openNuevaRendicion({
             title: 'Nueva Rendición de Gastos',
             width: 1000,
             height: 750,
-            singletonKey: 'expense-claim-new'
         });
     };
 
     const handleViewClaim = (claim) => {
-        openWindow(`expense-claim-${claim.id}`, { claimId: claim.id, onSave: fetchClaims }, {
+        openEditRendicion(claim.id, {
             title: `Rendición: ${claim.title}`,
             width: 1000,
             height: 750,
-            singletonKey: `expense-claim-${claim.id}`
         });
     };
 
@@ -178,7 +177,7 @@ export default function ExpenseClaimsPage() {
                                                     title="Ver Cuenta Corriente"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        openWindow('statement-page', { entityId: claim.entity_id }, { 
+                                                        openResumenCuenta(claim.entity_id, { 
                                                             title: `Resumen: ${claim.employee_name}`, 
                                                             width: 1200, 
                                                             height: 700 

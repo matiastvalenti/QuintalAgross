@@ -9,6 +9,7 @@ import {
     Search, Filter, Plus, Target, Award, Infinity, History
 } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
+import { openNuevaFactura, openNuevoRecibo, openResumenCuenta } from '../../utils/openStandaloneWindow';
 import api from '../../services/api';
 import s from './EntityDashboard.module.css';
 import { 
@@ -315,17 +316,17 @@ export default function EntityDashboard({ entityId, entityName }) {
                     <div className={s.card}>
                         <h3 className={s.cardTitle}><span style={{ display: 'flex', alignItems: 'center', gap: 8 }}><Zap size={18} color="#3b82f6" /> ACCIONES DIRECTAS</span></h3>
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                            <button className={s.sidebarBtn} onClick={() => openWindow('invoice-form', { mode: 'new', initialEntityId: entityId })}>
+                            <button className={s.sidebarBtn} onClick={() => openNuevaFactura({ initialEntityId: entityId })}>
                                 <div style={{ background: '#eff6ff', padding: 8, borderRadius: 10 }}><FileText size={18} color="#3b82f6" /></div>
                                 Emitir Factura
                             </button>
-                            <button className={s.sidebarBtn} onClick={() => openWindow('receipt-form', { entityId: entityId })}>
+                            <button className={s.sidebarBtn} onClick={() => openNuevoRecibo({ entityId: entityId })}>
                                 <div style={{ background: '#ecfdf5', padding: 8, borderRadius: 10 }}><DollarSign size={18} color="#10b981" /></div>
                                 Cobranza / Recibo
                             </button>
-                            <button className={s.sidebarBtn} onClick={() => openWindow('statement-page', { entityId: entityId })}>
+                            <button className={s.sidebarBtn} onClick={() => openResumenCuenta(entityId, { title: 'Resumen de Cuenta' })}>
                                 <div style={{ background: '#f8fafc', padding: 8, borderRadius: 10 }}><Activity size={18} color="#64748b" /></div>
-                                Estado de Cuenta
+                                Resumen de Cuenta
                             </button>
                         </div>
                     </div>

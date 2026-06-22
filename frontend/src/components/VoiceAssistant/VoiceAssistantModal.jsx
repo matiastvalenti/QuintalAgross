@@ -4,6 +4,7 @@ import s from './VoiceAssistantModal.module.css';
 import api from '../../services/api';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
+import { openNuevaFactura, openNuevoRemito, openNuevaOrdenVenta } from '../../utils/openStandaloneWindow';
 
 export default function VoiceAssistantModal({ isOpen, onClose }) {
     const { openWindow } = useWindow();
@@ -90,36 +91,36 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
             const confPct = Math.round(confidence * 100);
 
             if (isInvoice) {
-                openWindow('invoice-form', { 
-                    initialEntityId: result.entity_id,
-                    initialLines: [line],
-                    initialSalespersonId: result.salesperson_id,
-                    initialConditionId: result.condition_id,
-                }, { title: 'Nueva Factura (IA)', width: 1100, height: 700 });
+                const draftId = crypto.randomUUID();
+                localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify({
+                    entityId: result.entity_id,
+                    lines: [line],
+                    salespersonId: result.salesperson_id,
+                    conditionId: result.condition_id,
+                }));
+                openNuevaFactura({ draft_id: draftId }, { title: 'Nueva Factura (IA)', width: 1100, height: 700 });
             } else if (isSalesOrder) {
-                openWindow('sales-order', {
-                    mode: 'new',
-                    initialData: {
-                        entity_id: result.entity_id,
-                        warehouse_id: result.warehouse_id,
-                        salesperson_id: result.salesperson_id,
-                        sale_condition_id: result.condition_id,
-                        lines: [{
-                            ...line,
-                            _unit_content: result.quantity_per_container || 1
-                        }]
-                    }
-                }, { title: 'Nueva Orden de Venta (IA)', width: 1100, height: 600 });
+                const draftId = crypto.randomUUID();
+                localStorage.setItem(`sales_order_draft_${draftId}`, JSON.stringify({
+                    entity_id: result.entity_id,
+                    warehouse_id: result.warehouse_id,
+                    salesperson_id: result.salesperson_id,
+                    sale_condition_id: result.condition_id,
+                    lines: [{
+                        ...line,
+                        _unit_content: result.quantity_per_container || 1
+                    }]
+                }));
+                openNuevaOrdenVenta({ draft_id: draftId }, { title: 'Nueva Orden de Venta (IA)', width: 1100, height: 600 });
             } else {
-                openWindow('delivery-note', { 
-                    mode: 'new',
-                    initialData: {
-                        entity_id: result.entity_id,
-                        warehouse_id: result.warehouse_id,
-                        salesperson_id: result.salesperson_id,
-                        lines: [line]
-                    }
-                }, { title: 'Nuevo Remito (IA)', width: 1100, height: 600 });
+                const draftId = crypto.randomUUID();
+                localStorage.setItem(`delivery_note_draft_${draftId}`, JSON.stringify({
+                    entity_id: result.entity_id,
+                    warehouse_id: result.warehouse_id,
+                    salesperson_id: result.salesperson_id,
+                    lines: [line]
+                }));
+                openNuevoRemito(null, { draft_id: draftId, title: 'Nuevo Remito (IA)', width: 1100, height: 600 });
             }
 
             // Build informative toast message

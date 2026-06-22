@@ -5,6 +5,7 @@ import {
 import t from '../../../components/ui/Table.module.css';
 import Badge from '../../../components/ui/Badge';
 import { useWindow } from '../../../context/WindowContext';
+import { openResumenCuenta, openEntityDashboard } from '../../../utils/openStandaloneWindow';
 import TableSkeleton from '../../../components/ui/TableSkeleton';
 import EmptyState from '../../../components/ui/EmptyState';
 
@@ -235,7 +236,7 @@ export default function EntitiesTable({
                                                 title="Vista 360 / CRM"
                                                 onClick={(evt) => {
                                                     evt.stopPropagation();
-                                                    openWindow('entity-dashboard', { entityId: e.id, entityName: e.name }, { 
+                                                    openEntityDashboard(e.id, { 
                                                         title: `Vista 360: ${e.name}`, 
                                                         width: 1100, 
                                                         height: 750 
@@ -254,7 +255,7 @@ export default function EntitiesTable({
                                                 title="Resumen de Cuenta"
                                                 onClick={(evt) => {
                                                     evt.stopPropagation();
-                                                    openWindow('statement-page', { entityId: e.id }, { 
+                                                    openResumenCuenta(e.id, { 
                                                         title: `Resumen: ${e.name}`, 
                                                         width: 1200, 
                                                         height: 700 

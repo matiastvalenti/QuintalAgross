@@ -4,6 +4,15 @@ import {
     CheckCircle2, Clock, AlertCircle, X, Receipt, Wallet
 } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
+import { 
+  openEditFactura, 
+  openEditRecibo, 
+  openEditPago, 
+  openEditRemito,
+  openEditNotaDebito,
+  openEditNotaCredito,
+  openEditFacturaCompra
+} from '../../utils/openStandaloneWindow';
 import { useCostCenter } from '../../context/CostCenterContext';
 import { API_URL } from '../../config';
 import api from '../../services/api';
@@ -268,56 +277,35 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
 
     const handleRowClick = (m) => {
         if (m.is_initial_load) return;
-        let windowKey = '';
-        let titlePrefix = '';
-        let extraProps = {};
-        
+
+        let title = `${m.doc_type} ${m.number || ''}`;
         switch (m.doc_type) {
             case 'INVOICE':
-                windowKey = 'invoice-form';
-                titlePrefix = 'Factura';
-                break;
+                return openEditFactura(m.id, { title });
             case 'CREDIT_NOTE':
-                windowKey = 'credit-note-form';
-                titlePrefix = 'Nota Crédito';
-                break;
+                return openEditNotaCredito(m.id, { title });
             case 'DEBIT_NOTE':
-                windowKey = 'debit-note-form';
-                titlePrefix = 'Nota Débito';
-                break;
+                return openEditNotaDebito(m.id, { title });
             case 'PURCHASE_INVOICE':
-                windowKey = 'purchase-invoice-form';
-                titlePrefix = 'Factura Compra';
-                extraProps = { context: 'purchases' };
-                break;
+                return openEditFacturaCompra(m.id, { title });
             case 'RECEIPT':
-                windowKey = 'receipt-form';
-                titlePrefix = 'Recibo';
-                break;
+                return openEditRecibo(m.id, { title });
             case 'PAYMENT':
-                windowKey = 'receipt-form'; // Usually shared or similar form
-                titlePrefix = 'Orden de Pago';
-                extraProps = { isPayment: true };
-                break;
+                return openEditPago(m.id, { title });
+            case 'DELIVERY_NOTE':
+                return openEditRemito(m.id, { title });
             case 'LPG_PRIMARY':
             case 'LPG_SECONDARY':
-                windowKey = 'grain-settlement';
-                titlePrefix = m.doc_type === 'LPG_PRIMARY' ? 'Liq. Primaria' : 'Liq. Secundaria';
-                break;
-            case 'DELIVERY_NOTE':
-                windowKey = 'delivery-note';
-                titlePrefix = 'Remito';
+                openWindow('grain-settlement', { id: m.id, mode: "edit" }, {
+                    title: `${m.doc_type === 'LPG_PRIMARY' ? 'Liq. Primaria' : 'Liq. Secundaria'} ${m.number || ''}`,
+                    width: 1200,
+                    height: 750,
+                    singletonKey: `lpg-${m.id}`
+                });
                 break;
             default:
                 return;
         }
-
-        openWindow(windowKey, { id: m.id, mode: "edit", ...extraProps }, {
-            title: `${titlePrefix} ${m.number || ''}`,
-            width: 1200,
-            height: 750,
-            singletonKey: `${windowKey}-${m.id}`
-        });
     };
 
     return (

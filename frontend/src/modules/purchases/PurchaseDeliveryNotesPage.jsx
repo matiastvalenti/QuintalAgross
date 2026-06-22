@@ -4,17 +4,16 @@ import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import t from '../../components/ui/Table.module.css';
-import s from '../sales/DeliveryNotesPage.module.css';
+import s from './PurchaseDeliveryNotesPage.module.css';
 import { useToast } from '../../context/ToastContext';
-import { Eye, Edit, Search, Filter, ChevronUp, ChevronDown, X, Receipt, Clock, TrendingUp, CheckCircle, Activity } from 'lucide-react';
-import { useWindow } from '../../context/WindowContext';
+import { Eye, Edit, Search, Filter, ChevronUp, ChevronDown, X, Receipt, Clock, TrendingUp, CheckCircle, Activity, ChevronRight, Plus } from 'lucide-react';
+import { openNuevoRemitoEntrada, openEditRemitoEntrada } from '../../utils/openStandaloneWindow';
 import Skeleton from '../../components/ui/Skeleton';
 import { API_URL } from '../../config';
 import api from '../../services/api';
 
 export default function PurchaseDeliveryNotesPage() {
   const { showToast } = useToast();
-  const { openWindow } = useWindow();
   
   const [notes, setNotes] = useState([]);
   const [entities, setEntities] = useState([]);
@@ -40,11 +39,11 @@ export default function PurchaseDeliveryNotesPage() {
 
   useEffect(() => {
     const onChanged = () => fetchAll();
-    window.addEventListener('delivery-note-changed', onChanged);
-    window.addEventListener('invoice-changed', onChanged);
+    window.addEventListener('purchase-delivery-note-changed', onChanged);
+    window.addEventListener('purchase-invoice-changed', onChanged);
     return () => {
-      window.removeEventListener('delivery-note-changed', onChanged);
-      window.removeEventListener('invoice-changed', onChanged);
+      window.removeEventListener('purchase-delivery-note-changed', onChanged);
+      window.removeEventListener('purchase-invoice-changed', onChanged);
     };
   }, []);
 
@@ -57,8 +56,8 @@ export default function PurchaseDeliveryNotesPage() {
     try {
       setLoading(true);
       const [dnRes, entRes, whRes] = await Promise.all([
-        api.get('/sales/delivery-notes/', { params: { note_type: 'PURCHASE' } }), 
-        api.get('/entities/', { params: { type: 'provider' } }),
+        api.get('/purchases/delivery-notes/'), 
+        api.get('/entities/', { params: { type: 'supplier' } }),
         api.get('/inventory/warehouses/'),
       ]);
       setNotes(dnRes);
@@ -96,12 +95,12 @@ export default function PurchaseDeliveryNotesPage() {
     });
   }, [filtered, sortBy, sortDir]);
 
+  const handleOpenNew = () => {
+    openNuevoRemitoEntrada();
+  };
+
   const handleOpenDetail = (dn) => {
-    openWindow(
-      'delivery-note',
-      { id: dn.id, mode: 'edit' },
-      { title: `Remito de Compra ${dn.number}`, width: 1200, height: 650, singletonKey: `delivery-note-${dn.id}` }
-    );
+    openEditRemitoEntrada(dn.id);
   };
 
   const toggleSelect = (id) => {
@@ -141,7 +140,7 @@ export default function PurchaseDeliveryNotesPage() {
     openWindow(
       'purchase-invoice-form',
       { mode: 'new', initialDnIds: selectedIds },
-      { title: 'Nueva Factura de Compra (Lote)', width: 1100, height: 700 }
+      { title: 'Nueva Factura de Compra (Lote)', width: 1100, height: 700, singletonKey: 'purchase-invoice-new-bulk' }
     );
   };
 
@@ -159,43 +158,40 @@ export default function PurchaseDeliveryNotesPage() {
   return (
     <div className={s.pageLayout}>
       <ContentHeader
-        breadcrumbs={[{ label: 'Compras' }, { label: 'Recepción' }]}
+        breadcrumbs={[{ label: 'Compras' }, { label: 'Remitos de Entrada' }]}
         title="Remitos de Entrada"
-      />
+      >
+        <Button variant="primary" onClick={handleOpenNew}>
+          <Plus size={16} />
+          Nuevo Remito de Entrada
+        </Button>
+      </ContentHeader>
 
-      <div className={s.dashboard}>
-          <div className={`${s.bentoCard} ${s.cardWarning}`}>
-              <div className={s.bentoHeader}>
-                  <Clock size={14} color="#f59e0b" />
-                  <span>Pendientes</span>
-              </div>
-              <div className={s.bentoValue}>{stats.draftCount}</div>
-              <div className={s.bentoSubtext}>Ingresos en borrador</div>
-          </div>
-          <div className={`${s.bentoCard} ${s.cardPrimary}`}>
-              <div className={s.bentoHeader}>
-                  <TrendingUp size={14} color="#3b82f6" />
-                  <span>Recibidos</span>
-              </div>
-              <div className={s.bentoValue}>{stats.receivedCount}</div>
-              <div className={s.bentoSubtext}>Listos para facturar</div>
-          </div>
-          <div className={`${s.bentoCard} ${s.cardSuccess}`}>
-              <div className={s.bentoHeader}>
-                  <CheckCircle size={14} color="#10b981" />
-                  <span>Facturados</span>
-              </div>
-              <div className={s.bentoValue}>{stats.invoicedCount}</div>
-              <div className={s.bentoSubtext}>Cargados al Libro IVA</div>
-          </div>
-          <div className={s.bentoCard}>
-              <div className={s.bentoHeader}>
-                  <Activity size={14} color="#64748b" />
-                  <span>Total Vigentes</span>
-              </div>
-              <div className={s.bentoValue}>{stats.totalCount}</div>
-              <div className={s.bentoSubtext}>Filtros activos: {filtered.length}</div>
-          </div>
+      <div className={s.kpiCards}>
+        <Card variant="warning" className={s.kpiCard}>
+          <Clock size={18} />
+          <div className={s.kpiValue}>{stats.draftCount}</div>
+          <div className={s.kpiLabel}>Pendientes</div>
+          <ChevronRight size={20} className={s.kpiChevron} />
+        </Card>
+        <Card variant="success" className={s.kpiCard}>
+          <CheckCircle size={18} />
+          <div className={s.kpiValue}>{stats.receivedCount}</div>
+          <div className={s.kpiLabel}>Recibidos</div>
+          <ChevronRight size={20} className={s.kpiChevron} />
+        </Card>
+        <Card variant="primary" className={s.kpiCard}>
+          <Receipt size={18} />
+          <div className={s.kpiValue}>{stats.invoicedCount}</div>
+          <div className={s.kpiLabel}>Facturados</div>
+          <ChevronRight size={20} className={s.kpiChevron} />
+        </Card>
+        <Card variant="info" className={s.kpiCard}>
+          <Activity size={18} />
+          <div className={s.kpiValue}>{stats.totalCount}</div>
+          <div className={s.kpiLabel}>Total Vigentes</div>
+          <ChevronRight size={20} className={s.kpiChevron} />
+        </Card>
       </div>
 
       <div className={s.toolbar}>

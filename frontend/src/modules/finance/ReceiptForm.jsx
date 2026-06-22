@@ -7,6 +7,7 @@ import Autocomplete from "../../components/ui/Autocomplete";
 import Modal from "../../components/ui/Modal";
 import Badge from "../../components/ui/Badge";
 import { useWindow } from "../../context/WindowContext";
+import { openEditFactura } from "../../utils/openStandaloneWindow";
 import { useToast } from "../../context/ToastContext";
 import { useCostCenter } from "../../context/CostCenterContext";
 import api from "../../services/api";
@@ -745,7 +746,7 @@ export default function ReceiptForm({
                 entityName={entity.name} 
                 onNavigate={({ type, mode: newMode, docId }) => {
                     if (type === 'invoice-form') {
-                      openWindow('invoice-form', { mode: newMode, id: docId }, { title: `Factura ${docId}`, width: 1100, height: 800 });
+                      openEditFactura(docId, { mode: newMode, title: `Factura ${docId}`, width: 1100, height: 800 });
                     }
                 }}
              />

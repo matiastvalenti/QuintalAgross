@@ -172,6 +172,7 @@ class DocumentBase(BaseModel):
     currency: CurrencyType = CurrencyType.ARS
     exchange_rate: float = 1.0
     total_amount: float
+    net_amount: float = 0.0
     line: Optional[str] = None
     notes: Optional[str] = None  # Observaciones/notas
     attachment_url: Optional[str] = None

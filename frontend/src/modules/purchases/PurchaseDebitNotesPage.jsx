@@ -9,65 +9,84 @@ import {
   Eye,
   Trash2,
   X,
+  Edit,
   Download,
   TrendingUp,
-  Edit,
+  Clock,
+  CheckCircle,
+  BadgeDollarSign,
+  Activity,
+  Calendar,
+  XCircle,
+  Mail,
+  Send,
+  RefreshCcw,
+  LayoutGrid,
+  PlusCircle,
+  ArrowUpRight
 } from "lucide-react";
-import ContentHeader from "../../components/layout/ContentHeader";
+import { useNavigate } from 'react-router-dom';
+import { openNuevaNotaDebitoCompra, openEditNotaDebitoCompra } from '../../utils/openStandaloneWindow';
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
+import StatusBadge from "../../components/ui/StatusBadge";
 import { useWindow } from "../../context/WindowContext";
 import { useToast } from "../../context/ToastContext";
 import { API_URL } from "../../config";
+import api from '../../services/api';
 import s from "../../components/layout/DocumentListPage.module.css";
-import t from "../../components/ui/Table.module.css";
-import Skeleton from "../../components/ui/Skeleton";
-import api from "../../services/api";
+import DocumentListPage from "../../components/layout/DocumentListPage";
+import { TableRowSkeleton } from "../../components/ui/TableSkeleton";
+import ErrorState from "../../components/ui/ErrorState";
+import EmptyState from "../../components/ui/EmptyState";
 
 export default function PurchaseDebitNotesPage() {
   const [invoices, setInvoices] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [entities, setEntities] = useState([]);
-  const [hideCancelled, setHideCancelled] = useState(true);
-  const [previewUrl, setPreviewUrl] = useState(null);
-
-  // Filters
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [search, setSearch] = useState("");
   const [selectedEntityId, setSelectedEntityId] = useState("");
   const [selectedStatus, setSelectedStatus] = useState("");
   const [filterCurrency, setFilterCurrency] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
-  const [showFilters, setShowFilters] = useState(false);
-
-  // Pagination
-  const [currentPage, setCurrentPage] = useState(1);
-  const pageSize = 12;
-
-  const { openWindow } = useWindow();
-  const { showToast } = useToast();
-
-  // Sorting
+  const [hideCancelled, setHideCancelled] = useState(true);
   const [sortBy, setSortBy] = useState("date");
   const [sortDir, setSortDir] = useState("desc");
+  const [currentPage, setCurrentPage] = useState(1);
+  const pageSize = 15;
+  const [showFilters, setShowFilters] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [selectedInvoices, setSelectedInvoices] = useState([]);
+  
+  const { showToast } = useToast();
+  const navigate = useNavigate();
 
   useEffect(() => {
     fetchInvoices();
     fetchEntities();
 
     const handleRefresh = () => fetchInvoices();
-    window.addEventListener("invoice-changed", handleRefresh); // Using generic event for consistency
-    return () => window.removeEventListener("invoice-changed", handleRefresh);
+    window.addEventListener("purchase-invoice-changed", handleRefresh);
+    window.addEventListener("cost-center-changed", handleRefresh);
+    
+    return () => {
+      window.removeEventListener("purchase-invoice-changed", handleRefresh);
+      window.removeEventListener("cost-center-changed", handleRefresh);
+    };
   }, []);
 
   const fetchInvoices = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await api.get('/accounting/documents/');
-      const filteredDocs = data.filter((d) => d.doc_type === "DEBIT_NOTE");
+      const filteredDocs = data.filter((d) => d.doc_type === "PURCHASE_DEBIT_NOTE");
       setInvoices(filteredDocs);
     } catch (err) {
-      showToast("Error al cargar notas de débito de compra", "error");
+      console.error(err);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -75,23 +94,19 @@ export default function PurchaseDebitNotesPage() {
 
   const fetchEntities = async () => {
     try {
-      const data = await api.get('/entities/', { params: { type: 'provider' } });
-      setEntities(Array.isArray(data) ? data : []);
+      const data = await api.get('/entities/');
+      const relevant = (Array.isArray(data) ? data : []).filter(e => e.type === 'supplier');
+      setEntities(relevant);
     } catch (err) {
       console.error(err);
+      setEntities([]);
     }
   };
 
-  const providerIds = useMemo(() => new Set(entities.map(e => e.id)), [entities]);
-
-  const entityName = (id) =>
-    entities.find((e) => e.id === id)?.name || `ID: ${id}`;
+  const entityName = (id) => entities.find((e) => e.id === id)?.name || `ID: ${id}`;
 
   const filtered = useMemo(() => {
     return invoices.filter((inv) => {
-      // Filter by provider
-      if (entities.length > 0 && !providerIds.has(inv.entity_id)) return false;
-
       if (hideCancelled && inv.status === "CANCELLED") return false;
 
       if (search.trim()) {
@@ -103,11 +118,7 @@ export default function PurchaseDebitNotesPage() {
         if (!matchesSearch) return false;
       }
 
-      if (
-        selectedEntityId &&
-        String(inv.entity_id) !== String(selectedEntityId)
-      )
-        return false;
+      if (selectedEntityId && String(inv.entity_id) !== String(selectedEntityId)) return false;
       if (selectedStatus && inv.status !== selectedStatus) return false;
       if (filterCurrency && inv.currency !== filterCurrency) return false;
 
@@ -116,18 +127,7 @@ export default function PurchaseDebitNotesPage() {
 
       return true;
     });
-  }, [
-    invoices,
-    search,
-    selectedEntityId,
-    selectedStatus,
-    filterCurrency,
-    dateFrom,
-    dateTo,
-    hideCancelled,
-    entities,
-    providerIds
-  ]);
+  }, [invoices, search, selectedEntityId, selectedStatus, filterCurrency, dateFrom, dateTo, hideCancelled, entities]);
 
   const sorted = useMemo(() => {
     return [...filtered].sort((a, b) => {
@@ -140,321 +140,320 @@ export default function PurchaseDebitNotesPage() {
       }
 
       if (sortBy === "number") {
-        const na = String(a.number).replace(/[^0-9]/g, "");
-        const nb = String(b.number).replace(/[^0-9]/g, "");
-        return sortDir === "asc" ? (parseInt(na) || 0) - (parseInt(nb) || 0) : (parseInt(nb) || 0) - (parseInt(na) || 0);
+        va = parseInt(String(a.number).replace(/\D/g, "") || 0);
+        vb = parseInt(String(b.number).replace(/\D/g, "") || 0);
+        return sortDir === "asc" ? va - vb : vb - va;
       }
 
-      if (va < vb) return sortDir === "asc" ? -1 : 1;
-      if (va > vb) return sortDir === "asc" ? 1 : -1;
-      return 0;
+      if (sortBy === "date" || sortBy === "due_date") {
+        va = new Date(va || 0).getTime();
+        vb = new Date(vb || 0).getTime();
+        return sortDir === "asc" ? va - vb : vb - va;
+      }
+
+      if (typeof va === "string") {
+        return sortDir === "asc" ? va.localeCompare(vb) : vb.localeCompare(va);
+      }
+      return sortDir === "asc" ? va - vb : vb - va;
     });
   }, [filtered, sortBy, sortDir, entities]);
 
-  const currentInvoices = sorted.slice(
-    (currentPage - 1) * pageSize,
-    currentPage * pageSize
-  );
-
-  const handleCreate = () => {
-    openWindow(
-      "invoice-form",
-      { mode: "new", context: "purchases" },
-      {
-        title: "Nueva Nota de Débito (Compra)",
-        width: 1100,
-        height: 700,
-      }
-    );
-  };
-
-  const handleEdit = (inv) => {
-    openWindow(
-      "invoice-form",
-      { mode: "edit", id: inv.id, context: "purchases" },
-      {
-        title: `Nota de Débito ${inv.number}`,
-        width: 1100,
-        height: 700,
-      }
-    );
-  };
-
-  const formatCurrency = (val, curr) => {
-    return new Intl.NumberFormat("es-AR", {
-      style: "currency",
-      currency: curr || "ARS",
-    }).format(val || 0);
-  };
-
   const toggleSort = (field) => {
-    if (sortBy === field) {
-      setSortDir(sortDir === "asc" ? "desc" : "asc");
-    } else {
+    if (sortBy === field) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    else {
       setSortBy(field);
-      setSortDir("asc");
+      setSortDir("desc");
     }
   };
 
-  const hasActiveFilters = search.trim() || selectedEntityId || selectedStatus || filterCurrency || dateFrom || dateTo;
+  const hasActiveFilters = Boolean(
+    search.trim() || selectedEntityId || selectedStatus || filterCurrency || dateFrom || dateTo
+  );
 
-  const stats = useMemo(() => {
-    const now = new Date();
-    const currentMonth = now.getMonth();
-    const currentYear = now.getFullYear();
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [hasActiveFilters, search, selectedEntityId, selectedStatus, filterCurrency, dateFrom, dateTo, hideCancelled]);
 
-    const monthNotes = invoices.filter(inv => {
-      if (inv.status === 'CANCELLED') return false;
-      const d = new Date(inv.date);
-      return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
-    });
-
-    const totalMonth = monthNotes.reduce((sum, inv) => sum + (Number(inv.total_amount) || 0), 0);
-    const countMonth = monthNotes.length;
-    
-    return { totalMonth, countMonth, total: invoices.length };
-  }, [invoices]);
+  const clearFilters = () => {
+    setSearch("");
+    setSelectedEntityId("");
+    setSelectedStatus("");
+    setFilterCurrency("");
+    setDateFrom("");
+    setDateTo("");
+  };
 
   const totalPages = Math.ceil(filtered.length / pageSize);
+  const paginatedData = useMemo(() => {
+    return sorted.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  }, [sorted, currentPage, pageSize]);
+
+  const handleOpenNew = () => {
+    openNuevaNotaDebitoCompra();
+  };
+
+  const handleOpenDetail = (id, number) => {
+    openEditNotaDebitoCompra(id, { title: `ND Compra ${number}` });
+  };
+
+  const toggleStatus = async (id, newStatus) => {
+      try {
+          const res = await api.put(`/accounting/documents/${id}`, { status: newStatus });
+          if (res) {
+              showToast("Estado actualizado", "success");
+              fetchInvoices();
+          }
+      } catch (err) {
+          showToast(err.message || "Error al actualizar estado", "error");
+      }
+  };
+
+  const fmt = (val, cur = 'ARS') => {
+    return new Intl.NumberFormat('es-AR', { 
+        style: 'currency', 
+        currency: cur === 'USD' ? 'USD' : 'ARS',
+        minimumFractionDigits: 2 
+    }).format(val || 0);
+  };
+
+  const stats = useMemo(() => {
+    const activeDocs = invoices.filter(inv => inv.status !== 'CANCELLED');
+    const pendingDocs = invoices.filter(inv => inv.status === 'OPEN' || inv.status === 'PARTIAL');
+    const paidDocs = invoices.filter(inv => inv.status === 'PAID');
+
+    return {
+      totalAmount: activeDocs.reduce((acc, inv) => acc + Number(inv.total_amount || 0), 0),
+      totalCount: activeDocs.length,
+      pendingCount: pendingDocs.length,
+      paidCount: paidDocs.length
+    };
+  }, [invoices]);
+
+  const kpis = [
+    {
+      title: "Total Emitido",
+      value: fmt(stats.totalAmount),
+      subtitle: `${stats.totalCount} comprobantes`,
+      icon: TrendingUp,
+      type: "primary"
+    },
+    {
+      title: "Pendientes",
+      value: stats.pendingCount,
+      subtitle: `Notas por pagar`,
+      icon: Clock,
+      type: "warning"
+    },
+    {
+      title: "Pagadas",
+      value: stats.paidCount,
+      subtitle: "Notas finalizadas",
+      icon: CheckCircle,
+      type: "success"
+    },
+    {
+      title: "Total Vigentes",
+      value: stats.totalCount,
+      subtitle: `Resultados activos: ${filtered.length}`,
+      icon: LayoutGrid,
+      type: "neutral"
+    }
+  ];
+
+  const toolbar = {
+    search: (
+      <div className={s.searchWrap}>
+        <Search className={s.searchIcon} size={20} />
+        <input
+          type="text"
+          placeholder="Filtrar por número, proveedor o concepto..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && <button className={s.inputClear} style={{ position: 'absolute', right: 16, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', color: 'var(--muted)' }} onClick={() => setSearch("")}><X size={16} /></button>}
+      </div>
+    ),
+    filtersToggle: (
+      <button 
+        type="button" 
+        className={`${s.filterToggle} ${showFilters || hasActiveFilters ? s.active : ""}`}
+        onClick={() => setShowFilters(!showFilters)}
+      >
+        <Filter size={18} />
+        Filtros
+        {hasActiveFilters && <span className={s.filterDot} />}
+      </button>
+    ),
+    actions: (
+      <>
+        <button className={s.ghostBtn} title="Próximamente">Exportar</button>
+        <button className={s.ghostBtn} title="Próximamente">Columnas</button>
+        <button className={s.ghostBtn} style={{ color: '#ef4444' }} onClick={clearFilters} title="Limpiar Filtros">Limpiar</button>
+        <button className={s.primaryCta} onClick={handleOpenNew}>
+            <PlusCircle size={16} />
+            Nueva ND Compra
+        </button>
+      </>
+    ),
+    filtersArea: showFilters && (
+      <div className={s.compactFiltersRow}>
+          <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className={s.filterSelect}>
+            <option value="">Estado: Todos</option>
+            <option value="DRAFT">📝 Borrador</option>
+            <option value="OPEN">📌 Pendiente</option>
+            <option value="PARTIAL">⏳ Parcial</option>
+            <option value="PAID">✅ Pagada</option>
+            <option value="CANCELLED">❌ Anulada</option>
+          </select>
+          <select value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value)} className={s.filterSelect}>
+            <option value="">Proveedor: Todos</option>
+            {entities.map((e) => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
+          <select value={filterCurrency} onChange={(e) => setFilterCurrency(e.target.value)} className={s.filterSelect}>
+            <option value="">Moneda: Todas</option>
+            <option value="USD">💵 Dólares (USD)</option>
+            <option value="ARS">🇦🇷 Pesos (ARS)</option>
+          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Desde</span>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={s.dateInput} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Hasta</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={s.dateInput} />
+          </div>
+          <label className={s.toggleLabel} style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+              <div className={`${s.switch} ${!hideCancelled ? s.active : ""}`}>
+                  <input type="checkbox" checked={!hideCancelled} onChange={() => setHideCancelled(!hideCancelled)} />
+                  <div className={s.slider} />
+              </div>
+              <span className={s.toggleText} style={{ fontSize: '10px' }}>Incluir Anuladas</span>
+          </label>
+      </div>
+    )
+  };
+
+  const table = {
+    columns: (
+      <>
+        <th className={s.th} style={{ width: 40, padding: '0 12px' }}>
+          <input 
+              type="checkbox" 
+              onChange={(e) => setSelectedInvoices(e.target.checked ? paginatedData.map(i => i.id) : [])}
+              checked={selectedInvoices.length > 0 && selectedInvoices.length === paginatedData.length}
+              style={{ cursor: 'pointer', width: 18, height: 18, accentColor: 'var(--primary)' }}
+          />
+        </th>
+        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>Nº COMPROBANTE</th>
+        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>FECHA</th>
+        <th className={s.th} onClick={() => toggleSort('entity_id')} style={{ cursor: 'pointer' }}>PROVEEDOR</th>
+        <th className={s.th}>VENCIMIENTO</th>
+        <th className={s.th} style={{ textAlign: 'right' }} onClick={() => toggleSort('total_amount')}>TOTAL</th>
+        <th className={s.th} style={{ textAlign: 'center' }}>ESTADO</th>
+        <th className={s.th} style={{ textAlign: 'right' }}>ACCIONES</th>
+      </>
+    ),
+    body: loading ? (
+        <TableRowSkeleton rows={8} cols={8} />
+    ) : error ? (
+        <tr><td colSpan="8"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
+    ) : sorted.length === 0 ? (
+      <tr>
+        <td colSpan="8">
+          <EmptyState 
+              icon={FileText} 
+              title={hasActiveFilters ? "Sin resultados" : "Sin notas de débito de compra"}
+              description={hasActiveFilters ? "Ajustá los filtros para encontrar lo que buscás." : "Comenzá creando una nota de débito de proveedor."}
+              actionLabel={!hasActiveFilters ? "Crear Nota de Débito" : null}
+              onAction={!hasActiveFilters ? handleOpenNew : null}
+          />
+        </td>
+      </tr>
+    ) : (
+      paginatedData.map((inv) => (
+        <tr key={inv.id} className={`${s.row} ${selectedInvoices.includes(inv.id) ? s.rowSelected : ""}`} onClick={() => handleOpenDetail(inv.id, inv.number)}>
+          <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 40, padding: '0 12px' }}>
+            <input 
+                type="checkbox"
+                checked={selectedInvoices.includes(inv.id)}
+                onChange={(e) => {
+                    setSelectedInvoices(prev => prev.includes(inv.id) ? prev.filter(x => x !== inv.id) : [...prev, inv.id]);
+                }}
+                style={{ cursor: 'pointer', width: 17, height: 17, accentColor: 'var(--primary)' }}
+            />
+          </td>
+          <td className={`${s.td} ${s.numberCell}`}>{inv.number}</td>
+          <td className={s.td} style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600 }}>
+            {new Date(inv.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+          </td>
+          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{inv.entity_name || entityName(inv.entity_id)}</td>
+          <td className={s.td} style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
+            {inv.due_date ? new Date(inv.due_date).toLocaleDateString('es-AR') : '-'}
+          </td>
+          <td className={`${s.td} ${s.totalCell}`}>
+            <span className={s.currencyLabel}>{inv.currency}</span>
+            {Number(inv.total_amount)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+          </td>
+          <td className={s.td} style={{ textAlign: 'center', width: 200 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                <StatusBadge status={
+                    inv.status === "OPEN" ? "PENDIENTE" :
+                    inv.status === "PAID" ? "PAGADA" :
+                    inv.status === "PARTIAL" ? "PARCIAL" :
+                    inv.status === "DRAFT" ? "BORRADOR" :
+                    inv.status === "CANCELLED" ? "ANULADA" :
+                    inv.status
+                } />
+            </div>
+          </td>
+          <td className={s.td} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              {inv.status === 'DRAFT' && (
+                  <button onClick={() => toggleStatus(inv.id, 'OPEN')} style={{ all: 'unset', cursor: 'pointer', color: '#10b981' }} title="Confirmar (Emitir)">
+                      <CheckCircle size={18} />
+                  </button>
+              )}
+              {inv.status !== 'CANCELLED' && inv.status !== 'DRAFT' && (
+                  <button onClick={() => toggleStatus(inv.id, 'CANCELLED')} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Anular">
+                      <XCircle size={18} />
+                  </button>
+              )}
+              <button onClick={() => handleOpenDetail(inv.id, inv.number)} style={{ all: 'unset', cursor: 'pointer', color: 'var(--accent-indigo)' }} title="Ver Nota de Débito">
+                <ArrowUpRight size={18} />
+              </button>
+            </div>
+          </td>
+        </tr>
+      ))
+    )
+  };
+
+  const pagination = {
+    infoText: `REPORTE: ${filtered.length} NOTAS LOCALIZADAS`,
+    totalPages: totalPages,
+    currentPage: currentPage,
+    onPageChange: setCurrentPage
+  };
 
   return (
-    <div className={s.pageLayout}>
-      <ContentHeader 
-        title="Notas de Débito (Compras)" 
-        subtitle="Débitos recibidos de proveedores"
+    <>
+      <DocumentListPage 
+        title="Notas de Débito de Compra"
         breadcrumbs={[{ label: 'Compras' }, { label: 'Notas de Débito' }]}
-        actions={
-            <Button variant="primary" className={s.primaryCta} onClick={handleCreate} style={{ height: 44, padding: '0 24px' }}>
-                <Plus size={18} /> Cargar Nota de Débito
-            </Button>
-        }
+        kpis={kpis}
+        toolbar={toolbar}
+        table={table}
+        pagination={pagination}
       />
-
-      <div className={s.dashboard}>
-          <div className={`${s.bentoCard} ${s.cardPrimary}`}>
-              <div className={s.bentoHeader}>
-                  <TrendingUp size={14} color="#3b82f6" />
-                  <span>Débitos del Mes</span>
-              </div>
-              <div className={s.bentoValue}>{formatCurrency(stats.totalMonth)}</div>
-              <div className={s.bentoSubtext}>{stats.countMonth} comprobantes registrados</div>
-          </div>
-          <div className={s.bentoCard}>
-              <div className={s.bentoHeader}>
-                  <FileText size={14} color="#64748b" />
-                  <span>Total Histórico</span>
-              </div>
-              <div className={s.bentoValue}>{stats.total}</div>
-              <div className={s.bentoSubtext}>Documentos totales</div>
-          </div>
-          <div className={s.bentoCard}>
-              <div className={s.bentoHeader}>
-                <Search size={14} color="#64748b" />
-                <span>Resultados Filtro</span>
-              </div>
-              <div className={s.bentoValue}>{filtered.length}</div>
-              <div className={s.bentoSubtext}>Coincidencias con búsqueda</div>
-          </div>
-      </div>
-
-      <div className={s.toolbar}>
-        <div className={s.toolbarRow}>
-          <div className={s.toolbarMain}>
-            <div className={s.searchWrap}>
-              <Search size={18} className={s.searchIcon} />
-              <input
-                type="text"
-                placeholder="Buscar por número o proveedor..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-               {search && <button className={s.inputClear} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setSearch("")}><X size={14} /></button>}
-            </div>
-            
-            <button 
-              className={`${s.filterToggle} ${showFilters || hasActiveFilters ? s.active : ""}`}
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <Filter size={16} /> Filtros Avanzados
-              {hasActiveFilters && <span className={s.filterDot} style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, background: '#ef4444', borderRadius: '50%', border: '2px solid white' }} />}
-            </button>
-
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <label className={s.verCanceladosLabel} style={{ fontSize: 12, fontWeight: 600 }}>
-                    <input
-                        type="checkbox"
-                        checked={hideCancelled}
-                        onChange={(e) => setHideCancelled(e.target.checked)}
-                        style={{ width: 16, height: 16, accentColor: '#3b82f6' }}
-                    />
-                    Ocultar Anuladas
-                </label>
-            </div>
-          </div>
-        </div>
-
-        {showFilters && (
-          <div className={s.expandedFilters}>
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Estado</span>
-                <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className={s.filterSelect}>
-                  <option value="">Todos los estados</option>
-                  <option value="DRAFT">Borrador</option>
-                  <option value="ISSUED">Emitida</option>
-                  <option value="PAID">Pagada</option>
-                  <option value="CANCELLED">Anulada</option>
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Proveedor</span>
-                <select value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value)} className={s.filterSelect}>
-                  <option value="">Todos los proveedores</option>
-                  {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Moneda</span>
-                <select value={filterCurrency} onChange={(e) => setFilterCurrency(e.target.value)} className={s.filterSelect}>
-                  <option value="">Todas</option>
-                  <option value="ARS">ARS</option>
-                  <option value="USD">USD</option>
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Desde</span>
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={s.dateInput} />
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Hasta</span>
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={s.dateInput} />
-              </div>
-              
-              <div className={s.filterGroup} style={{ justifyContent: 'flex-end', gridColumn: 'span 2' }}>
-                  <Button variant="ghost" size="sm" onClick={() => {
-                        setSearch("");
-                        setSelectedEntityId("");
-                        setSelectedStatus("");
-                        setFilterCurrency("");
-                        setDateFrom("");
-                        setDateTo("");
-                    }} style={{ color: '#ef4444', fontWeight: 700 }}>
-                      Limpiar Filtros
-                  </Button>
-              </div>
-          </div>
-        )}
-      </div>
-
-      <div className={s.cardTable}>
-        <div className={s.tableWrap}>
-          <table className={t.table}>
-            <thead>
-              <tr>
-                <th className={s.th} onClick={() => toggleSort("number")} style={{ cursor: 'pointer' }}>
-                  Número {sortBy === "number" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className={s.th} onClick={() => toggleSort("date")} style={{ cursor: 'pointer' }}>
-                  Fecha {sortBy === "date" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className={s.th} onClick={() => toggleSort("entity_id")} style={{ cursor: 'pointer' }}>
-                  Proveedor {sortBy === "entity_id" && (sortDir === "asc" ? "↑" : "↓")}
-                </th>
-                <th className={s.th}>Concepto</th>
-                <th className={s.th} style={{ textAlign: 'right' }}>Total</th>
-                <th className={s.th} style={{ textAlign: 'center' }}>Estado</th>
-                <th className={s.th} style={{ textAlign: 'right' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [...Array(6)].map((_, i) => (
-                  <tr key={i} className={s.row}>
-                    <td className={s.td}><Skeleton width="100px" height="18px" /></td>
-                    <td className={s.td}><Skeleton width="80px" height="14px" /></td>
-                    <td className={s.td}><Skeleton width="180px" height="16px" /></td>
-                    <td className={s.td}><Skeleton width="150px" height="14px" /></td>
-                    <td className={`${s.td} ${s.tdRight}`} style={{ textAlign: 'right' }}><Skeleton width="90px" height="16px" style={{ marginLeft: 'auto' }} /></td>
-                    <td className={`${s.td} ${s.tdCenter}`} style={{ textAlign: 'center' }}><Skeleton width="80px" height="24px" borderRadius="12px" style={{ margin: 'auto' }} /></td>
-                    <td className={`${s.td} ${s.tdRight}`} style={{ textAlign: 'right' }}>
-                       <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                         <Skeleton width="28px" height="28px" borderRadius="6px" />
-                         <Skeleton width="28px" height="28px" borderRadius="6px" />
-                       </div>
-                    </td>
-                  </tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan="7" style={{ padding: 80, textAlign: 'center' }}>
-                    <div className={s.empty} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                      <div className={s.emptyTitle} style={{ fontSize: 18, fontWeight: 700, color: '#1e293b' }}>
-                        {hasActiveFilters ? "No hay resultados" : "Sin notas de débito"}
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                currentInvoices.map((inv) => (
-                  <tr key={inv.id} className={s.row} onClick={() => handleEdit(inv)}>
-                    <td className={`${s.td} ${s.numberCell}`}>{inv.number}</td>
-                    <td className={s.td} style={{ color: '#64748b' }}>{new Date(inv.date).toLocaleDateString('es-AR')}</td>
-                    <td className={s.td} style={{ fontWeight: 600 }}>{entityName(inv.entity_id)}</td>
-                    <td className={s.td} style={{ fontSize: '12px', opacity: 0.8 }}>{inv.notes || '-'}</td>
-                    <td className={`${s.td} ${s.totalCell}`}>
-                      <span className={s.currencyLabel}>{inv.currency}</span>
-                      {inv.total_amount?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className={s.td} style={{ textAlign: 'center' }}>
-                      <Badge variant={inv.status}>{inv.status}</Badge>
-                    </td>
-                    <td className={s.td} onClick={e => e.stopPropagation()}>
-                      <div className={s.actions}>
-                        {inv.attachment_url && (
-                          <Button variant="ghost" size="sm" onClick={() => setPreviewUrl(inv.attachment_url)} title="Ver Adjunto">
-                            <Eye size={16} color="#64748b" />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => handleEdit(inv)} title="Ver / Editar">
-                          <Edit size={16} />
-                        </Button>
-                        <Button variant="ghost" size="sm" title="Descargar"><Download size={16} /></Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {totalPages > 1 && (
-        <div className={s.paginationBar}>
-          <div className={s.paginationInfo}>
-            Mostrando <strong>{((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filtered.length)}</strong> de <strong>{filtered.length}</strong> documentos
-          </div>
-          <div className={s.paginationControls}>
-            <button className={s.pageBtn} disabled={currentPage === 1} onClick={() => setCurrentPage(currentPage - 1)}>Anterior</button>
-            <div className={s.pageNumbers}>
-              {[...Array(totalPages)].map((_, i) => (
-                <button key={i + 1} className={`${s.pageNum} ${currentPage === i + 1 ? s.active : ""}`} onClick={() => setCurrentPage(i + 1)}>{i + 1}</button>
-              ))}
-            </div>
-            <button className={s.pageBtn} disabled={currentPage === totalPages} onClick={() => setCurrentPage(currentPage + 1)}>Siguiente</button>
-          </div>
-        </div>
-      )}
-
+      
       {previewUrl && (
           <div className={s.previewOverlay} onClick={() => setPreviewUrl(null)}>
               <div className={s.previewContent} onClick={e => e.stopPropagation()}>
                   <div className={s.previewHeader}>
-                      <h3>VISTA PREVIA DEL COMPROBANTE</h3>
-                      <button className={s.closePreview} onClick={() => setPreviewUrl(null)}><X size={24} /></button>
+                      <h3>VISTA PREVIA DEL DOCUMENTO</h3>
+                      <button className={s.closePreview} onClick={() => setPreviewUrl(null)}><X size={20} /></button>
                   </div>
                   <div className={s.previewBody}>
                       {previewUrl.toLowerCase().endsWith('.pdf') ? (
@@ -466,7 +465,6 @@ export default function PurchaseDebitNotesPage() {
               </div>
           </div>
       )}
-    </div>
+    </>
   );
 }
-

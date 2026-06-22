@@ -84,6 +84,19 @@ const RemitoStandalonePage = lazy(() => import("./modules/sales/RemitoStandalone
 const FacturaStandalonePage = lazy(() => import("./modules/sales/FacturaStandalonePage"));
 const NotaDebitoStandalonePage = lazy(() => import("./modules/sales/NotaDebitoStandalonePage"));
 const CreditNoteStandalonePage = lazy(() => import("./modules/sales/CreditNoteStandalonePage"));
+const PurchaseOrderStandalonePage = lazy(() => import("./modules/purchases/PurchaseOrderStandalonePage"));
+const PurchaseDeliveryNoteStandalonePage = lazy(() => import("./modules/purchases/PurchaseDeliveryNoteStandalonePage"));
+const PurchaseInvoiceStandalonePage = lazy(() => import("./modules/purchases/PurchaseInvoiceStandalonePage"));
+const PurchaseDebitNoteStandalonePage = lazy(() => import("./modules/purchases/PurchaseDebitNoteStandalonePage"));
+const PurchaseCreditNoteStandalonePage = lazy(() => import("./modules/purchases/PurchaseCreditNoteStandalonePage"));
+const ReceiptStandalonePage = lazy(() => import("./modules/finance/ReceiptStandalonePage"));
+const ExpenseClaimStandalonePage = lazy(() => import("./modules/finance/ExpenseClaimStandalonePage"));
+const StatementStandalonePage = lazy(() => import("./modules/reports/StatementStandalonePage"));
+const EntitiesManagerStandalonePage = lazy(() => import("./modules/entities/EntitiesManagerStandalonePage"));
+const EntityDashboardStandalonePage = lazy(() => import("./modules/entities/EntityDashboardStandalonePage"));
+const UsersManagerStandalonePage = lazy(() => import("./modules/auth/UsersManagerStandalonePage"));
+const AuditLogsStandalonePage = lazy(() => import("./modules/auth/AuditLogsStandalonePage"));
+const FleetStandalonePage = lazy(() => import("./modules/fleet/FleetStandalonePage"));
 
 // Legacy standalone (backwards compat)
 const SalesOrderStandalonePage = lazy(() => import("./modules/sales/SalesOrderStandalonePage"));
@@ -147,8 +160,53 @@ export default function App() {
               <Route path="/standalone/notas-credito/nueva" element={<CreditNoteStandalonePage />} />
               <Route path="/standalone/notas-credito/:id" element={<CreditNoteStandalonePage />} />
 
+              {/* Órdenes de Compra */}
+              <Route path="/standalone/ordenes-compra/nueva" element={<PurchaseOrderStandalonePage />} />
+              <Route path="/standalone/ordenes-compra/:id" element={<PurchaseOrderStandalonePage />} />
+
+              {/* Remitos de Entrada */}
+              <Route path="/standalone/remitos-entrada/nuevo" element={<PurchaseDeliveryNoteStandalonePage />} />
+              <Route path="/standalone/remitos-entrada/:id" element={<PurchaseDeliveryNoteStandalonePage />} />
+
+              {/* Facturas de Compra */}
+              <Route path="/standalone/facturas-compra/nueva" element={<PurchaseInvoiceStandalonePage />} />
+              <Route path="/standalone/facturas-compra/:id" element={<PurchaseInvoiceStandalonePage />} />
+
+              {/* Notas de Débito de Compra */}
+              <Route path="/standalone/notas-debito-compra/nueva" element={<PurchaseDebitNoteStandalonePage />} />
+              <Route path="/standalone/notas-debito-compra/:id" element={<PurchaseDebitNoteStandalonePage />} />
+
+              {/* Notas de Crédito de Compra */}
+              <Route path="/standalone/notas-credito-compra/nueva" element={<PurchaseCreditNoteStandalonePage />} />
+              <Route path="/standalone/notas-credito-compra/:id" element={<PurchaseCreditNoteStandalonePage />} />
+              
               {/* Comisiones Standalone */}
-              <Route path="/standalone/comisiones/vendedor/:id" element={<SellerCommissionStandalone />} />
+              <Route path="/standalone/comisiones/vendedor/:id" element={<SellerCommissionStandalone />} />            
+              
+              {/* Recibos y Pagos */}
+              <Route path="/standalone/recibos/nuevo" element={<ReceiptStandalonePage />} />
+              <Route path="/standalone/recibos/:id" element={<ReceiptStandalonePage />} />
+              <Route path="/standalone/pagos/nuevo" element={<ReceiptStandalonePage />} />
+              <Route path="/standalone/pagos/:id" element={<ReceiptStandalonePage />} />
+              
+              {/* Rendiciones de Gastos */}
+              <Route path="/standalone/gastos/nuevo" element={<ExpenseClaimStandalonePage />} />
+              <Route path="/standalone/gastos/:id" element={<ExpenseClaimStandalonePage />} />
+
+              {/* Resumen de Cuenta */}
+              <Route path="/standalone/resumen-cuenta" element={<StatementStandalonePage />} />
+              <Route path="/standalone/resumen-cuenta/:entityId" element={<StatementStandalonePage />} />
+
+              {/* Entidades y CRM */}
+              <Route path="/standalone/entidades" element={<EntitiesManagerStandalonePage />} />
+              <Route path="/standalone/crm/entidad/:id" element={<EntityDashboardStandalonePage />} />
+
+              {/* Auth y Auditoría */}
+              <Route path="/standalone/usuarios" element={<UsersManagerStandalonePage />} />
+              <Route path="/standalone/auditoria" element={<AuditLogsStandalonePage />} />
+
+              {/* Flota */}
+              <Route path="/standalone/flota" element={<FleetStandalonePage />} />
             </Route>
 
             {/* ── Rutas legacy (backwards compat) — redirigen a /standalone/ ── */}

@@ -16,6 +16,7 @@ import Autocomplete from '../../components/ui/Autocomplete';
 import Modal from '../../components/ui/Modal';
 import { useToast } from '../../context/ToastContext';
 import { useWindow } from '../../context/WindowContext';
+import { openEntityDashboard } from '../../utils/openStandaloneWindow';
 import s from './CRMDashboard.module.css';
 
 export default function CRMDashboard() {
@@ -320,7 +321,7 @@ export default function CRMDashboard() {
                                     </div>
                                     <div className={s.taskContent}>
                                         <div className={s.taskTop}>
-                                            <div className={s.entityName} onClick={() => openWindow('entity-dashboard', { entityId: task.entity_id }, { title: 'Vista 360', width: 1300, height: 900 })}>
+                                            <div className={s.entityName} onClick={() => openEntityDashboard(task.entity_id, { title: 'Vista 360', width: 1300, height: 900 })}>
                                                 {task.entity_name} <ArrowUpRight size={16} style={{ opacity: 0.3 }} />
                                             </div>
                                             <div className={s.taskDate} style={{ color: getOverdueStatus(task.next_follow_up) === 'overdue' ? '#ef4444' : '#94a3b8' }}>
