@@ -50,6 +50,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
     const [saving, setSaving] = useState(false);
     const [salespeople, setSalespeople] = useState([]);
     const [duplicateError, setDuplicateError] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -178,6 +179,49 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
         }
     };
 
+    const handleDelete = () => {
+        setShowDeleteConfirm(true);
+    };
+
+    const executeDelete = async () => {
+        setShowDeleteConfirm(false);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/entities/${entity.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!res.ok) {
+                if (res.status === 400) {
+                    throw new Error('No se puede eliminar esta entidad porque tiene comprobantes, movimientos u operaciones asociadas.');
+                }
+                if (res.status === 403) {
+                    throw new Error('No tenés permisos para eliminar entidades.');
+                }
+                throw new Error('Error al intentar eliminar la entidad.');
+            }
+            
+            if (showToast) {
+                showToast("Entidad eliminada correctamente.", "success");
+            } else {
+                alert("Entidad eliminada correctamente.");
+            }
+            
+            if (onSave) {
+                onSave(null);
+            }
+        } catch (err) {
+            if (showToast) {
+                showToast(err.message, "error");
+            } else {
+                alert(err.message);
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
         setSaving(true);
@@ -261,6 +305,29 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                     ))}
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
+                    {entity && (
+                        <button 
+                            type="button"
+                            onClick={handleDelete}
+                            style={{
+                                padding: '8px 14px',
+                                background: '#fff',
+                                border: '1px solid #fee2e2',
+                                borderRadius: '8px',
+                                color: '#ef4444',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                transition: 'all 0.2s ease',
+                                marginRight: '4px'
+                            }}
+                        >
+                            <Trash2 size={16} /> Eliminar
+                        </button>
+                    )}
                     <button 
                         onClick={onCancel}
                         style={{
@@ -727,6 +794,68 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                 }}
                             >
                                 Convertir a Mixto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showDeleteConfirm && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        background: 'white',
+                        padding: '24px',
+                        borderRadius: '8px',
+                        width: '450px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        <h3 style={{ margin: '0 0 12px 0', color: '#ef4444', fontSize: '18px', fontWeight: 700 }}>
+                            ¿Seguro que querés eliminar esta entidad?
+                        </h3>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
+                            Solo se puede eliminar si no tiene comprobantes, movimientos ni operaciones asociadas.
+                        </p>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'end', gap: '12px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteConfirm(false)}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: 'white',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    color: '#4b5563'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={executeDelete}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600
+                                }}
+                            >
+                                Sí, eliminar
                             </button>
                         </div>
                     </div>
