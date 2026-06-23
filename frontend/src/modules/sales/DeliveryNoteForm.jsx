@@ -49,9 +49,27 @@ import {
   CheckSquare,
   Square,
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  Pencil
 } from "lucide-react";
 import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/ui/TraceabilityStatusBadge";
+
+// Helper to compute display value for Remitir column (packages or quantity)
+function formatQty(value) {
+  const n = Number(value || 0);
+  return Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function getDisplayPackages(item) {
+  const qty = Number(item.qty || 0);
+  const factor = Number(item._unit_content || 1);
+  if (factor > 1) {
+    return `${formatQty(qty / factor)} env.`;
+  }
+  return `${formatQty(qty)} ${item._unit_label || 'u'}.`;
+}
 import s from "./SalesOrderForm.module.css";
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
@@ -84,7 +102,7 @@ export default function DeliveryNoteForm(props) {
   const [traceability, setTraceability] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [relatedDeliveryNotes, setRelatedDeliveryNotes] = useState([]);
-  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit" || initialMode === "view");
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [selectableItems, setSelectableItems] = useState([]);
   const [selectorLoading, setSelectorLoading] = useState(false);
@@ -142,7 +160,7 @@ export default function DeliveryNoteForm(props) {
     );
   }, [items]);
 
-  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + ((parseFloat(item.qty) || 0) * (parseFloat(item._unit_content) || 1)), 0), [items]);
+  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + (parseFloat(item.qty) || 0), 0), [items]);
 
   useEffect(() => {
     if (ov_id) {
@@ -738,6 +756,9 @@ export default function DeliveryNoteForm(props) {
             window.dispatchEvent(new CustomEvent("delivery-note-changed"));
             setMode("edit");
             setId(savedId);
+            setIsReadOnly(true);
+            // Fetch fresh saved note to load the updated view schema values and totals
+            fetchDeliveryNote();
         } else {
             const err = await res.json();
             showToast(err.detail || "Error al guardar", "error");
@@ -771,7 +792,7 @@ export default function DeliveryNoteForm(props) {
 
   return (
     <>
-      <div className={`${s.formCard}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
+      <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
           {isLocked && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(37, 99, 235, 0.05)', color: '#1d4ed8', padding: '8px 24px', fontSize: 10, fontWeight: 900, textAlign: 'center', borderBottom: '1px solid rgba(37, 99, 235, 0.1)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, backdropFilter: 'blur(4px)' }}>
                 <Receipt size={14} /> DOCUMENTO BLOQUEADO POR FACTURACIÓN. NO SE PERMITEN MODIFICACIONES.
@@ -796,10 +817,29 @@ export default function DeliveryNoteForm(props) {
                   </div>
               </div>
               <div className={s.headerActions}>
-                  <button className={s.saveBtn} onClick={handleSave} disabled={isLocked || saving} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                      {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
-                      {saving ? "Guardando..." : "Guardar"}
-                  </button>
+                  {isReadOnly ? (
+                    <button 
+                      className={s.saveBtn} 
+                      style={{ background: '#64748b', cursor: 'pointer' }} 
+                      onClick={() => {
+                        if (isLocked) {
+                          showToast("Atención: este remito está bloqueado por facturación.", "warning");
+                        } else {
+                          setIsReadOnly(false);
+                        }
+                      }}
+                      title="Activar modo edición"
+                      disabled={isLocked}
+                    >
+                        <Pencil size={16} />
+                        Editar
+                    </button>
+                  ) : (
+                    <button className={s.saveBtn} onClick={handleSave} disabled={isLocked || saving} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                        {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
+                        {saving ? "Guardando..." : "Guardar"}
+                    </button>
+                  )}
                   <div className={s.actionGroup}>
                       <button className={s.actionBtn} disabled={!id || isLocked} onClick={async () => {
                           if (!window.confirm("¿Estás seguro de anular este remito? Esta acción no se puede deshacer.")) return;
@@ -816,13 +856,13 @@ export default function DeliveryNoteForm(props) {
                               console.error(e);
                           }
                       }} title="Anular Remito" style={{ color: '#ef4444' }}>
-                          <Trash2 size={18} /> Anular
+                          <Trash2 size={18} />
                       </button>
                       <button className={s.actionBtn} disabled={!id} onClick={handlePrintPreprinted} title="Imprimir Remito">
-                          <Printer size={18} /> Imprimir
+                          <Printer size={18} />
                       </button>
                       <button className={s.actionBtn} onClick={() => closeWindow(windowId)} title="Volver">
-                          <X size={18} /> Volver
+                          <X size={18} />
                       </button>
                   </div>
               </div>
@@ -832,7 +872,7 @@ export default function DeliveryNoteForm(props) {
           <div className={s.bodyTwoColumns} style={{ opacity: isLocked ? 0.8 : 1 }}>
               {/* Columna Izquierda: Ítems y Productos */}
               <div className={s.leftCol}>
-                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden' }}>
+                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden', flex: 1, minHeight: 0 }}>
                       {items.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {isReadOnly ? null : (
@@ -846,7 +886,7 @@ export default function DeliveryNoteForm(props) {
                                     <div></div>
                                 </div>
                             )}
-                            <div className={s.itemsList} style={{ overflowX: 'hidden' }}>
+                            <div className={s.productsPanelCompact} style={{ maxHeight: '200px', overflowY: 'auto', paddingRight: '8px' }}>
                                 {items.map(item => {
                                     if (isReadOnly) {
                                         const qtyOrdered = parseFloat(item.qty_ordered) || 0;
@@ -856,29 +896,35 @@ export default function DeliveryNoteForm(props) {
                                         const qtyPackages = item.qty_packages;
                                         const qty = item.qty || 0;
                                         const hasPackages = qtyPackages !== undefined && qtyPackages !== null;
-                                        const subtotal = qty * (item.unit_price || 0);
+                                        
+                                        const totalQty = qty;
+                                        const subtotalNeto = totalQty * (item.unit_price || 0) * (1 - (item.discount_pct || 0)/100);
+                                        const vatAmount = subtotalNeto * (item.vat_rate || 0.21);
+                                        const totalAmount = subtotalNeto + vatAmount;
                                         
                                         return (
                                             <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                    <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.name || item.product?.name || item.description}</div>
-                                                    <div style={{ display: 'flex', gap: 12, fontSize: 11, background: '#f8fafc', padding: '4px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                                                        <div style={{ color: '#64748b' }}><span style={{ fontWeight: 800 }}>Ped:</span> {qtyOrdered.toFixed(2)}</div>
-                                                        <div style={{ color: 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Rem:</span> {qtyDelivered.toFixed(2)}</div>
-                                                        <div style={{ color: qtyPending > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {qtyPending.toFixed(2)}</div>
+                                                    <div>
+                                                        <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.name || item.product?.name || item.description || ''}</div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 8, fontSize: 10, fontWeight: 800, background: '#f8fafc', padding: '4px 8px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                                        <span style={{ color: '#64748b' }}>Ped: {qtyOrdered.toFixed(2)}</span>
+                                                        <span style={{ color: '#059669' }}>Rem: {qtyDelivered.toFixed(2)}</span>
+                                                        <span style={{ color: qtyPending > 0 ? '#d97706' : '#059669' }}>Pte: {qtyPending.toFixed(2)}</span>
                                                     </div>
                                                 </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569' }}>
-                                                    {hasPackages ? (
-                                                        <>
-                                                            <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qtyPackages} envases</div>
-                                                            <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {qtyPackages} envases = {qty.toFixed(2)} {item._unit_label || 'u'}</div>
-                                                        </>
-                                                    ) : (
-                                                        <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qty.toFixed(2)} {item._unit_label || 'u'}</div>
+                                                
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569', alignItems: 'center' }}>
+                                                                                    <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {totalQty.toFixed(2)} {item._unit_label || 'u'}</div>
+                                                    {Number(item._unit_content || 1) > 1 && (
+                                                        <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {getDisplayPackages(item)}</div>
                                                     )}
-                                                    <div><span style={{ fontWeight: 800 }}>Precio:</span> {Number(item.unit_price || 0).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })} / {item._unit_label || 'u'}</div>
-                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Subtotal:</span> {Number(subtotal).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })}</div>
+                                                    
+                                                    <div><span style={{ fontWeight: 800 }}>Precio:</span> {fmt(item.unit_price)} / {item._unit_label || 'u'}</div>
+                                                    <div><span style={{ fontWeight: 800 }}>Subtotal:</span> {fmt(subtotalNeto)}</div>
+                                                    <div><span style={{ fontWeight: 800 }}>IVA:</span> {fmt(vatAmount)}</div>
+                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Total:</span> {fmt(totalAmount)}</div>
                                                 </div>
                                             </div>
                                         );
@@ -898,7 +944,11 @@ export default function DeliveryNoteForm(props) {
                                             <div style={{ color: (item.qty_pending || 0) > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {(item.qty_pending || 0).toFixed(2)}</div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                                            <input type="number" step="0.01" min="0" max={item.qty_pending || 0} className={s.tableInput} value={item.qty_packages !== undefined ? item.qty_packages : (item.qty || 0)} onChange={(e) => updateItem(item.id, 'qty_packages', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
+                                            <input type="number" step="0.01" min="0" max={item.qty_pending || 0} className={s.tableInput} value={
+            item.qty_packages !== undefined ? item.qty_packages : (
+              Number(item._unit_content) > 1 ? (Number(item.qty) || 0) / Number(item._unit_content) : (item.qty || 0)
+            )
+          } onChange={(e) => updateItem(item.id, 'qty_packages', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
                                             {item._unit_content > 1 && (
                                                 <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>
                                                     = {(item.qty || 0).toFixed(2)} {item._unit_label || 'u'}
@@ -933,9 +983,29 @@ export default function DeliveryNoteForm(props) {
                         </div>
                       )}
                   </div>
+
+                  {/* Observaciones (Mismo ancho que productos, altura fija y flex-shrink 0) */}
+                  <div className={s.sideBlock} style={{ height: 80, display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'center', padding: '8px 16px', flexShrink: 0 }}>
+                      <div className={s.sideBlockTitle} style={{ margin: 0, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                          <ClipboardList size={14} /> OBSERVACIONES
+                      </div>
+                      <div style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'center' }}>
+                          {isReadOnly ? (
+                              <div style={{ fontSize: 12, color: observations ? 'var(--text)' : '#64748b', fontStyle: observations ? 'normal' : 'italic' }}>
+                                  {observations || 'Sin observaciones'}
+                              </div>
+                          ) : (
+                              <textarea
+                                  style={{ width: '100%', height: '100%', minHeight: 'unset', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-color)', background: '#fff', resize: 'none', fontSize: 12, boxSizing: 'border-box' }}
+                                  value={observations}
+                                  onChange={e => setObservations(e.target.value)}
+                                  placeholder="Añadir observaciones logísticas o referencias..."
+                              />
+                          )}
+                      </div>
+                  </div>
               </div>
 
-              {/* Columna Derecha: Panel Lateral Administrativo */}
               {/* Columna Derecha: Panel Lateral Administrativo */}
               <div className={s.rightCol}>
                   {/* Bloque Cliente */}
@@ -1003,22 +1073,12 @@ export default function DeliveryNoteForm(props) {
                               <input className={s.sideInput} value={vehiclePlate} onChange={e => setVehiclePlate(e.target.value)} placeholder="Ej: AB123CD" />
                           )}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 12, flex: 1 }}>
-                          <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)' }}>OBSERVACIONES</label>
-                          <textarea 
-                             style={{ flex: 1, minHeight: 80, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-color)', background: isReadOnly ? 'var(--bg-secondary)' : '#fff', resize: 'none', fontSize: 12 }} 
-                             value={observations} 
-                             onChange={e => setObservations(e.target.value)} 
-                             placeholder="Añadir observaciones logísticas o referencias..."
-                             readOnly={isReadOnly}
-                          />
-                      </div>
                   </div>
               </div>
           </div>
 
 
-          {/* Relations Bar: OV → REMITO → FACTURA → STOCK → OBSERVACIONES */}
+          {/* Relations Bar: OV → REMITO → FACTURA → STOCK */}
           <div className={s.relationsBar}>
 
             {/* ORDEN DE VENTA */}
@@ -1071,12 +1131,6 @@ export default function DeliveryNoteForm(props) {
               <div className={s.nodeMetric} style={{ color: '#0f172a' }}>
                 {items.reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0).toFixed(2)} u. · {warehouses.find(w => w.id === warehouseId)?.name || 'S/D'}
               </div>
-            </div>
-
-            {/* OBSERVACIONES */}
-            <div className={s.relationCard} style={{ maxWidth: '140px', background: 'transparent', border: 'none', paddingLeft: 8, cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
-              <div className={s.nodeTitle} style={{ color: '#64748b' }}>OBSERVACIONES</div>
-              <div className={s.obsText} style={{ marginTop: 4 }}>{observations || 'Sin observaciones'}</div>
             </div>
           </div>
 
@@ -1156,7 +1210,7 @@ export default function DeliveryNoteForm(props) {
                          </Button>
                       </div>
 
-                      <div className={t.tableWrap} style={{ maxHeight: '60vh', overflowY: 'auto', borderRadius: 24, border: '1px solid #e2e8f0', boxShadow: '0 15px 25px -5px rgba(0,0,0,0.08)' }}>
+                      <div className={t.tableWrap} style={{ borderRadius: 24, border: '1px solid #e2e8f0', boxShadow: '0 15px 25px -5px rgba(0,0,0,0.08)' }}>
                         <table className={t.table}>
                            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                               <tr style={{ background: '#f8fafc', fontSize: 10, letterSpacing: '0.02em', color: '#64748b' }}>

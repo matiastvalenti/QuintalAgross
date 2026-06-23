@@ -35,7 +35,7 @@
     border-radius: 0;
     box-shadow: none;
     padding: 16px 24px;
-    min-height: 100vh;
+    min-height: auto;
     height: auto;
     box-sizing: border-box;
     overflow: visible;
@@ -475,27 +475,30 @@
 }
 
 .footerCompact {
-    margin-top: 6px;
+    margin-top: 2px;
+    margin-bottom: 2px;
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 24px;
-    padding: 4px 16px;
+    gap: 8px;
+    padding: 1px 4px;
     background: #ffffff;
     border-top: 1px solid var(--border-color);
     border-radius: 12px;
-    height: 48px;
-    min-height: 48px;
+    height: 32px;
+    min-height: 32px;
     flex-shrink: 0;
 }
 
 .footerCompactItem {
+    /* existing styles remain */
     display: flex;
     flex-direction: column;
     align-items: flex-end;
 }
 
 .footerCompactLabel {
+    /* existing styles remain */
     font-size: 10px;
     font-weight: 700;
     color: var(--text-secondary);
@@ -504,16 +507,24 @@
 }
 
 .footerCompactValue {
+    /* existing styles remain */
     font-size: 13px;
     font-weight: 800;
     color: var(--text);
 }
 
 .footerCompactTotal {
-    font-size: 16px;
-    font-weight: 900;
-    color: var(--primary);
+    /* existing styles remain */
 }
+
+/* New class to limit product panel height in view mode */
+.productsPanelCompact {
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 8px;
+}
+
+
 
 .ivaValue {
     color: #006c49;

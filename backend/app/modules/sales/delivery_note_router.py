@@ -1309,7 +1309,15 @@ def update_delivery_note(dn_id: str, data: dn_schemas.DeliveryNoteUpdate, db: Se
             
             for i, line_data in enumerate(lines_data):
                 old_line = dn.lines[i]
-                new_qty = float(line_data.qty)
+                
+                # line_data can be a dict (from model_dump or raw) or a Pydantic object
+                if isinstance(line_data, dict):
+                    new_qty = float(line_data.get("qty", 0))
+                    new_prod = str(line_data.get("product_id")) if line_data.get("product_id") else None
+                else:
+                    new_qty = float(getattr(line_data, "qty", 0))
+                    new_prod = str(getattr(line_data, "product_id")) if getattr(line_data, "product_id", None) else None
+                
                 old_qty = float(old_line.qty)
                 
                 # Tolerancia mínima para flotantes
@@ -1320,7 +1328,6 @@ def update_delivery_note(dn_id: str, data: dn_schemas.DeliveryNoteUpdate, db: Se
                     )
                 
                 # Bloquear cambio de producto
-                new_prod = str(line_data.product_id) if line_data.product_id else None
                 old_prod = str(old_line.product_id) if old_line.product_id else None
                 if new_prod != old_prod:
                     raise HTTPException(status_code=409, detail=f"Línea {i+1}: No se puede cambiar el producto de un remito vinculado.")

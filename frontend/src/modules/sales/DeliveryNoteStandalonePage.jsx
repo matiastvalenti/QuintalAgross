@@ -54,7 +54,7 @@ export default function DeliveryNoteStandalonePage() {
   }, []);
 
   return (
-    <div style={{ height: '100vh', width: '100vw', background: 'var(--bg-app)', display: 'flex', overflow: 'hidden', boxSizing: 'border-box' }}>
+    <div style={{ minHeight: '100vh', width: '100vw', background: 'var(--bg-app)', display: 'block', overflowY: 'auto', boxSizing: 'border-box' }}>
       <StandaloneProtectedRoute>
         {isReady ? (
           ovId ? (
