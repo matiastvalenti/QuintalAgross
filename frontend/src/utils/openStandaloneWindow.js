@@ -39,13 +39,17 @@ export function openStandaloneWindow(path, name = '_blank', options = {}) {
   return newWindow;
 }
 
+// Tamaño estándar para formularios de documentos (OV, Remito, Factura, etc.)
+// Mismo valor para todos los documentos del sistema.
+const DOCUMENT_WINDOW = { width: 1280, height: 820 };
+
 // ── Shortcuts para formularios frecuentes ──
 
 export function openNuevaOrdenVenta(options = {}) {
   const { draft_id, ...windowOptions } = options;
   let path = "/standalone/ordenes-venta/nueva";
   if (draft_id) path += `?draft_id=${draft_id}`;
-  return openStandaloneWindow(path, draft_id ? `ov-draft-${draft_id}` : "orden-venta-nueva", windowOptions);
+  return openStandaloneWindow(path, draft_id ? `ov-draft-${draft_id}` : "orden-venta-nueva", { ...DOCUMENT_WINDOW, ...windowOptions });
 }
 
 export function openNuevoRemito(ovId, options = {}) {
@@ -56,7 +60,7 @@ export function openNuevoRemito(ovId, options = {}) {
   if (draft_key) path += `&draft_key=${encodeURIComponent(draft_key)}`;
   if (draft_id) path += (path.includes('?') ? '&' : '?') + `draft_id=${draft_id}`;
   
-  return openStandaloneWindow(path, ovId ? `remito-ov-${ovId}` : (draft_id ? `remito-draft-${draft_id}` : "remito-nuevo"), windowOptions);
+  return openStandaloneWindow(path, ovId ? `remito-ov-${ovId}` : (draft_id ? `remito-draft-${draft_id}` : "remito-nuevo"), { ...DOCUMENT_WINDOW, ...windowOptions });
 }
 
 export function openNuevaFactura(params = {}, options = {}) {
@@ -77,11 +81,11 @@ export function openNuevaFactura(params = {}, options = {}) {
 }
 
 export function openEditOrdenVenta(id, options = {}) {
-  return openStandaloneWindow(`/standalone/ordenes-venta/${id}`, `orden-venta-${id}`, options);
+  return openStandaloneWindow(`/standalone/ordenes-venta/${id}`, `orden-venta-${id}`, { ...DOCUMENT_WINDOW, ...options });
 }
 
 export function openEditRemito(id, options = {}) {
-  return openStandaloneWindow(`/standalone/remitos/${id}`, `remito-${id}`, options);
+  return openStandaloneWindow(`/standalone/remitos/${id}`, `remito-${id}`, { ...DOCUMENT_WINDOW, ...options });
 }
 
 export function openEditFactura(id, options = {}) {

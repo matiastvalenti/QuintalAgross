@@ -702,6 +702,9 @@ def create_delivery_note_from_ov(
         dn.status = DeliveryNoteStatus.DISPATCHED
         _update_order_status(db, dn)
         _log_history(db, dn.id, "CONFIRMACION", "Remito autoconfirmado al crear desde OV", current_user=current_user)
+    # ── RECONCILIACION ESTRICTA DE OV/REMITO/FACTURA ──
+    from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+    reconcile_sales_order_invoice_delivery_links(db, order.id)
 
     db.commit()
     db.refresh(dn)
@@ -1050,13 +1053,8 @@ def list_delivery_notes(
             if all(inv.status == DocumentStatus.CLOSED for inv in invs):
                 dn.paid_progress = 100.0
             else:
-                total_inv_val = sum(float(inv.total_amount_ars or inv.total_amount or 0) for inv in invs)
-                if total_inv_val > 0:
-                    total_allocated = sum(float(inv.allocated_amount_ars or inv.allocated_amount or 0) for inv in invs)
-                    dn.paid_progress = min(round((total_allocated / total_inv_val) * 100, 2), 100.0)
-                else:
-                    paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
-                    dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
+                paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
+                dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
         else:
             dn.paid_progress = 0.0
 
@@ -1105,36 +1103,28 @@ def get_delivery_note(dn_id: str, db: Session = Depends(get_db)):
             dn.status = DeliveryNoteStatus.PARTIAL
             
         if invs:
-            total_inv_val = sum(float(inv.total_amount or 0) for inv in invs)
-            if total_inv_val > 0:
-                total_allocated = sum(float(inv.allocated_amount or 0) for inv in invs)
-                dn.paid_progress = min(round((total_allocated / total_inv_val) * 100, 2), 100.0)
-            else:
-                paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
-                dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
-        else:
-            dn.paid_progress = 0.0
-
+            paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
+            dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
     # 2. Poblar traza de facturas
-    dn.invoices = []
+    invoices_list = []
     # Usando tabla puente M:N
     invoice_links = db.query(InvoiceDeliveryNoteLink).options(joinedload(InvoiceDeliveryNoteLink.document)).filter(
         InvoiceDeliveryNoteLink.delivery_note_id == dn.id
     ).all()
     for link in invoice_links:
         inv = link.document
-        dn.invoices.append({
+        invoices_list.append({
             "id": inv.id,
             "number": inv.number,
             "date": inv.date.isoformat() if inv.date else None,
-            "status": inv.status.value if hasattr(inv.status, 'value') else str(inv.status),
-            "doc_type": inv.doc_type,
+            "status": inv.status.name if hasattr(inv.status, 'name') else str(inv.status),
+            "doc_type": inv.doc_type.name if hasattr(inv.doc_type, 'name') else str(inv.doc_type),
             "total_amount": float(inv.total_amount),
-            "currency": inv.currency
+            "currency": inv.currency.name if hasattr(inv.currency, 'name') else str(inv.currency)
         })
     
     # 3. Poblar remitos relacionados (del mismo pedido)
-    dn.related_delivery_notes = []
+    related_delivery_notes_list = []
     if dn.sales_order_id:
         others = db.query(DeliveryNote).filter(
             DeliveryNote.sales_order_id == dn.sales_order_id,
@@ -1142,18 +1132,67 @@ def get_delivery_note(dn_id: str, db: Session = Depends(get_db)):
             DeliveryNote.status != DeliveryNoteStatus.CANCELLED
         ).all()
         for o in others:
-            dn.related_delivery_notes.append({
+            related_delivery_notes_list.append({
                 "id": o.id,
                 "number": o.number,
                 "date": o.date.isoformat() if o.date else None,
-                "status": o.status.value if hasattr(o.status, 'value') else str(o.status)
+                "status": o.status.name if hasattr(o.status, 'name') else str(o.status)
             })
 
-    # Asegurar compatibilidad...
+    # Construir dict para Pydantic manualmente para evitar ValidationError
+    dn_dict = {
+        "id": dn.id,
+        "entity_id": dn.entity_id,
+        "warehouse_id": dn.warehouse_id,
+        "number": dn.number,
+        "date": dn.date,
+        "note_type": dn.note_type,
+        "delivery_type": dn.delivery_type,
+        "sales_order_id": dn.sales_order_id,
+        "purchase_order_id": dn.purchase_order_id,
+        "return_source_id": dn.return_source_id,
+        "status": dn.status.name if hasattr(dn.status, 'name') else str(dn.status),
+        "origin_reference": dn.origin_reference,
+        "notes": dn.notes,
+        "currency": dn.currency.name if hasattr(dn.currency, 'name') else str(dn.currency),
+        "exchange_rate": getattr(dn, "exchange_rate", 1.0),
+        "vendedor": dn.vendedor,
+        "sale_condition_id": dn.sale_condition_id,
+        "due_date": dn.due_date,
+        "vehicle_id": getattr(dn, "vehicle_id", None),
+        "vehicle_driver": getattr(dn, "vehicle_driver", None),
+        "attachment_url": dn.attachment_url,
+        "created_at": dn.created_at,
+        "updated_at": dn.updated_at,
+        "created_by": dn.created_by,
+        "updated_by": dn.updated_by,
+        "invoice_progress": getattr(dn, "invoice_progress", 0.0),
+        "paid_progress": getattr(dn, "paid_progress", 0.0),
+        "invoices": invoices_list,
+        "related_delivery_notes": related_delivery_notes_list,
+        "history": [],
+        "lines": []
+    }
+
+    # Lines
     for line in dn.lines:
-        if getattr(line, "description", None) is None:
-            line.description = ""
-    return dn
+        line_dict = {c.name: getattr(line, c.name) for c in line.__table__.columns}
+        line_dict["description"] = getattr(line, "description", "") or ""
+        line_dict["product"] = line.product
+        dn_dict["lines"].append(line_dict)
+
+    # History
+    for hist in getattr(dn, "history", []):
+        dn_dict["history"].append({
+            "id": hist.id,
+            "user": hist.user,
+            "date": hist.date,
+            "action": hist.action,
+            "details": hist.details
+        })
+
+    response = dn_schemas.DeliveryNoteResponse(**dn_dict)
+    return response
 
 
 @router.get("/by-ov/{order_id}",
@@ -1415,6 +1454,11 @@ def update_delivery_note(dn_id: str, data: dn_schemas.DeliveryNoteUpdate, db: Se
                     source_purchase_line_id=src_purchase,
                 )
                 db.add(db_line)
+
+        # ── RECONCILIACION ESTRICTA DE OV/REMITO/FACTURA ──
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     db.commit()
     db.refresh(dn)

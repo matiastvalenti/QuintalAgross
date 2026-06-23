@@ -16,6 +16,104 @@ import {
 import s from "./SalesOrderForm.module.css";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
+function getInvoiceLineName(line) {
+  return (
+    line.product_name ||
+    line.product?.name ||
+    line.product_description ||
+    line.description ||
+    line.concept ||
+    line.name ||
+    line.item_name ||
+    ""
+  );
+}
+
+function isSourceLockedLine(line) {
+  return Boolean(
+    line.sales_order_id ||
+    line.delivery_note_id ||
+    line.source_sales_line_id ||
+    line.source_delivery_line_id ||
+    line.source_dn_line_id ||
+    line.source_line_id ||
+    line.origin_line_id
+  );
+}
+
+function resolveLineProductId(line) {
+  return (
+    line.product_id ||
+    line.product?.id ||
+    line.item?.product_id ||
+    null
+  );
+}
+
+function findProductById(products, productId) {
+  if (!productId || !products) return null;
+  return products.find((p) => String(p.id) === String(productId)) || null;
+}
+
+function resolveProductSalesAccount(line, products) {
+  const productId = resolveLineProductId(line);
+  const catalogProduct = findProductById(products, productId);
+
+  return (
+    line.account_id ||
+    line.accounting_account_id ||
+    line.sales_account_id ||
+    line.product?.sales_account_id ||
+    catalogProduct?.sales_account_id ||
+    catalogProduct?.revenue_account_id ||
+    catalogProduct?.income_account_id ||
+    null
+  );
+}
+
+function getInvoiceOriginInfo(invoice, lines = []) {
+  const salesOrderId =
+    invoice?.sales_order_id ||
+    invoice?.source_sales_order_id ||
+    invoice?.origin_sales_order_id ||
+    lines.find(l => l.sales_order_id || l.source_sales_order_id)?.sales_order_id ||
+    lines.find(l => l.sales_order_id || l.source_sales_order_id)?.source_sales_order_id ||
+    invoice?.sales_orders?.[0]?.id ||
+    null;
+
+  const salesOrderNumber =
+    invoice?.sales_order_number ||
+    invoice?.source_sales_order_number ||
+    invoice?.origin_number ||
+    lines.find(l => l.sales_order_number || l.source_sales_order_number)?.sales_order_number ||
+    lines.find(l => l.sales_order_number || l.source_sales_order_number)?.source_sales_order_number ||
+    invoice?.sales_orders?.[0]?.number ||
+    null;
+
+  return { salesOrderId, salesOrderNumber };
+}
+
+function getInvoiceDeliveryNoteInfo(invoice, lines = []) {
+  const deliveryNoteId =
+    invoice?.delivery_note_id ||
+    invoice?.source_delivery_note_id ||
+    invoice?.linked_delivery_note_id ||
+    lines.find(l => l.delivery_note_id || l.source_delivery_note_id)?.delivery_note_id ||
+    lines.find(l => l.delivery_note_id || l.source_delivery_note_id)?.source_delivery_note_id ||
+    invoice?.delivery_notes?.[0]?.id ||
+    null;
+
+  const deliveryNoteNumber =
+    invoice?.delivery_note_number ||
+    invoice?.source_delivery_note_number ||
+    lines.find(l => l.delivery_note_number || l.source_delivery_note_number)?.delivery_note_number ||
+    lines.find(l => l.delivery_note_number || l.source_delivery_note_number)?.source_delivery_note_number ||
+    invoice?.delivery_notes?.[0]?.number ||
+    null;
+
+  return { deliveryNoteId, deliveryNoteNumber };
+}
+
 export default function InvoiceForm(props) {
   const {
     mode: initialMode = "new",
@@ -38,24 +136,30 @@ export default function InvoiceForm(props) {
   const [saving, setSaving] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
 
+  
   // Header State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
   const [entity, setEntity] = useState(null);
   const [pv, setPv] = useState("0001");
   const [number, setNumber] = useState("");
+  const [warehouseId, setWarehouseId] = useState("");
   const [currency, setCurrency] = useState("ARS");
   const [exchangeRate, setExchangeRate] = useState(1);
-  const [status, setStatus] = useState("DRAFT");
+  const [observations, setObservations] = useState("");
+  const [salespersonId, setSalespersonId] = useState("");
+  const [selectedConditionId, setSelectedConditionId] = useState("");
+  const [status, setStatus] = useState("BORRADOR");
+  const [reasonType, setReasonType] = useState("");
+  const [returnStock, setReturnStock] = useState(true);
   const [docType, setDocType] = useState(initialDocType);
   const [letter, setLetter] = useState("A");
-  const [observations, setObservations] = useState("");
-  const [selectedConditionId, setSelectedConditionId] = useState("");
-  const [salespersonId, setSalespersonId] = useState("");
   const [ctroCosto, setCtroCosto] = useState("1");
   const [sourceNumber, setSourceNumber] = useState("");
-  const [reasonType, setReasonType] = useState("");
-  const [returnStock, setReturnStock] = useState(false);
+  const [sourceOrderId, setSourceOrderId] = useState(null);
+  const [sourceDeliveryNoteId, setSourceDeliveryNoteId] = useState(null);
+  const [ovHasDeliveryNotes, setOvHasDeliveryNotes] = useState(false);
+  const [fullInvoiceData, setFullInvoiceData] = useState(null);
   
   // Lines
   const [items, setItems] = useState([]);
@@ -64,14 +168,79 @@ export default function InvoiceForm(props) {
   const [saleConditions, setSaleConditions] = useState([]);
   const [pointsOfSale, setPointsOfSale] = useState([]);
   const [sellers, setSellers] = useState([]);
+  const [products, setProducts] = useState([]);
 
   useEffect(() => {
     fetchInitialData();
+    fetchProductsCatalog();
     if (mode === "edit" && id) fetchInvoice();
     else if (mode === "new" && initialSourceType === "sales-order" && initialSourceId) {
         fetchFromSource();
     }
   }, []);
+
+  useEffect(() => {
+    const handleDocumentMessage = (e) => {
+        const payload = e.data;
+        if (!payload || payload.type !== 'QUINTAL_DOCUMENT_SAVED') return;
+        
+        // Si hay una actualización de un documento relacionado (ej: remito o la misma factura) y estamos en modo vista
+        if (mode === "edit" && id && (payload.invoiceId === id || payload.salesOrderId === sourceOrderId)) {
+            fetchInvoice();
+        }
+    };
+
+    window.addEventListener("message", handleDocumentMessage);
+    let bc;
+    try {
+        bc = new BroadcastChannel("quintal-documents");
+        bc.onmessage = handleDocumentMessage;
+    } catch (err) {
+        console.error("BroadcastChannel not supported", err);
+    }
+
+    return () => {
+        window.removeEventListener("message", handleDocumentMessage);
+        if (bc) bc.close();
+    };
+  }, [mode, id, sourceOrderId]);
+
+  const fetchProductsCatalog = async () => {
+    try {
+      const token = localStorage.getItem("token");
+      const res = await fetch(`${API_URL}/inventory/products/?active=true`, { headers: { Authorization: `Bearer ${token}` } });
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(data.items || data || []);
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  useEffect(() => {
+    if (!products?.length || !items?.length) return;
+
+    let changed = false;
+    const newItems = items.map((line) => {
+      if (!resolveLineProductId(line)) return line;
+      if (line.accounting_account_id) return line;
+
+      const accountId = resolveProductSalesAccount(line, products);
+      if (!accountId) return line;
+
+      changed = true;
+      return {
+        ...line,
+        accounting_account_id: accountId,
+        accountLocked: Boolean(accountId),
+      };
+    });
+
+    if (changed) {
+      setItems(newItems);
+    }
+  }, [products, items]);
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("token");
@@ -119,12 +288,14 @@ export default function InvoiceForm(props) {
       fetchNextNumber(pv);
   }, [pv, docType]);
 
-  const fetchInvoice = async () => {
+  const fetchInvoice = async (docId = id) => {
+    if (!docId) return;
     setLoading(true);
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/accounting/documents/${id}`, { headers: { Authorization: `Bearer ${token}` }});
+    const res = await fetch(`${API_URL}/accounting/documents/${docId}`, { headers: { Authorization: `Bearer ${token}` }});
     if (res.ok) {
         const data = await res.json();
+        setFullInvoiceData(data);
         setEntity(data.entity_id ? { id: data.entity_id, name: data.entity_name } : null);
         setDate(data.date.split("T")[0]);
         setDueDate((data.due_date || data.date).split("T")[0]);
@@ -220,13 +391,33 @@ export default function InvoiceForm(props) {
           }
       }
 
-      const res = await fetch(`${API_URL}/sales/sales-orders/${initialSourceId}`, { headers: { Authorization: `Bearer ${token}` } });
+      const endpoint = initialSourceType === 'delivery-note' 
+          ? `${API_URL}/sales/delivery-notes/${initialSourceId}`
+          : `${API_URL}/sales/sales-orders/${initialSourceId}`;
+
+      const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
           const data = await res.json();
           if (data.entity_id) setEntity({ id: data.entity_id, name: draft?.customerName || data.entity_name || "Cliente Origen" });
           
+          if (initialSourceType === 'sales-order') {
+              setSourceOrderId(data.id);
+              // Check if order has delivery notes based on status or relations
+              const statusStr = data.status || "";
+              if (
+                statusStr.includes("DELIVERED") || 
+                statusStr.includes("REMITIDO") ||
+                (data.delivery_notes && data.delivery_notes.length > 0)
+              ) {
+                  setOvHasDeliveryNotes(true);
+              }
+          } else if (initialSourceType === 'delivery-note') {
+              setSourceDeliveryNoteId(data.id);
+              setSourceOrderId(data.sales_order_id);
+          }
+
           if (draft) {
-              setSourceNumber(draft.salesOrderNumber || data.number);
+              setSourceNumber(draft.salesOrderNumber || draft.deliveryNoteNumber || data.number);
               setPv(draft.pointOfSale || "0001");
               setCurrency(draft.currency || data.currency || "ARS");
               setExchangeRate(draft.exchangeRate || data.exchange_rate || 1);
@@ -235,26 +426,30 @@ export default function InvoiceForm(props) {
               setCtroCosto(draft.costCenter || data.cost_center || "1");
               
               setItems(draft.lines.map(l => {
-                  const factor = parseFloat(l._unit_content || l.package_size || 1);
+                  const factor = parseFloat(l._unit_content || l.package_size || l.quantity_per_container || 1);
                   const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                   let qtyPackages = l.qty_packages;
                   if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
                       qtyPackages = qty / factor;
                   }
+                  const resolvedAccount = resolveProductSalesAccount(l, products);
                   return {
                       id: Math.random(),
                       product_id: l.product_id,
-                      description: l.product_name || l.description,
+                      description: getInvoiceLineName(l),
                       qty: qty,
                       qty_packages: qtyPackages,
                       _unit_content: factor > 1 ? factor : undefined,
-                      _unit_label: l._unit_label || l.package_unit || 'u',
-                      _container_name: l._container_name || 'Unidad',
-                      unit_price: l.unit_price,
-                      discount_pct: 0,
-                      vat_rate: l.vat_rate || 0.21,
-                      source_sales_line_id: l.source_sales_line_id,
-                      _account_code: l._account_code || null,
+                      _unit_label: l._unit_label || l.package_unit || l.unit_short_name || 'u',
+                      _container_name: l._container_name || l.container_name || 'Unidad',
+                      unit_price: parseFloat(l.unit_price || 0),
+                      discount_pct: parseFloat(l.discount_pct || 0),
+                      vat_rate: parseFloat(l.vat_rate || 0.21),
+                      source_sales_line_id: l.source_sales_line_id || (initialSourceType === 'sales-order' ? l.id : null),
+                      source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
+                      accounting_account_id: resolvedAccount,
+                      accountLocked: Boolean(resolvedAccount && l.product_id),
+                      _account_code: l._account_code || l.sales_account_code || null,
                   };
               }));
           } else {
@@ -276,10 +471,11 @@ export default function InvoiceForm(props) {
                       if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
                           qtyPackages = qty / factor;
                       }
+                      const resolvedAccount = resolveProductSalesAccount(l, products);
                       return {
                           id: Math.random(),
                           product_id: l.product_id,
-                          description: l.product?.name || l.name || l.description || '',
+                          description: getInvoiceLineName(l),
                           qty: qty,
                           qty_packages: qtyPackages,
                           _unit_content: factor > 1 ? factor : undefined,
@@ -289,7 +485,8 @@ export default function InvoiceForm(props) {
                           discount_pct: parseFloat(l.discount_pct || 0),
                           vat_rate: parseFloat(l.vat_rate || 0.21),
                           source_sales_line_id: l.source_sales_line_id || l.id,
-                          accounting_account_id: l.accounting_account_id || null,
+                          accounting_account_id: resolvedAccount,
+                          accountLocked: Boolean(resolvedAccount && l.product_id),
                           _account_code: l._account_code || l.sales_account_code || null,
                       };
                   }));
@@ -305,10 +502,11 @@ export default function InvoiceForm(props) {
                       if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
                           qtyPackages = qty / factor;
                       }
+                      const resolvedAccount = resolveProductSalesAccount(l, products);
                       return {
                           id: Math.random(),
                           product_id: l.product_id,
-                          description: l.description,
+                          description: getInvoiceLineName(l),
                           qty: qty,
                           qty_packages: qtyPackages,
                           _unit_content: factor > 1 ? factor : undefined,
@@ -318,7 +516,8 @@ export default function InvoiceForm(props) {
                           discount_pct: l.discount_pct || 0,
                           vat_rate: l.vat_rate || 0.21,
                           source_sales_line_id: l.id,
-                          accounting_account_id: null,
+                          accounting_account_id: resolvedAccount,
+                          accountLocked: Boolean(resolvedAccount && l.product_id),
                           _account_code: l.product?.sales_account_code || null,
                       };
                   }));
@@ -401,13 +600,38 @@ export default function InvoiceForm(props) {
             body: JSON.stringify(payload)
         });
         if (res.ok) {
+            const docData = await res.json();
             showToast("Factura guardada correctamente", "success");
             const evtName = docType === 'PURCHASE_INVOICE' ? 'purchase-invoice-changed' : 'invoice-changed';
             window.dispatchEvent(new Event(evtName));
             if (window.opener) window.opener.dispatchEvent(new Event(evtName));
             
-            if (isStandalone) window.close();
-            else closeWindow(windowId);
+            // Emit QUINTAL_DOCUMENT_SAVED
+            const eventPayload = {
+                type: "QUINTAL_DOCUMENT_SAVED",
+                documentType: "invoice",
+                invoiceId: docData.id,
+                salesOrderId: sourceOrderId,
+                deliveryNoteId: sourceDeliveryNoteId,
+                timestamp: Date.now()
+            };
+            
+            if (window.opener) {
+                window.opener.postMessage(eventPayload, "*");
+            }
+            try {
+                const bc = new BroadcastChannel("quintal-documents");
+                bc.postMessage(eventPayload);
+                bc.close();
+            } catch (err) {
+                console.error("BroadcastChannel error:", err);
+            }
+
+            // Cambiar a modo solo lectura sin cerrar ventana
+            setId(docData.id);
+            setMode("edit");
+            setIsReadOnly(true);
+            fetchInvoice(docData.id);
         } else {
             const err = await res.json();
             console.error("ERROR FROM BACKEND:", err);
@@ -434,6 +658,14 @@ export default function InvoiceForm(props) {
   const handleUpdateItem = (itemId, field, value) => {
     setItems(items.map(i => {
       if (i.id === itemId) {
+        if (isSourceLockedLine(i) && ["product", "product_id", "description", "concept", "qty", "quantity", "qty_packages", "unit"].includes(field)) {
+          return i;
+        }
+        
+        if (field === 'accounting_account_id' && i.accountLocked) {
+          return i;
+        }
+
         if (field === 'description' || field === 'accounting_account_id') {
           return { ...i, [field]: value };
         }
@@ -513,6 +745,14 @@ export default function InvoiceForm(props) {
             </div>
         </div>
 
+        {/* Alertas */}
+        {!isReadOnly && initialSourceType === 'sales-order' && ovHasDeliveryNotes && (
+            <div style={{ margin: '0 24px 16px', padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', color: '#1e3a8a', fontSize: '14px', fontWeight: 500 }}>
+                <span style={{ fontSize: '18px' }}>ℹ️</span>
+                La factura también se vinculará automáticamente a los remitos asociados a esta orden de venta.
+            </div>
+        )}
+
         {/* Body: 2 Column Layout */}
         <div className={s.bodyTwoColumns}>
             
@@ -542,6 +782,7 @@ export default function InvoiceForm(props) {
                                         discount_pct: 0,
                                         // Cuenta contable de venta del producto (puede ser null si no está configurada)
                                         accounting_account_id: p.sales_account_id || null,
+                                        accountLocked: Boolean(p.sales_account_id),
                                     }]);
                                 }}
                                 placeholder="Escriba para buscar productos para añadir..."
@@ -567,7 +808,7 @@ export default function InvoiceForm(props) {
                     {items.length > 0 ? (
                         <>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(250px, 1fr) 80px 100px 80px 90px 90px 60px 100px 30px' }}>
+                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px' }}>
                                     <div className={s.th}>PRODUCTO / CONCEPTO</div>
                                     <div className={s.th}>ENVASES</div>
                                     <div className={s.th}>CANTIDAD</div>
@@ -610,30 +851,44 @@ export default function InvoiceForm(props) {
                                         );
                                     }
                                     
+                                    const isLocked = isSourceLockedLine(item);
+                                    
                                     return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(250px, 1fr) 80px 100px 80px 90px 90px 60px 100px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
-                                        <div style={{ padding: '4px 0', overflow: 'hidden' }}>
+                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px', background: isLocked ? '#f8fafc' : 'transparent', cursor: isLocked ? 'not-allowed' : 'default' }}>
+                                        <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 2 }}>
                                             <input 
                                                 type="text" 
                                                 className={s.tableInput} 
                                                 value={item.description || ''} 
                                                 onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)} 
                                                 placeholder="Ingrese concepto..."
-                                                style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: 'transparent' }}
+                                                readOnly={isLocked}
+                                                style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: isLocked ? 'transparent' : 'transparent', color: isLocked ? '#334155' : 'inherit', cursor: isLocked ? 'not-allowed' : 'text', opacity: isLocked ? 0.9 : 1, textOverflow: 'ellipsis' }}
+                                                title={isLocked ? 'Esta línea viene de una OV/Remito y no puede modificarse' : (item.description || '')}
                                             />
-                                            {item._unit_content && (
-                                                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginTop: 2 }}>
-                                                    {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toFixed(0)} {item._unit_label || 'u'}
-                                                </div>
-                                            )}
-                                            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                                                <span style={{ fontWeight: 800, color: '#475569' }}>Cuenta:</span>
-                                                <div style={{ flex: 1, minWidth: 0, maxWidth: 200 }}>
-                                                    <AccountSelector 
-                                                        value={item.accounting_account_id ?? ''} 
-                                                        onChange={(e) => handleUpdateItem(item.id, 'accounting_account_id', e.target.value)} 
-                                                        placeholder="Sin asignar"
-                                                    />
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap' }}>
+                                                {item._unit_content && (
+                                                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>
+                                                        {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toFixed(0)} {item._unit_label || 'u'}
+                                                    </span>
+                                                )}
+                                                {isLocked && (
+                                                    <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 800 }}>
+                                                        &middot; {item.delivery_note_id || item.source_dn_line_id ? 'Desde Remito' : 'Desde OV'}
+                                                    </span>
+                                                )}
+                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                                                    <span style={{ fontSize: 9, fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Cta:</span>
+                                                    <div style={{ width: 110 }}>
+                                                        <AccountSelector 
+                                                            value={item.accounting_account_id ?? ''} 
+                                                            onChange={(e) => handleUpdateItem(item.id, 'accounting_account_id', e.target.value)} 
+                                                            placeholder="Sin asignar"
+                                                            readOnly={item.accountLocked}
+                                                            style={{ opacity: item.accountLocked ? 0.8 : 1, cursor: item.accountLocked ? 'not-allowed' : 'pointer', background: item.accountLocked ? '#f1f5f9' : undefined }}
+                                                            title={item.accountLocked ? 'Cuenta configurada en el artículo' : ''}
+                                                        />
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
@@ -643,8 +898,9 @@ export default function InvoiceForm(props) {
                                             className={s.tableInput} 
                                             value={item.qty_packages !== undefined ? item.qty_packages : (item.qty || 0)} 
                                             onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)}
-                                            style={{ background: item._unit_content ? '#eff6ff' : '#fff', border: item._unit_content ? '1.5px solid #93c5fd' : undefined }}
-                                            title={item._unit_content ? `Cantidad de envases (cada uno contiene ${item._unit_content} ${item._unit_label || 'u'})` : 'Cantidad'}
+                                            readOnly={isLocked}
+                                            style={{ background: isLocked ? '#e2e8f0' : (item._unit_content ? '#eff6ff' : '#fff'), border: item._unit_content ? '1.5px solid #93c5fd' : undefined, cursor: isLocked ? 'not-allowed' : 'text' }}
+                                            title={isLocked ? 'Bloqueado por origen' : (item._unit_content ? `Cantidad de envases (cada uno contiene ${item._unit_content} ${item._unit_label || 'u'})` : 'Cantidad')}
                                         />
                                         {/* UNIDADES EQUIVALENTES: calculado automáticamente */}
                                         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -653,9 +909,9 @@ export default function InvoiceForm(props) {
                                                 className={s.tableInput} 
                                                 value={item.qty || 0} 
                                                 onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)} 
-                                                readOnly={!!item._unit_content}
-                                                style={{ background: item._unit_content ? '#f1f5f9' : '#fff', color: item._unit_content ? '#64748b' : 'inherit' }}
-                                                title={item._unit_content ? 'Calculado automáticamente (envases × contenido)' : 'Cantidad'}
+                                                readOnly={isLocked || !!item._unit_content}
+                                                style={{ background: (isLocked || !!item._unit_content) ? '#f1f5f9' : '#fff', color: (isLocked || !!item._unit_content) ? '#64748b' : 'inherit', cursor: (isLocked || !!item._unit_content) ? 'not-allowed' : 'text' }}
+                                                title={isLocked ? 'Bloqueado por origen' : (item._unit_content ? 'Calculado automáticamente (envases × contenido)' : 'Cantidad')}
                                             />
                                         </div>
                                         <div style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#64748b' }}>{item._unit_label || 'u'}</div>
@@ -665,9 +921,15 @@ export default function InvoiceForm(props) {
                                         <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--primary)', textAlign: 'right' }}>
                                             {fmtValue((item.qty * item.unit_price * (1 - (item.discount_pct||0)/100)) * (1 + (item.vat_rate||0.21)))}
                                         </div>
-                                        <button style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => setItems(items.filter(i => i.id !== item.id))}>
-                                            <Trash2 size={16} />
-                                        </button>
+                                        {isLocked ? (
+                                            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }} title="Esta línea viene de un origen y no puede eliminarse.">
+                                                <div style={{ width: 6, height: 6, borderRadius: '50%', background: '#cbd5e1' }} />
+                                            </div>
+                                        ) : (
+                                            <button style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer' }} onClick={() => setItems(items.filter(i => i.id !== item.id))}>
+                                                <Trash2 size={16} />
+                                            </button>
+                                        )}
                                     </div>
                                     );
                                 })}
@@ -823,31 +1085,50 @@ export default function InvoiceForm(props) {
                 </div>
             </div>
             {/* Flujo Inferior */}
-          <div className={s.relationsBar}>
-              <div className={s.relationCard} style={{ opacity: initialSourceType ? 1 : 0.5 }}>
-                  <div className={s.nodeTitle} style={{ color: initialSourceType ? '#10b981' : '#0b132b' }}>ORIGEN</div>
-                  <div className={s.nodeStatus} style={{ color: initialSourceType ? '#10b981' : '#eab308' }}>
-                      {initialSourceType === 'sales-order' ? 'Completado' : initialSourceType === 'delivery-note' ? 'Remito' : initialSourceType === 'invoice' ? 'Factura' : 'Directo'}
-                  </div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>
-                      {initialSourceType === 'sales-order' && sourceNumber ? `OV ${sourceNumber}` : 
-                       initialSourceType === 'invoice' && sourceNumber ? `FC ${sourceNumber}` :
-                       initialSourceType ? 'Vinculado' : 'Sin origen'}
-                  </div>
-              </div>
+            {(() => {
+                const invoiceInfo = fullInvoiceData ? getInvoiceOriginInfo(fullInvoiceData, items) : { salesOrderId: sourceOrderId, salesOrderNumber: sourceNumber };
+                const dnInfo = fullInvoiceData ? getInvoiceDeliveryNoteInfo(fullInvoiceData, items) : { deliveryNoteId: sourceDeliveryNoteId, deliveryNoteNumber: null };
+                
+                let originStatus = "Directo";
+                let originDetail = "Sin origen";
+                let originColor = '#eab308';
+                
+                if (invoiceInfo.salesOrderId || invoiceInfo.salesOrderNumber) {
+                    originStatus = "Vinculada";
+                    originDetail = `OV ${invoiceInfo.salesOrderNumber || String(invoiceInfo.salesOrderId).slice(-8)}`;
+                    originColor = '#10b981';
+                }
+                
+                let remitoStatus = "Pendiente";
+                let remitoDetail = "0 remitos";
+                let remitoColor = '#eab308';
+                
+                if (dnInfo.deliveryNoteId || dnInfo.deliveryNoteNumber) {
+                    remitoStatus = "Vinculado";
+                    remitoDetail = `RE ${dnInfo.deliveryNoteNumber || String(dnInfo.deliveryNoteId).slice(-8)}`;
+                    remitoColor = '#10b981';
+                }
 
-              <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-
-              {docType !== 'DEBIT_NOTE' && (
-                  <>
-                      <div className={s.relationCard}>
-                          <div className={s.nodeTitle} style={{ color: '#0b132b' }}>REMITO</div>
-                          <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
-                          <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0 remitos</div>
+                return (
+                  <div className={s.relationsBar}>
+                      <div className={s.relationCard} style={{ opacity: (originStatus !== "Directo") ? 1 : 0.5 }}>
+                          <div className={s.nodeTitle} style={{ color: originColor }}>ORIGEN</div>
+                          <div className={s.nodeStatus} style={{ color: originColor }}>{originStatus}</div>
+                          <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{originDetail}</div>
                       </div>
+
                       <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-                  </>
-              )}
+
+                      {docType !== 'DEBIT_NOTE' && (
+                          <>
+                              <div className={s.relationCard} style={{ opacity: (remitoStatus !== "Pendiente") ? 1 : 0.5 }}>
+                                  <div className={s.nodeTitle} style={{ color: remitoColor }}>REMITO</div>
+                                  <div className={s.nodeStatus} style={{ color: remitoColor }}>{remitoStatus}</div>
+                                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{remitoDetail}</div>
+                              </div>
+                              <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+                          </>
+                      )}
 
               <div className={s.relationCard} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe' }}>
                   <div className={s.nodeTitle} style={{ color: '#1d4ed8' }}>{docType === 'CREDIT_NOTE' ? 'NOTA DE CRÉDITO' : docType === 'DEBIT_NOTE' ? 'NOTA DE DÉBITO' : 'FACTURA'}</div>
@@ -881,6 +1162,8 @@ export default function InvoiceForm(props) {
                   <div className={s.obsText} style={{ marginTop: 4, fontWeight: 800, color: '#1e293b' }}>{status}</div>
               </div>
           </div>
+                );
+            })()}
         </div>
 
         {/* Operational Summary */}

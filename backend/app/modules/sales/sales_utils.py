@@ -12,6 +12,137 @@ from app.db.models.commercial_models import (
 
 logger = logging.getLogger(__name__)
 
+def reconcile_sales_order_invoice_delivery_links(db: Session, sales_order_id: str):
+    """
+    Reconcilia cantidades y genera vínculos duros (InvoiceDeliveryNoteLink y source_dn_line_id)
+    entre remitos y facturas de una orden de venta.
+    Solo usa IDs fuertes (source_sales_line_id). No toca stock.
+    Idempotente y FIFO.
+    """
+    order = db.query(SalesOrder).filter(SalesOrder.id == sales_order_id).first()
+    if not order:
+        return
+
+    # 1. Obtener remitos no cancelados de la OV
+    dns = db.query(DeliveryNote).filter(
+        DeliveryNote.sales_order_id == sales_order_id,
+        DeliveryNote.status != DeliveryNoteStatus.CANCELLED
+    ).order_by(DeliveryNote.date.asc()).all()
+    
+    dn_ids = [dn.id for dn in dns]
+    if not dn_ids:
+        return
+        
+    dn_lines = db.query(DeliveryNoteLine).filter(
+        DeliveryNoteLine.delivery_note_id.in_(dn_ids),
+        DeliveryNoteLine.source_sales_line_id.isnot(None)
+    ).all()
+
+    # Agrupar líneas de remito por línea de OV
+    dn_lines_by_so_line = {}
+    for dnl in dn_lines:
+        so_line_id = str(dnl.source_sales_line_id)
+        if so_line_id not in dn_lines_by_so_line:
+            dn_lines_by_so_line[so_line_id] = []
+        dn_lines_by_so_line[so_line_id].append(dnl)
+
+    # 2. Obtener facturas no canceladas de la OV
+    ov_line_ids = [str(l.id) for l in order.lines]
+    if not ov_line_ids:
+        return
+        
+    invoice_lines = db.query(DocumentLine).join(Document, DocumentLine.document_id == Document.id).filter(
+        DocumentLine.source_sales_line_id.in_(ov_line_ids),
+        Document.status != DocumentStatus.CANCELLED
+    ).order_by(Document.date.asc(), Document.created_at.asc()).all()
+
+    # Para controlar cuánto se ha facturado de cada línea de remito en memoria (Idempotencia)
+    dn_qty_used = {str(dnl.id): 0.0 for dnl in dn_lines}
+    
+    links_to_create = set()
+
+    # Primero, registrar el uso de cantidades que ya tienen el vínculo fuerte `source_dn_line_id`
+    for il in invoice_lines:
+        if il.source_dn_line_id and str(il.source_dn_line_id) in dn_qty_used:
+            dn_qty_used[str(il.source_dn_line_id)] += float(il.qty or 0)
+            
+            dnl_match = next((l for l in dn_lines if str(l.id) == str(il.source_dn_line_id)), None)
+            if dnl_match:
+                links_to_create.add((str(il.document_id), str(dnl_match.delivery_note_id)))
+
+    # Segundo, empatar líneas de factura que no tienen vínculo fuerte al remito
+    for il in invoice_lines:
+        if il.source_dn_line_id:
+            continue # Ya tiene
+            
+        so_line_id = str(il.source_sales_line_id)
+        if so_line_id in dn_lines_by_so_line:
+            available_dn_lines = dn_lines_by_so_line[so_line_id]
+            qty_to_match = float(il.qty or 0)
+            
+            for dnl in available_dn_lines:
+                if qty_to_match <= 0.0001:
+                    break
+                    
+                dnl_id = str(dnl.id)
+                dnl_qty = float(dnl.qty or 0)
+                used = dn_qty_used[dnl_id]
+                available = dnl_qty - used
+                
+                if available > 0.0001:
+                    matched = min(qty_to_match, available)
+                    qty_to_match -= matched
+                    dn_qty_used[dnl_id] += matched
+                    
+                    # Como DocumentLine admite 1 solo source_dn_line_id, seteamos el primero que cubra parte.
+                    if not il.source_dn_line_id:
+                        il.source_dn_line_id = dnl.id
+                        
+                    links_to_create.add((str(il.document_id), str(dnl.delivery_note_id)))
+
+    # 3. Actualizar cantidades en líneas de remito
+    for dnl in dn_lines:
+        dnl_id = str(dnl.id)
+        dnl.qty_invoiced = Decimal(str(dn_qty_used.get(dnl_id, 0.0)))
+
+    # 4. Actualizar estado de los remitos
+    for dn in dns:
+        all_invoiced = True
+        any_invoiced = False
+        for dnl in dn.lines:
+            qty = Decimal(str(dnl.qty or 0))
+            inv = Decimal(str(dnl.qty_invoiced or 0))
+            if qty > 0:
+                if inv < (qty - Decimal("0.0001")):
+                    all_invoiced = False
+                if inv > Decimal("0.0001"):
+                    any_invoiced = True
+                    
+        if all_invoiced and len(dn.lines) > 0:
+            dn.status = DeliveryNoteStatus.INVOICED
+        elif any_invoiced:
+            dn.status = DeliveryNoteStatus.PARTIAL
+        elif dn.status in [DeliveryNoteStatus.INVOICED, DeliveryNoteStatus.PARTIAL]:
+            dn.status = DeliveryNoteStatus.DISPATCHED
+
+    # 5. Guardar nuevos links cabecera (InvoiceDeliveryNoteLink)
+    from app.db.models.models import generate_uuid
+    for doc_id, dn_id in links_to_create:
+        existing = db.query(InvoiceDeliveryNoteLink).filter(
+            InvoiceDeliveryNoteLink.document_id == doc_id,
+            InvoiceDeliveryNoteLink.delivery_note_id == dn_id
+        ).first()
+        if not existing:
+            new_link = InvoiceDeliveryNoteLink(
+                id=generate_uuid(),
+                document_id=doc_id,
+                delivery_note_id=dn_id
+            )
+            db.add(new_link)
+
+    db.flush()
+
+
 def recalc_sales_order_traceability_strict(db: Session, order: SalesOrder) -> list:
     """
     Recalcula estrictamente qty_delivered y qty_invoiced de una OV

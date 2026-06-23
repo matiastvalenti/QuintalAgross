@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, Fragment } from "react";
 import {
   Search,
   Filter,
@@ -23,7 +23,8 @@ import {
   RefreshCcw,
   LayoutGrid,
   PlusCircle,
-  ArrowUpRight
+  ArrowUpRight,
+  Layers
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { navigateToError } from '../../utils/errorNavigation';
@@ -40,9 +41,11 @@ import s from "../../components/layout/DocumentListPage.module.css";
 import DocumentListPage from "../../components/layout/DocumentListPage";
 // eslint-disable-next-line no-unused-vars
 import { TableRowSkeleton } from "../../components/ui/TableSkeleton";
+import Skeleton from "../../components/ui/Skeleton";
 import ErrorState from "../../components/ui/ErrorState";
 import EmptyState from "../../components/ui/EmptyState";
 import InvoiceCreationModal from "./InvoiceCreationModal";
+import InvoiceQuickPreview from "./InvoiceQuickPreview";
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState([]);
@@ -65,6 +68,35 @@ export default function InvoicesPage() {
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   const [sendingEmail, setSendingEmail] = useState(false);
   const [showCreationModal, setShowCreationModal] = useState(false);
+  
+  // Vista Rápida Expandible
+  const [quickViewId, setQuickViewId] = useState(null);
+  const [quickViewDetail, setQuickViewDetail] = useState(null);
+  const [quickViewLoading, setQuickViewLoading] = useState(false);
+  const [quickViewError, setQuickViewError] = useState(null);
+
+  const loadQuickView = async (id) => {
+    if (quickViewId === id) {
+       setQuickViewId(null);
+       return;
+    }
+    setQuickViewId(id);
+    setQuickViewLoading(true);
+    setQuickViewError(null);
+    try {
+      const data = await api.get(`/accounting/documents/${id}`);
+      setQuickViewDetail(data);
+    } catch (e) {
+      setQuickViewError(e.message || "Error al cargar");
+    } finally {
+      setQuickViewLoading(false);
+    }
+  };
+
+  const handleRowClick = (id) => {
+    if (quickViewId === id) setQuickViewId(null);
+    else loadQuickView(id);
+  };
   
   const { openWindow } = useWindow();
   const { showToast } = useToast();
@@ -312,42 +344,38 @@ export default function InvoicesPage() {
 
   const kpis = [
     {
-      title: "Facturado Mes",
+      label: "FACTURADO DEL MES",
       value: fmt(stats.monthTotal),
-      subtitle: `${stats.monthCount} comprobantes hoy`,
-      icon: TrendingUp,
-      type: "primary"
+      sub: "Total emitido",
+      type: "Primary"
     },
     {
-      title: "Pendiente Cobro",
+      label: "PENDIENTE DE COBRO",
       value: fmt(stats.pendingTotal),
-      subtitle: `${stats.pendingCount} facturas abiertas`,
-      icon: Clock,
-      type: "warning"
+      sub: "Saldo abierto",
+      type: "Warning"
     },
     {
-      title: "Cobrado Histórico",
+      label: "COBRADO",
       value: fmt(invoices.filter(i => i.status === 'CLOSED').reduce((acc, i) => acc + Number(i.total_amount || 0), 0)),
-      subtitle: "Total histórico cobrado",
-      icon: CheckCircle,
-      type: "success"
+      sub: "Facturas completadas",
+      type: "Success"
     },
     {
-      title: "Total Vigentes",
+      label: "TOTAL HISTÓRICO",
       value: stats.totalCount,
-      subtitle: `Resultados: ${filtered.length}`,
-      icon: LayoutGrid,
-      type: "neutral"
+      sub: "Comprobantes",
+      type: "Default"
     }
   ];
 
   const toolbar = {
-    search: (
+    searchWrap: (
       <div className={s.searchWrap}>
         <Search className={s.searchIcon} size={20} />
         <input
           type="text"
-          placeholder="Filtrar por número, cliente o importe..."
+          placeholder="Filtrar por número, cliente o descripción..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -446,24 +474,25 @@ export default function InvoicesPage() {
       </>
     ),
     body: loading ? (
-        <TableRowSkeleton rows={8} cols={8} />
+        <TableRowSkeleton rows={10} cols={8} />
     ) : error ? (
         <tr><td colSpan="8"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
     ) : sorted.length === 0 ? (
       <tr>
         <td colSpan="8">
           <EmptyState 
-              icon={Search} 
-              title={hasActiveFilters ? "Sin resultados" : "Sin facturas registradas"}
-              description={hasActiveFilters ? "Probá ajustando los filtros de búsqueda." : "Comenzá creando tu primera factura de venta."}
-              actionLabel={!hasActiveFilters ? "Nueva Factura" : null}
-              onAction={!hasActiveFilters ? handleOpenNew : null}
+              icon={Layers} 
+              title="Sin facturas coincidentes"
+              description="Ajustá los filtros o registrá una nueva factura."
+              actionLabel="Nueva Factura"
+              onAction={handleOpenNew}
           />
         </td>
       </tr>
     ) : (
       paginatedData.map((inv) => (
-        <tr key={inv.id} className={`${s.row} ${selectedInvoices.includes(inv.id) ? s.rowSelected : ""}`} onClick={() => handleOpenDetail(inv.id, inv.number)}>
+        <Fragment key={inv.id}>
+        <tr className={`${s.row} ${quickViewId === inv.id ? s.selectedRow : ""} ${selectedInvoices.includes(inv.id) ? s.rowSelected : ""}`} onClick={() => handleRowClick(inv.id)} onDoubleClick={() => handleOpenDetail(inv.id, inv.number)}>
           <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 40, padding: '0 12px' }}>
             <input 
                 type="checkbox"
@@ -522,6 +551,20 @@ export default function InvoicesPage() {
             </div>
           </td>
         </tr>
+        
+        {/* Fila expandible */}
+        {quickViewId === inv.id && (
+          <tr className="animate-slide-down">
+            <td colSpan={8} style={{ padding: 0, borderBottom: '1px solid var(--border-color)' }}>
+              <div style={{ padding: '16px 32px', background: '#f8fafc', borderTop: '1px dashed var(--border-color)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+                {quickViewLoading ? <Skeleton width="100%" height={150} /> : quickViewError ? <ErrorState title="Error" message={quickViewError} /> : (
+                  <InvoiceQuickPreview detail={quickViewDetail} entities={entities} onOpenFull={handleOpenDetail} onPrint={(id) => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} />
+                )}
+              </div>
+            </td>
+          </tr>
+        )}
+        </Fragment>
       ))
     )
   };

@@ -58,7 +58,7 @@ import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkDeliveryNoteModal from "./ManualLinkDeliveryNoteModal";
 import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
-import { openNuevoRemito } from "../../utils/openStandaloneWindow";
+import { openNuevoRemito, openNuevaFactura } from "../../utils/openStandaloneWindow";
 
 export default function SalesOrderForm(props) {
   const {
@@ -179,7 +179,32 @@ export default function SalesOrderForm(props) {
       if (mode === "edit" && id) fetchSalesOrder(id);
     };
     window.addEventListener('delivery-note-changed', refreshOV);
-    return () => window.removeEventListener('delivery-note-changed', refreshOV);
+    
+    // Escuchar eventos de la red de documentos
+    const handleDocumentMessage = (e) => {
+        const payload = e.data;
+        if (!payload || payload.type !== 'QUINTAL_DOCUMENT_SAVED') return;
+        
+        // Si el documento salvado está relacionado con esta OV, refrescar
+        if (payload.salesOrderId === id || payload.documentType === 'sales-order') {
+            refreshOV();
+        }
+    };
+    window.addEventListener("message", handleDocumentMessage);
+    
+    let bc;
+    try {
+        bc = new BroadcastChannel("quintal-documents");
+        bc.onmessage = handleDocumentMessage;
+    } catch (err) {
+        console.error("BroadcastChannel not supported", err);
+    }
+
+    return () => {
+        window.removeEventListener('delivery-note-changed', refreshOV);
+        window.removeEventListener("message", handleDocumentMessage);
+        if (bc) bc.close();
+    };
   }, [mode, id]);
 
   const totals = useMemo(() => {
@@ -650,33 +675,55 @@ export default function SalesOrderForm(props) {
       .filter(item => (parseFloat(invoiceQtys[item.id] || 0)) > 0)
       .map(item => {
         const qtyPkgs = parseFloat(invoiceQtys[item.id] || 0);
-        const factor = parseFloat(item._unit_content || 1);
+        const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
         const qtyUnits = factor > 1 ? qtyPkgs * factor : qtyPkgs;
+        const lineName = item.product_name || item.product?.name || item.description || item.name || item.concept || item.item_name || '';
+        
         return {
           ...item,
+          product_id: item.product_id || item.product?.id,
+          product_name: lineName,
+          description: lineName,
+          concept: lineName,
+          name: lineName,
+          qty: qtyUnits,
+          quantity: qtyUnits,
           qty_packages: qtyPkgs,
           qty_to_invoice: qtyUnits,
+          unit: item.unit || item._unit_label || 'LT',
+          unit_price: item.unit_price || item.price || 0,
+          price: item.unit_price || item.price || 0,
+          tax_rate: item.tax_rate ?? item.vat_rate ?? 21,
+          sales_order_id: id,
+          source_sales_line_id: item.id,
+          accounting_account_id: item.product?.sales_account_id || item.sales_account_id || item.accounting_account_id || null
         };
       });
 
     if (selectedLines.length === 0) {
-      return showToast("Seleccioná al menos un ítem para facturar", "warning");
+      showToast('Seleccioná al menos un ítem para facturar', 'warning');
+      return;
     }
 
     setShowInvoiceModal(false);
-    openWindow(
-      'invoice-form',
-      {
-        initialSourceType: 'sales-order',
-        initialSourceId: id,
-        initialEntityId: entity?.id,
-        initialEntity: entity,
-        autoOpenSelector: false,
-        preselectedLines: selectedLines,
-      },
-      { title: 'Nueva Factura', width: 1200, height: 800 }
-    );
-    if (windowId) minimizeWindow(windowId);
+
+    const draftId = `ov_${id}_${Date.now()}`;
+    const draftData = {
+      sourceType: 'sales-order',
+      salesOrderId: id,
+      salesOrderNumber: number,
+      customerName: entity?.name,
+      currency: currency,
+      exchangeRate: exchangeRate,
+      pointOfSale: pv,
+      paymentCondition: selectedConditionId,
+      sellerId: salespersonId,
+      costCenter: ctroCosto,
+      lines: selectedLines
+    };
+    localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify(draftData));
+    
+    openNuevaFactura({ draft_id: draftId });
   };
 
   const handleAddItem = (p) => {

@@ -1119,6 +1119,17 @@ def create_document(
         # ── Recalcular comisiones finales de la factura ──
         _recalc_document_commission(db_doc, db)
 
+        # ── RECONCILIACION ESTRICTA DE OV/REMITO/FACTURA ──
+        if doc.lines and any(getattr(l, "source_sales_line_id", None) for l in doc.lines):
+            from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+            from app.db.models.commercial_models import SalesOrderLine
+            ov_line_ids = [l.source_sales_line_id for l in doc.lines if getattr(l, "source_sales_line_id", None)]
+            if ov_line_ids:
+                ovls = db.query(SalesOrderLine.order_id).filter(SalesOrderLine.id.in_(ov_line_ids)).distinct().all()
+                for (oid,) in ovls:
+                    reconcile_sales_order_invoice_delivery_links(db, oid)
+
+
         # ── GENERAR ASIENTO CONTABLE AUTOMÁTICO ──
         try:
             create_journal_entry_for_document(db, db_doc)

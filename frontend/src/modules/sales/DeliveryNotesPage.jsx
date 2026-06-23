@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { openNuevoRemito, openEditRemito, openNuevaFactura } from '../../utils/openStandaloneWindow';
 import ContentHeader from '../../components/layout/ContentHeader';
@@ -9,7 +9,9 @@ import Modal from '../../components/ui/Modal';
 import Select from '../../components/ui/Select';
 import Input from '../../components/ui/Input';
 import t from '../../components/ui/Table.module.css';
-import s from './DeliveryNotesPage.module.css';
+import localS from './DeliveryNotesPage.module.css';
+import s from '../../components/layout/DocumentListPage.module.css';
+import DocumentListPage from '../../components/layout/DocumentListPage';
 import { useToast } from '../../context/ToastContext';
 import Skeleton from '../../components/ui/Skeleton';
 import TableSkeleton, { TableRowSkeleton } from '../../components/ui/TableSkeleton';
@@ -21,6 +23,7 @@ import api from '../../services/api';
 import { useWindow } from '../../context/WindowContext';
 import { TraceabilityProgress } from '../../components/ui/TraceabilityStatusBadge';
 import StatusBadge from '../../components/ui/StatusBadge';
+import DeliveryNoteQuickPreview from './DeliveryNoteQuickPreview';
 
 export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
   const navigate = useNavigate();
@@ -63,6 +66,30 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
   const [confirmingId, setConfirmingId] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
+
+  // Vista Rápida Expandible
+  const [quickViewId, setQuickViewId] = useState(null);
+  const [quickViewDetail, setQuickViewDetail] = useState(null);
+  const [quickViewLoading, setQuickViewLoading] = useState(false);
+  const [quickViewError, setQuickViewError] = useState(null);
+
+  const loadQuickView = async (id) => {
+    if (quickViewId === id) {
+       setQuickViewId(null);
+       return;
+    }
+    setQuickViewId(id);
+    setQuickViewLoading(true);
+    setQuickViewError(null);
+    try {
+      const data = await api.get(`/sales/delivery-notes/${id}`);
+      setQuickViewDetail(data);
+    } catch (e) {
+      setQuickViewError(e.message || "Error al cargar");
+    } finally {
+      setQuickViewLoading(false);
+    }
+  };
 
   // Creation State
   const [showCreateType, setShowCreateType] = useState(false);
@@ -587,293 +614,241 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
     openNuevoRemito(crossOV.id, { draft_key: draftKey });
   };
 
-  return (
-    <div className={s.pageLayout}>
-      <ContentHeader
-        breadcrumbs={[{ label: 'Suite Comercial' }, { label: 'Remitos' }]}
-        title="Libro de Remitos"
-      />
+  const kpis = [
+    { label: "Remitos del Mes", value: stats.countMonth, sub: "Comprobantes", type: "Primary" },
+    { label: "A Facturar", value: stats.pendingInvoice, sub: "Pendientes", type: "Warning" },
+    { label: "Despachados", value: stats.dispatched, sub: "En logística", type: "Info" },
+    { label: "Efectividad", value: `${stats.effectiveness}%`, sub: "Ratio facturación", type: "Success" },
+    { label: "Total Histórico", value: stats.totalCount, sub: "Registros totales", type: "Default" }
+  ];
 
-      {error && (
-          <div style={{ padding: 40, textAlign: 'center', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, margin: '20px 24px' }}>
-              <Activity size={32} color="#ef4444" style={{ marginBottom: 16 }} />
-              <div style={{ fontSize: 16, fontWeight: 800, color: '#991b1b', marginBottom: 8 }}>Error de Conexión</div>
-              <div style={{ fontSize: 13, color: '#b91c1c', marginBottom: 16 }}>{error}</div>
-              <Button onClick={() => fetchAll()} variant="primary" style={{ background: '#ef4444', border: 'none' }}>Reintentar</Button>
-          </div>
-      )}
-      
-      {!error && (
+  const toolbar = {
+    searchWrap: (
+      <div className={s.searchWrap}>
+        <Search className={s.searchIcon} size={20} />
+        <input
+          type="text"
+          placeholder="Filtrar por número, cliente o descripción..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && <button className={s.inputClear} style={{ right: 16, top: '50%', transform: 'translateY(-50%)', position: 'absolute', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }} onClick={() => setSearch("")}><X size={16} /></button>}
+      </div>
+    ),
+    filtersToggle: (
+      <button 
+        type="button" 
+        className={`${s.filterToggle} ${showFilters || (search && !notes.length) ? s.active : ""}`}
+        onClick={() => setShowFilters(!showFilters)}
+      >
+        <Filter size={18} />
+        Filtros
+      </button>
+    ),
+    actions: (
       <>
-      <div className={s.kpiRow}>
-          <div className={`${s.kpiCard} ${s.kpiPrimary}`}>
-              <div className={s.kpiHeader}>
-                  <span>Remitos del Mes</span>
-              </div>
-              <div className={s.kpiValue}>{stats.countMonth}</div>
-              <div className={s.kpiSub}>Comprobantes</div>
+        <button className={s.ghostBtn} title="Próximamente">Exportar</button>
+        <button className={s.ghostBtn} title="Próximamente">Columnas</button>
+        <button className={s.ghostBtn} style={{ color: '#ef4444' }} onClick={clearFilters} title="Limpiar filtros">Limpiar</button>
+        <button className={s.primaryCta} onClick={() => setShowCreateType(true)}>
+            <PlusCircle size={16} />
+            Nuevo Remito
+        </button>
+      </>
+    ),
+    massActions: selectedIds.length > 0 && (
+      <button className={s.primaryCta} onClick={handleBulkInvoice}>
+        FACTURAR ({selectedIds.length})
+      </button>
+    ),
+    filtersArea: showFilters && (
+      <div className={s.compactFiltersRow}>
+          <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={s.filterSelect}>
+            <option value="">Estado: Todos</option>
+            <option value="DRAFT">Borrador</option>
+            <option value="DISPATCHED">Despachado</option>
+            <option value="INVOICED">Facturado</option>
+            <option value="CANCELLED">Anulado</option>
+          </select>
+
+          <select value={filterEntityId} onChange={e => setFilterEntityId(e.target.value)} className={s.filterSelect}>
+            <option value="">Cliente: Todos</option>
+            {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+          </select>
+
+          <select value={selectedWarehouseId} onChange={e => setSelectedWarehouseId(e.target.value)} className={s.filterSelect}>
+            <option value="">Depósito: Todos</option>
+            {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+          </select>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Desde</span>
+              <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={s.dateInput} />
           </div>
-          <div className={`${s.kpiCard} ${s.kpiWarning}`}>
-              <div className={s.kpiHeader}>
-                  <span>A Facturar</span>
-              </div>
-              <div className={s.kpiValue}>{stats.pendingInvoice}</div>
-              <div className={s.kpiSub}>Pendientes</div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Hasta</span>
+              <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={s.dateInput} />
           </div>
-          <div className={`${s.kpiCard} ${s.kpiInfo}`}>
-              <div className={s.kpiHeader}>
-                  <span>Despachados</span>
+
+          <label className={s.toggleLabel} style={{ marginLeft: 'auto' }}>
+              <div className={`${s.switch} ${!hideInvoiced ? s.active : ""}`}>
+                  <input type="checkbox" checked={!hideInvoiced} onChange={() => setHideInvoiced(!hideInvoiced)} />
+                  <div className={s.slider} />
               </div>
-              <div className={s.kpiValue}>{stats.dispatched}</div>
-              <div className={s.kpiSub}>En logística</div>
-          </div>
-          <div className={`${s.kpiCard} ${s.kpiSuccess}`}>
-              <div className={s.kpiHeader}>
-                  <span>Efectividad</span>
+              <span className={s.toggleText} style={{ fontSize: '10px' }}>Incluir Facturados</span>
+          </label>
+
+          <label className={s.toggleLabel}>
+              <div className={`${s.switch} ${!hideCancelled ? s.active : ""}`}>
+                  <input type="checkbox" checked={!hideCancelled} onChange={() => setHideCancelled(!hideCancelled)} />
+                  <div className={s.slider} />
               </div>
-              <div className={s.kpiValue}>{stats.effectiveness}%</div>
-              <div className={s.kpiSub}>Ratio facturación</div>
-          </div>
-          <div className={s.kpiCard}>
-              <div className={s.kpiHeader}>
-                  <span>Total Histórico</span>
-              </div>
-              <div className={s.kpiValue}>{stats.totalCount}</div>
-              <div className={s.kpiSub}>Registros totales</div>
-          </div>
+              <span className={s.toggleText} style={{ fontSize: '10px' }}>Incluir Anulados</span>
+          </label>
       </div>
+    )
+  };
 
-      <div className={s.toolbar}>
-        <div className={s.toolbarMain}>
-            <div className={s.searchWrap}>
-              <Search className={s.searchIcon} size={20} />
-              <input
-                type="text"
-                placeholder="Filtrar por número, cliente o descripción..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && <button className={s.inputClear} style={{ right: 16, top: '50%', transform: 'translateY(-50%)', position: 'absolute', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }} onClick={() => setSearch("")}><X size={16} /></button>}
-            </div>
-            
-            <button 
-              type="button" 
-              className={`${s.filterToggle} ${showFilters || (search && !notes.length) ? s.active : ""}`}
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <Filter size={18} />
-              Filtros
-            </button>
-
-            <div className={s.actionGroup}>
-                <button className={s.ghostBtn} title="Próximamente">Exportar</button>
-                <button className={s.ghostBtn} title="Próximamente">Columnas</button>
-                <button className={s.ghostBtn} style={{ color: '#ef4444' }} onClick={clearFilters} title="Limpiar filtros">Limpiar</button>
-                {selectedIds.length > 0 && (
-                  <button className={s.primaryCta} onClick={handleBulkInvoice}>
-                    FACTURAR ({selectedIds.length})
-                  </button>
-                )}
-                <button className={s.primaryCta} onClick={() => setShowCreateType(true)}>
-                    <PlusCircle size={16} />
-                    Nuevo Remito
-                </button>
-            </div>
-        </div>
-
-        {showFilters && (
-          <div className={s.compactFiltersRow}>
-              <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} className={s.filterSelect}>
-                <option value="">Estado: Todos</option>
-                <option value="DRAFT">Borrador</option>
-                <option value="DISPATCHED">Despachado</option>
-                <option value="INVOICED">Facturado</option>
-                <option value="CANCELLED">Anulado</option>
-              </select>
-
-              <select value={filterEntityId} onChange={e => setFilterEntityId(e.target.value)} className={s.filterSelect}>
-                <option value="">Cliente: Todos</option>
-                {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
-              </select>
-
-              <select value={selectedWarehouseId} onChange={e => setSelectedWarehouseId(e.target.value)} className={s.filterSelect}>
-                <option value="">Depósito: Todos</option>
-                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-              </select>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Desde</span>
-                  <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={s.dateInput} />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Hasta</span>
-                  <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={s.dateInput} />
-              </div>
-
-              <label className={s.toggleLabel} style={{ marginLeft: 'auto' }}>
-                  <div className={`${s.switch} ${!hideInvoiced ? s.active : ""}`}>
-                      <input type="checkbox" checked={!hideInvoiced} onChange={() => setHideInvoiced(!hideInvoiced)} />
-                      <div className={s.slider} />
-                  </div>
-                  <span className={s.toggleText}>Incluir Facturados</span>
-              </label>
-
-              <label className={s.toggleLabel}>
-                  <div className={`${s.switch} ${!hideCancelled ? s.active : ""}`}>
-                      <input type="checkbox" checked={!hideCancelled} onChange={() => setHideCancelled(!hideCancelled)} />
-                      <div className={s.slider} />
-                  </div>
-                  <span className={s.toggleText}>Incluir Anulados</span>
-              </label>
-          </div>
-        )}
-      </div>
-
-      <div className={`${s.cardTable} animate-slide-up`}>
-        <div className={s.tableWrap}>
-          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ width: 48, textAlign: 'center' }} className={s.th}>
-                  <input 
-                    type="checkbox" 
-                    onChange={toggleSelectAll} 
-                    checked={paginatedData.length > 0 && selectedIds.length === paginatedData.filter(n => n.status === "DISPATCHED" || n.status === "PARTIAL").length}
-                    style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--primary)' }}
+  const table = {
+    columns: (
+      <>
+        <th style={{ width: 48, textAlign: 'center' }} className={s.th}>
+          <input 
+            type="checkbox" 
+            onChange={toggleSelectAll} 
+            checked={paginatedData.length > 0 && selectedIds.length === paginatedData.filter(n => n.status === "DISPATCHED" || n.status === "PARTIAL").length}
+            style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--primary)' }}
+          />
+        </th>
+        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>NUMERAL</th>
+        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>REGISTRO</th>
+        <th className={s.th} onClick={() => toggleSort('client')} style={{ cursor: 'pointer' }}>TITULAR DE CUENTA</th>
+        <th className={s.th}>OV ORIGEN</th>
+        <th className={s.th}>BASE</th>
+        <th className={s.th} style={{ textAlign: 'center' }}>ESTADO</th>
+        <th className={s.th} style={{ textAlign: 'center' }}>USUARIO</th>
+        <th className={s.th} style={{ textAlign: 'right' }}>DILIGENCIAS</th>
+      </>
+    ),
+    body: loading ? (
+        <TableRowSkeleton rows={10} cols={9} />
+    ) : error ? (
+        <tr><td colSpan="9"><ErrorState message={error} onRetry={fetchAll} /></td></tr>
+    ) : filtered.length === 0 ? (
+      <tr>
+        <td colSpan="9">
+          <EmptyState 
+              icon={Layers} 
+              title="Sin remitos coincidentes"
+              description="Ajustá los filtros o registrá un nuevo remito."
+              actionLabel="Nuevo Remito"
+              onAction={() => setShowCreateType(true)}
+          />
+        </td>
+      </tr>
+    ) : (
+       paginatedData.map((n) => (
+        <Fragment key={n.id}>
+        <tr 
+          className={`${s.row} ${quickViewId === n.id ? s.selectedRow : ''} ${selectedIds.includes(n.id) ? s.rowSelected : ''}`} 
+          onClick={() => loadQuickView(n.id)}
+          onDoubleClick={() => openEditRemito(n.id)}
+        >
+          <td className={s.td} style={{ textAlign: 'center', width: 48 }} onClick={(e) => e.stopPropagation()}>
+            <input 
+              type="checkbox" 
+              checked={selectedIds.includes(n.id)}
+              onChange={(e) => {
+                if (e.target.checked) setSelectedIds([...selectedIds, n.id]);
+                else setSelectedIds(selectedIds.filter(id => id !== n.id));
+              }}
+              disabled={n.status !== "DISPATCHED" && n.status !== "PARTIAL"}
+              style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--primary)' }}
+            />
+          </td>
+          <td className={`${s.td} ${s.numberCell}`}>{n.number}</td>
+          <td className={s.td} style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>
+            {new Date(n.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+          </td>
+          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{entityName(n.entity_id)}</td>
+          <td className={s.td} style={{ fontSize: 13, color: '#64748b' }}>
+            {n.origin_reference || 'DIRECTO'}
+          </td>
+          <td className={s.td} style={{ fontSize: 13, color: '#64748b' }}>
+            {warehouses.find(w => w.id === n.warehouse_id)?.name || '-'}
+          </td>
+          <td className={s.td} style={{ textAlign: 'center', width: 220 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <StatusBadge status={n.status} />
+              {n.status !== 'DRAFT' && n.status !== 'CANCELLED' && (
+                <div style={{ width: '100%', padding: '0 4px', marginTop: 4 }}>
+                  <TraceabilityProgress 
+                      delivered={100} 
+                      invoiced={n.invoice_progress || 0} 
+                      paid={n.paid_progress || 0}
                   />
-                </th>
-                <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>NUMERAL</th>
-                <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>REGISTRO</th>
-                <th className={s.th} onClick={() => toggleSort('client')} style={{ cursor: 'pointer' }}>TITULAR DE CUENTA</th>
-                <th className={s.th}>OV ORIGEN</th>
-                <th className={s.th}>BASE</th>
-                <th className={s.th} style={{ textAlign: 'center' }}>ESTADO</th>
-                <th className={s.th} style={{ textAlign: 'center' }}>USUARIO</th>
-                <th className={s.th} style={{ textAlign: 'right' }}>DILIGENCIAS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                 <TableRowSkeleton rows={10} cols={9} />
-              ) : error ? (
-                 <tr><td colSpan="9"><ErrorState message={error} onRetry={fetchAll} /></td></tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan="9">
-                    <EmptyState 
-                        icon={Layers} 
-                        title="Sin Registros Coincidentes"
-                        description="Ajustá los parámetros del ledger o registrá una nueva operación corporativa."
-                        actionLabel="Nuevo Remito"
-                        onAction={() => setShowCreateType(true)}
-                    />
-                  </td>
-                </tr>
-              ) : (
-                 paginatedData.map((n) => (
-                  <tr key={n.id} className={s.row} onClick={() => handleEdit(n)}>
-                    <td className={s.td} style={{ textAlign: 'center', width: 48 }} onClick={(e) => e.stopPropagation()}>
-                      <input 
-                        type="checkbox" 
-                        checked={selectedIds.includes(n.id)}
-                        onChange={(e) => {
-                          if (e.target.checked) setSelectedIds([...selectedIds, n.id]);
-                          else setSelectedIds(selectedIds.filter(id => id !== n.id));
-                        }}
-                        disabled={n.status !== "DISPATCHED" && n.status !== "PARTIAL"}
-                        style={{ width: 18, height: 18, cursor: 'pointer', accentColor: 'var(--primary)' }}
-                      />
-                    </td>
-                    <td className={`${s.td} ${s.numberCell}`}>{n.number}</td>
-                    <td className={s.td} style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>
-                      {new Date(n.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
-                    </td>
-                    <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{entityName(n.entity_id)}</td>
-                    <td className={s.td} style={{ fontSize: 13, color: '#64748b' }}>
-                      {n.origin_reference || 'DIRECTO'}
-                    </td>
-                    <td className={s.td} style={{ fontSize: 13, color: '#64748b' }}>
-                      {warehouses.find(w => w.id === n.warehouse_id)?.name || '-'}
-                    </td>
-                    <td className={s.td} style={{ textAlign: 'center', width: 220 }}>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                        <StatusBadge status={n.status} />
-                        {n.status !== 'DRAFT' && n.status !== 'CANCELLED' && (
-                          <div style={{ width: '100%', padding: '0 4px', marginTop: 4 }}>
-                            <TraceabilityProgress 
-                                delivered={100} 
-                                invoiced={n.invoice_progress || 0} 
-                                paid={n.paid_progress || 0}
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className={s.td} style={{ verticalAlign: 'middle' }}>
-                        <div style={{ display: 'flex', justifyContent: 'center' }}>
-                            <div className={s.userBadge}>
-                                {(n.created_by || 'AD').substring(0, 2).toUpperCase()}
-                            </div>
-                        </div>
-                    </td>
-                    <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
-                        {n.status === 'DRAFT' && (
-                          <button onClick={() => deleteDN(n.id)} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Eliminar">
-                            <Trash2 size={18} />
-                          </button>
-                        )}
-                        <button onClick={() => handlePreviewPdf(n.id)} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Documento Oficial">
-                          <FileText size={18} />
-                        </button>
-                        <button onClick={() => handleEdit(n)} style={{ all: 'unset', cursor: 'pointer', color: 'var(--primary)' }} title="Consultar Registro">
-                          <ArrowUpRight size={18} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                </div>
               )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {totalPages > 1 && (
-        <div className={s.paginationBar}>
-          <div className={s.paginationInfo}>
-            Mostrando <strong>{((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filtered.length)}</strong> de <strong>{filtered.length}</strong> remitos
-          </div>
-          <div className={s.paginationControls}>
-            <button 
-              className={s.pageBtn} 
-              disabled={currentPage === 1} 
-              onClick={() => setCurrentPage(p => p - 1)}
-            >
-              Anterior
-            </button>
-            <div className={s.pageNumbers}>
-              {[...Array(totalPages)].map((_, i) => (
-                <button 
-                  key={i + 1}
-                  className={`${s.pageNum} ${currentPage === i + 1 ? s.active : ""}`}
-                  onClick={() => setCurrentPage(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
             </div>
-            <button 
-              className={s.pageBtn} 
-              disabled={currentPage === totalPages} 
-              onClick={() => setCurrentPage(p => p + 1)}
-            >
-              Siguiente
-            </button>
-          </div>
-        </div>
-      )}
+          </td>
+          <td className={s.td} style={{ verticalAlign: 'middle' }}>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div className={s.userBadge}>
+                      {(n.created_by || 'AD').substring(0, 2).toUpperCase()}
+                  </div>
+              </div>
+          </td>
+          <td className={s.td} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              {n.status === 'DRAFT' && (
+                <button onClick={() => deleteDN(n.id)} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Eliminar">
+                  <Trash2 size={18} />
+                </button>
+              )}
+              <button onClick={(e) => { e.stopPropagation(); handlePreviewPdf(n.id); }} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Documento Oficial">
+                <FileText size={18} />
+              </button>
+              <button onClick={(e) => { e.stopPropagation(); openEditRemito(n.id); }} style={{ all: 'unset', cursor: 'pointer', color: 'var(--primary)' }} title="Consultar Registro">
+                <ArrowUpRight size={18} />
+              </button>
+            </div>
+          </td>
+        </tr>
+        {/* Fila expandible */}
+        {quickViewId === n.id && (
+          <tr className="animate-slide-down">
+            <td colSpan={10} style={{ padding: 0, borderBottom: '1px solid var(--border-color)' }}>
+              <div style={{ padding: '16px 32px', background: '#f8fafc', borderTop: '1px dashed var(--border-color)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+                {quickViewLoading ? <Skeleton width="100%" height={150} /> : quickViewError ? <ErrorState title="Error" message={quickViewError} /> : (
+                  <DeliveryNoteQuickPreview detail={quickViewDetail} entities={entities} warehouses={warehouses} onOpenFull={openEditRemito} onPrint={handlePreviewPdf} />
+                )}
+              </div>
+            </td>
+          </tr>
+        )}
+        </Fragment>
+      ))
+    )
+  };
+
+  const pagination = {
+    infoText: `REPORTE: ${filtered.length} REMITOS LOCALIZADOS`,
+    totalPages: totalPages,
+    currentPage: currentPage,
+    onPageChange: setCurrentPage
+  };
+
+  return (
+    <>
+      <DocumentListPage 
+        title="Libro de Remitos"
+        breadcrumbs={[{ label: 'Suite Comercial' }, { label: 'Remitos' }]}
+        kpis={!loading && !error ? kpis : []}
+        toolbar={toolbar}
+        table={table}
+        pagination={pagination}
+      />
 
       {/* Crear remito solo desde OV */}
       <Modal open={showCreateType} onClose={() => { setShowCreateType(false); }} title={"Crear Remito desde Orden de Venta"} wide>
@@ -962,16 +937,16 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
           </>
         }
       >
-        <form id="direct-remito-form" onSubmit={submitDirectRemito} className={s.formContainer}>
+        <form id="direct-remito-form" onSubmit={submitDirectRemito} className={localS.formContainer}>
           <Card noPad style={{ padding: 16, border: '1px solid var(--border-color)', boxShadow: 'none' }}>
-            <div className={s.fieldGrid} style={{ gridTemplateColumns: 'minmax(120px, 1fr) 2fr 1fr' }}>
+            <div className={localS.fieldGrid} style={{ gridTemplateColumns: 'minmax(120px, 1fr) 2fr 1fr' }}>
               <Select label="PV" value={directForm.pv} onChange={e => setDirectForm({...directForm, pv: e.target.value})}>
                 {pvOptions.map(p => <option key={p.pv} value={p.pv}>{p.pv} - {p.name}</option>)}
               </Select>
               <Input label="Número Remito" required value={directForm.number} onChange={e => setDirectForm({...directForm, number: e.target.value})} />
               <Input type="date" label="Fecha" required value={directForm.date} onChange={e => setDirectForm({...directForm, date: e.target.value})} />
             </div>
-            <div className={s.fieldGrid}>
+            <div className={localS.fieldGrid}>
               <Select label="Cliente" required value={directForm.entity_id} onChange={e => setDirectForm({...directForm, entity_id: e.target.value})}>
                 <option value="">Seleccionar...</option>
                 {entities.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
@@ -999,8 +974,8 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
                          {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                        </select>
                      </td>
-                     <td style={{ width: 100 }}><input type="number" step="0.01" value={l.qty} onChange={e => updateDirectLine(i, 'qty', parseFloat(e.target.value))} className={s.inlineInput} /></td>
-                     <td style={{ width: 120 }}><input type="number" step="0.01" value={l.unit_price} onChange={e => updateDirectLine(i, 'unit_price', parseFloat(e.target.value))} className={s.inlineInput} /></td>
+                     <td style={{ width: 100 }}><input type="number" step="0.01" value={l.qty} onChange={e => updateDirectLine(i, 'qty', parseFloat(e.target.value))} className={localS.inlineInput} /></td>
+                     <td style={{ width: 120 }}><input type="number" step="0.01" value={l.unit_price} onChange={e => updateDirectLine(i, 'unit_price', parseFloat(e.target.value))} className={localS.inlineInput} /></td>
                      <td style={{ width: 50 }}><Button variant="ghost" size="sm" type="button" onClick={() => removeDirectLine(i)} style={{ color: 'var(--bad)' }}>✕</Button></td>
                   </tr>
                 ))}
@@ -1030,7 +1005,7 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
         {preview && (
           <>
             {preview.has_negative_stock && (
-              <div className={s.warningBanner}>
+              <div className={localS.warningBanner}>
                 <span style={{ fontSize: 20 }}>⚠️</span>
                 <div>
                     <strong>Stock insuficente</strong>
@@ -1248,24 +1223,30 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
 
       {/* Receipt Preview Overlay */}
       {previewUrl && (
-          <div className={s.previewOverlay} onClick={() => setPreviewUrl(null)}>
-              <div className={s.previewContent} onClick={e => e.stopPropagation()}>
-                  <div className={s.previewHeader}>
+          <div className={localS.previewOverlay} onClick={() => setPreviewUrl(null)}>
+              <div className={localS.previewContent} onClick={e => e.stopPropagation()}>
+                  <div className={localS.previewHeader}>
                       <h3>VISTA PREVIA DEL COMPROBANTE</h3>
-                      <button className={s.closePreview} onClick={() => setPreviewUrl(null)}><X size={24} /></button>
+                      <button className={localS.closePreview} onClick={() => setPreviewUrl(null)}><X size={24} /></button>
                   </div>
-                  <div className={s.previewBody}>
+                  <div className={localS.previewBody}>
                       {previewUrl.toLowerCase().endsWith('.pdf') ? (
-                          <iframe src={previewUrl} className={s.previewFrame} title="Documento PDF" />
+                          <iframe src={previewUrl} className={localS.previewFrame} title="Documento PDF" />
                       ) : (
-                          <img src={previewUrl} alt="Comprobante" className={s.previewImage} />
+                          <img src={previewUrl} alt="Comprobante" className={localS.previewImage} />
                       )}
                   </div>
               </div>
           </div>
       )}
-      </>
+      {error && (
+          <div style={{ padding: 40, textAlign: 'center', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 12, margin: '20px 24px' }}>
+              <Activity size={32} color="#ef4444" style={{ marginBottom: 16 }} />
+              <div style={{ fontSize: 16, fontWeight: 800, color: '#991b1b', marginBottom: 8 }}>Error de Conexión</div>
+              <div style={{ fontSize: 13, color: '#b91c1c', marginBottom: 16 }}>{error}</div>
+              <Button onClick={() => fetchAll()} variant="primary" style={{ background: '#ef4444', border: 'none' }}>Reintentar</Button>
+          </div>
       )}
-    </div>
+    </>
   );
 }

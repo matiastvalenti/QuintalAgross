@@ -11,7 +11,9 @@
 }
 
 @keyframes spin {
-    to { transform: rotate(360deg); }
+    to {
+        transform: rotate(360deg);
+    }
 }
 
 .formCard {
@@ -214,7 +216,8 @@
 }
 
 /* Common inputs - reusing Bento/Glass style */
-.input, .select {
+.input,
+.select {
     background: #f1f5f9;
     border: none;
     border-radius: 8px;
@@ -337,7 +340,8 @@
     flex-shrink: 0;
 }
 
-.sideInput, .sideSelect {
+.sideInput,
+.sideSelect {
     background: #f1f5f9;
     border: none;
     border-radius: 6px;
@@ -352,6 +356,7 @@
     text-align: right;
     box-sizing: border-box;
 }
+
 .sideSelect {
     text-align: left;
     text-align-last: right;
@@ -404,10 +409,11 @@
 .itemsList {
     height: auto;
     min-height: 60px;
-    max-height: 220px;
+    max-height: 360px;
     overflow-y: auto;
     padding-right: 8px;
-    flex-shrink: 0;
+    flex: 1;
+    min-height: 0;
 }
 
 .itemsList::-webkit-scrollbar {
@@ -471,7 +477,7 @@
     border: 1px solid #e2e8f0;
     margin-bottom: 12px;
     z-index: 100;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
 }
 
 .footerCompact {
@@ -519,10 +525,36 @@
 
 /* New class to limit product panel height in view mode */
 .productsPanelCompact {
-    max-height: 200px;
+    height: auto;
+    max-height: 220px;
+    min-height: 0;
     overflow-y: auto;
     padding-right: 8px;
 }
+
+/* deliveryNoteStandaloneCard: solo aislamiento estructural, sin cambiar medidas respecto de OV */
+.deliveryNoteStandaloneCard {
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    display: flex !important;
+    flex-direction: column !important;
+}
+
+.deliveryNaturalContent {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    flex: 1;
+    min-height: 0;
+}
+
+/* Las clases siguientes no deben tener overrides de tamaño en Remito:
+   .deliveryNoteStandaloneCard .relationsBar → usa estilos base de .relationsBar
+   .deliveryNoteStandaloneCard .relationCard → usa estilos base de .relationCard
+   .deliveryNoteStandaloneCard .summaryPanel → usa estilos base de .summaryPanel
+   .deliveryNoteStandaloneCard .footerCompact → usa estilos base de .footerCompact
+*/
 
 
 
@@ -562,7 +594,7 @@
 .relationCard:hover {
     border-color: #cbd5e1;
     background: #ffffff;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.03);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
 }
 
 .nodeTitle {

@@ -42,6 +42,7 @@ export default function RemitoStandalonePage() {
   const id = pathId || searchParams.get("id");
   const mode = id ? "edit" : "new";
 
+
   return (
     <StandaloneGuard>
       {id ? (

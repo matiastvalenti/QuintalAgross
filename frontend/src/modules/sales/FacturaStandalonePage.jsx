@@ -53,8 +53,8 @@ export default function FacturaStandalonePage() {
     if (draftStr) {
       const draft = JSON.parse(draftStr);
       console.log("FacturaStandalonePage: draft recuperado =", draft);
-      initialSourceType = draft.sourceType;
-      initialSourceId = draft.salesOrderId || draft.ovId || null;
+      initialSourceType = draft.sourceType || initialSourceType;
+      initialSourceId = draft.deliveryNoteId || draft.salesOrderId || draft.ovId || null;
     } else {
       console.warn("FacturaStandalonePage: draft_id presente pero no encontrado en localStorage");
     }

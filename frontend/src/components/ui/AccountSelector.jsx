@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import Select from './Select';
 import { API_URL } from '../../config';
 
-export default function AccountSelector({ label, value, onChange, placeholder = "Seleccionar cuenta..." }) {
+export default function AccountSelector({ label, value, onChange, placeholder = "Seleccionar cuenta...", ...rest }) {
     const [accounts, setAccounts] = useState([]);
 
     useEffect(() => {
@@ -21,7 +21,7 @@ export default function AccountSelector({ label, value, onChange, placeholder = 
     }, []);
 
     return (
-        <Select label={label} value={value} onChange={onChange}>
+        <Select label={label} value={value} onChange={onChange} {...rest}>
             <option value="">{placeholder}</option>
             {accounts.map(a => (
                 <option key={a.id} value={a.code}>

@@ -8,7 +8,7 @@ import Drawer from "../../components/ui/Drawer";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { useWindow } from '../../context/WindowContext';
-import { openEditOrdenVenta } from '../../utils/openStandaloneWindow';
+import { openEditOrdenVenta, openNuevaFactura } from '../../utils/openStandaloneWindow';
 import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
@@ -99,6 +99,7 @@ export default function DeliveryNoteForm(props) {
   const [sourceId, setSourceId] = useState(props.initialSourceId || ov_id || '');
   const [sourceType, setSourceType] = useState(props.initialSourceType || (ov_id ? 'sales-order' : ''));
   const [sourceOrderId, setSourceOrderId] = useState(ov_id || '');
+  const [ovHasInvoices, setOvHasInvoices] = useState(false);
   const [traceability, setTraceability] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [relatedDeliveryNotes, setRelatedDeliveryNotes] = useState([]);
@@ -112,6 +113,10 @@ export default function DeliveryNoteForm(props) {
   const [searchTerm, setSearchTerm] = useState("");
   const [showManualLinkModal, setShowManualLinkModal] = useState(false);
   const [dnTraceability, setDnTraceability] = useState(null);
+  
+  // Facturación
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceQtys, setInvoiceQtys] = useState({});
 
   // --- Header Data ---
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -241,6 +246,34 @@ export default function DeliveryNoteForm(props) {
         }
     }
   }, [mode, id, ov_id, autoOpenSelector]);
+
+  useEffect(() => {
+    const handleDocumentMessage = (e) => {
+        const payload = e.data;
+        if (!payload || payload.type !== 'QUINTAL_DOCUMENT_SAVED') return;
+        
+        if (payload.documentType === 'invoice' && mode === 'edit' && id) {
+            if (payload.deliveryNoteId === id || payload.salesOrderId === sourceOrderId) {
+                fetchDeliveryNote();
+                fetchDeliveryNoteTraceability();
+            }
+        }
+    };
+
+    window.addEventListener("message", handleDocumentMessage);
+    let bc;
+    try {
+        bc = new BroadcastChannel("quintal-documents");
+        bc.onmessage = handleDocumentMessage;
+    } catch (err) {
+        console.error("BroadcastChannel not supported", err);
+    }
+
+    return () => {
+        window.removeEventListener("message", handleDocumentMessage);
+        if (bc) bc.close();
+    };
+  }, [mode, id, sourceOrderId]);
 
   useEffect(() => {
     if (sourceId && sourceType === 'sales-order') {
@@ -407,6 +440,10 @@ export default function DeliveryNoteForm(props) {
         setSourceId(data.number);
         setSourceType('sales-order');
         setSourceOrderId(data.id);
+        const statusStr = data.status || "";
+        if (statusStr.includes("INVOICED") || statusStr.includes("FACTURADO") || statusStr.includes("COMPLETED")) {
+            setOvHasInvoices(true);
+        }
         fetchTraceability(data.id);
         setVendedor(data.vendedor || '');
         setSalespersonId(data.salesperson_id || '');
@@ -439,6 +476,10 @@ export default function DeliveryNoteForm(props) {
         setSourceId(data.number);
         setSourceType('sales-order');
         setSourceOrderId(data.id);
+        const statusStr = data.status || "";
+        if (statusStr.includes("INVOICED") || statusStr.includes("FACTURADO") || statusStr.includes("COMPLETED")) {
+            setOvHasInvoices(true);
+        }
         fetchTraceability(data.id);
         setVendedor(data.vendedor || '');
         setSalespersonId(data.salesperson_id || '');
@@ -754,6 +795,27 @@ export default function DeliveryNoteForm(props) {
             const savedId = data.id || id;
             showToast("Remito guardado exitosamente", "success");
             window.dispatchEvent(new CustomEvent("delivery-note-changed"));
+            
+            // Emit QUINTAL_DOCUMENT_SAVED
+            const eventPayload = {
+                type: "QUINTAL_DOCUMENT_SAVED",
+                documentType: "delivery-note",
+                deliveryNoteId: savedId,
+                salesOrderId: sourceOrderId,
+                timestamp: Date.now()
+            };
+            
+            if (window.opener) {
+                window.opener.postMessage(eventPayload, "*");
+            }
+            try {
+                const bc = new BroadcastChannel("quintal-documents");
+                bc.postMessage(eventPayload);
+                bc.close();
+            } catch (err) {
+                console.error("BroadcastChannel error:", err);
+            }
+
             setMode("edit");
             setId(savedId);
             setIsReadOnly(true);
@@ -766,6 +828,78 @@ export default function DeliveryNoteForm(props) {
     } finally {
         setSaving(false);
     }
+  };
+
+  const handleOpenInvoiceModal = () => {
+    const qtys = {};
+    items.forEach(item => {
+      const qtyInvoicedUnits = parseFloat(item.qty_invoiced || 0);
+      const qtyOrderedUnits = parseFloat(item.qty || 0);
+      const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
+      const orderedPkgs = factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+      const invoicedPkgs = factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+      const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
+      qtys[item.id] = pendingPkgs;
+    });
+    setInvoiceQtys(qtys);
+    setShowInvoiceModal(true);
+  };
+
+  const handleConfirmInvoice = () => {
+    const selectedLines = items
+      .filter(item => (parseFloat(invoiceQtys[item.id] || 0)) > 0)
+      .map(item => {
+        const qtyPkgs = parseFloat(invoiceQtys[item.id] || 0);
+        const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
+        const qtyUnits = factor > 1 ? qtyPkgs * factor : qtyPkgs;
+        const lineName = item.product_name || item.product?.name || item.description || item.name || item.concept || item.item_name || '';
+        
+        return {
+          ...item,
+          product_id: item.product_id || item.product?.id,
+          product_name: lineName,
+          description: lineName,
+          concept: lineName,
+          name: lineName,
+          qty: qtyUnits,
+          quantity: qtyUnits,
+          qty_packages: qtyPkgs,
+          qty_to_invoice: qtyUnits,
+          unit: item.unit || item._unit_label || 'LT',
+          unit_price: item.unit_price || item.price || 0,
+          price: item.unit_price || item.price || 0,
+          tax_rate: item.tax_rate ?? item.vat_rate ?? 21,
+          delivery_note_id: id,
+          source_sales_line_id: item.source_sales_line_id || null, // from DeliveryNote item.
+          source_dn_line_id: item.id,
+          accounting_account_id: item.product?.sales_account_id || item.sales_account_id || item.accounting_account_id || null
+        };
+      });
+
+    if (selectedLines.length === 0) {
+      showToast('Seleccioná al menos un ítem para facturar', 'warning');
+      return;
+    }
+
+    setShowInvoiceModal(false);
+
+    const draftId = `dn_${id}_${Date.now()}`;
+    const draftData = {
+      sourceType: 'delivery-note',
+      deliveryNoteId: id,
+      salesOrderId: sourceOrderId || null,
+      customerName: entity?.name,
+      currency: currency,
+      exchangeRate: exchangeRate,
+      pointOfSale: pv,
+      paymentCondition: selectedConditionId,
+      sellerId: salespersonId,
+      costCenter: ctroCosto,
+      lines: selectedLines
+    };
+    localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify(draftData));
+    
+    openNuevaFactura({ draft_id: draftId });
   };
 
   const handlePrint = () => {
@@ -799,8 +933,7 @@ export default function DeliveryNoteForm(props) {
                 <button style={{ pointerEvents: 'auto', background: 'none', border: 'none', color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer', marginLeft: 12, fontSize: 10, fontWeight: 950 }} onClick={() => closeWindow(windowId)}>SALIR</button>
             </div>
           )}
-
-          {/* Header Section */}
+              {/* Header Section */}
           <div className={s.headerLine} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
               <div className={s.compactHeaderTitle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -867,6 +1000,13 @@ export default function DeliveryNoteForm(props) {
                   </div>
               </div>
           </div>
+          {/* Alertas */}
+          {!isReadOnly && sourceType === 'sales-order' && ovHasInvoices && (
+              <div style={{ margin: '0 24px 16px', padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', color: '#1e3a8a', fontSize: '14px', fontWeight: 500 }}>
+                  <span style={{ fontSize: '18px' }}>ℹ️</span>
+                  Esta orden de venta ya tiene una factura asociada. El remito se vinculará automáticamente a esa factura.
+              </div>
+          )}
 
           {/* Body: 2 Column Layout */}
           <div className={s.bodyTwoColumns} style={{ opacity: isLocked ? 0.8 : 1 }}>
@@ -886,7 +1026,7 @@ export default function DeliveryNoteForm(props) {
                                     <div></div>
                                 </div>
                             )}
-                            <div className={s.productsPanelCompact} style={{ maxHeight: '200px', overflowY: 'auto', paddingRight: '8px' }}>
+                            <div className={s.itemsList}>
                                 {items.map(item => {
                                     if (isReadOnly) {
                                         const qtyOrdered = parseFloat(item.qty_ordered) || 0;
@@ -1112,13 +1252,33 @@ export default function DeliveryNoteForm(props) {
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
             {/* FACTURA */}
-            <div className={s.relationCard}>
-              <div className={s.nodeTitle} style={{ color: invoices.length > 0 ? '#f97316' : '#0b132b' }}>FACTURA</div>
-              <div className={s.nodeStatus} style={{ color: progressInvoiced >= 100 ? '#10b981' : progressInvoiced > 0 ? '#f97316' : '#eab308' }}>
-                {progressInvoiced >= 100 ? 'Completa' : progressInvoiced > 0 ? 'Parcial' : 'Pendiente'}
+            {invoices.length > 0 ? (
+              <div 
+                className={s.relationCard} 
+                onClick={() => invoices.length === 1 && openNuevaFactura({ id: invoices[0].id })}
+                style={{ cursor: invoices.length === 1 ? 'pointer' : 'default', border: progressInvoiced >= 100 ? '1.5px solid #10b981' : '1.5px solid #f97316' }}
+              >
+                <div className={s.nodeTitle} style={{ color: progressInvoiced >= 100 ? '#10b981' : '#f97316' }}>FACTURA</div>
+                <div className={s.nodeBadge} style={{ background: progressInvoiced >= 100 ? '#d1fae5' : '#ffedd5', color: progressInvoiced >= 100 ? '#059669' : '#c2410c' }}>
+                  {progressInvoiced >= 100 ? '● Vinculada Total' : '● Vinculada Parcial'}
+                </div>
+                <div className={s.nodeMetric} style={{ color: '#0f172a', marginTop: 'auto' }}>
+                  {invoices.length === 1 ? invoices[0].number || 'S/N' : `${invoices.length} facturas`}
+                </div>
+                {mode === 'edit' && progressInvoiced < 100 && (
+                  <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar Resto</button>
+                )}
               </div>
-              <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{invoices.length} factura(s) · {Math.round(progressInvoiced)}%</div>
-            </div>
+            ) : (
+              <div className={s.relationCard}>
+                <div className={s.nodeTitle} style={{ color: '#0b132b' }}>FACTURA</div>
+                <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
+                <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0 factura(s) · 0%</div>
+                {mode === 'edit' && (
+                  <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar</button>
+                )}
+              </div>
+            )}
 
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
@@ -1185,6 +1345,112 @@ export default function DeliveryNoteForm(props) {
           </div>
       </div>
 
+      {/* Invoicing Selection Modal */}
+      <Modal open={showInvoiceModal} title="Seleccionar ítems a facturar" onClose={() => setShowInvoiceModal(false)} wide>
+        <div style={{ padding: '0 24px 24px' }}>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20, fontWeight: 600 }}>
+            Seleccioná los productos y cantidades que querés incluir en esta factura.
+            Lo que no factures quedará como <strong>pendiente</strong> en este remito.
+          </p>
+
+          <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '10px 16px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', alignItems: 'center' }}>
+              <div></div>
+              <div>PRODUCTO</div>
+              <div style={{ textAlign: 'center' }}>REMITIDO</div>
+              <div style={{ textAlign: 'center' }}>YA FACT.</div>
+              <div style={{ textAlign: 'center' }}>PENDIENTE</div>
+              <div style={{ textAlign: 'center' }}>A FACTURAR AHORA</div>
+            </div>
+            {items.map(item => {
+              const qtyInvoicedUnits = parseFloat(item.qty_invoiced || 0);
+              const qtyOrderedUnits = parseFloat(item.qty || 0);
+              const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
+              const orderedPkgs = factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+              const invoicedPkgs = factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+              const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
+              const currentQty = invoiceQtys[item.id] !== undefined ? invoiceQtys[item.id] : pendingPkgs;
+              const isSelected = currentQty > 0;
+              const unitLabel = item._unit_label || 'u';
+
+              return (
+                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '14px 16px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', background: isSelected ? '#f5f3ff' : '#fff', transition: 'background 0.15s' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    {pendingPkgs > 0 ? (
+                      <button
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: isSelected ? '#7c3aed' : '#cbd5e1', padding: 0 }}
+                        onClick={() => {
+                          if (isSelected) {
+                            setInvoiceQtys(prev => ({ ...prev, [item.id]: 0 }));
+                          } else {
+                            setInvoiceQtys(prev => ({ ...prev, [item.id]: pendingPkgs }));
+                          }
+                        }}
+                      >
+                        {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                      </button>
+                    ) : (
+                      <Check size={18} style={{ color: '#059669' }} title="Totalmente facturado" />
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>{item.product?.name || item.name || item.description || 'Sin nombre'}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{item.product?.brand?.name || item.brand}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{orderedPkgs} env.</div>
+                    {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyOrderedUnits} {unitLabel}</div>}
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{invoicedPkgs} env.</div>
+                    {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyInvoicedUnits} {unitLabel}</div>}
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 900, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{pendingPkgs.toFixed(2)} env.</div>
+                    {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{(pendingPkgs * factor).toFixed(1)} {unitLabel}</div>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                    {pendingPkgs > 0 ? (
+                      <>
+                        <input
+                          type="number"
+                          min={0}
+                          max={pendingPkgs}
+                          step="any"
+                          value={currentQty}
+                          onChange={e => {
+                            const val = Math.min(parseFloat(e.target.value) || 0, pendingPkgs);
+                            setInvoiceQtys(prev => ({ ...prev, [item.id]: val }));
+                          }}
+                          style={{ width: 90, padding: '6px 10px', borderRadius: 10, border: `2px solid ${isSelected ? '#7c3aed' : '#e2e8f0'}`, textAlign: 'center', fontWeight: 800, fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none' }}
+                        />
+                        {factor > 1 && <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {unitLabel}</div>}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>—</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>
+              {Object.values(invoiceQtys).filter(q => q > 0).length} ítems seleccionados para facturar
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setShowInvoiceModal(false)} style={{ padding: '10px 22px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+              <button
+                onClick={handleConfirmInvoice}
+                style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: '#7c3aed', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <Receipt size={16} /> Ir a Facturar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {/* Item Selector Modal omitted for brevity if it's identical, wait I must include it because it was in the original */}
       {showItemSelector && (

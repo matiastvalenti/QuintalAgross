@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { openNuevaOrdenVenta, openEditOrdenVenta, openNuevoRemito } from '../../utils/openStandaloneWindow';
 import ContentHeader from '../../components/layout/ContentHeader';
@@ -20,6 +20,7 @@ import api from '../../services/api';
 import TableSkeleton, { TableRowSkeleton } from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
+import SalesOrderQuickPreview from './SalesOrderQuickPreview';
 import { 
   Plus, 
   PlusCircle,
@@ -67,6 +68,32 @@ export default function SalesOrdersPage({ isWindow }) {
   const [detail, setDetail] = useState(null);
   const [showRemito, setShowRemito] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
+
+  // Vista Rápida Expandible
+  const [quickViewId, setQuickViewId] = useState(null);
+  const [quickViewDetail, setQuickViewDetail] = useState(null);
+  const [quickViewLoading, setQuickViewLoading] = useState(false);
+  const [quickViewError, setQuickViewError] = useState(null);
+
+  const loadQuickView = async (id) => {
+    if (quickViewId === id) return; 
+    setQuickViewId(id);
+    setQuickViewLoading(true);
+    setQuickViewError(null);
+    try {
+      const data = await api.get(`/sales/sales-orders/${id}`);
+      setQuickViewDetail(data);
+    } catch (e) {
+      setQuickViewError(e.message || "Error al cargar");
+    } finally {
+      setQuickViewLoading(false);
+    }
+  };
+
+  const handleRowClick = (id) => {
+    if (quickViewId === id) setQuickViewId(null);
+    else loadQuickView(id);
+  };
 
   useEffect(() => {
     fetchAll();
@@ -391,8 +418,8 @@ export default function SalesOrdersPage({ isWindow }) {
         <td colSpan="8">
           <EmptyState 
               icon={Layers} 
-              title="Sin Registros Coincidentes"
-              description="Ajustá los parámetros del ledger o registrá una nueva operación corporativa."
+              title="Sin órdenes coincidentes"
+              description="Ajustá los filtros o registrá una nueva orden."
               actionLabel="Nueva Orden"
               onAction={handleOpenNew}
           />
@@ -400,7 +427,8 @@ export default function SalesOrdersPage({ isWindow }) {
       </tr>
     ) : (
       paginatedData.map((o) => (
-        <tr key={o.id} className={s.row} onClick={() => handleOpenDetail(o.id, o.number)}>
+        <Fragment key={o.id}>
+        <tr className={`${s.row} ${quickViewId === o.id ? s.selectedRow : ''}`} onClick={() => handleRowClick(o.id)} onDoubleClick={() => handleOpenDetail(o.id, o.number)}>
           <td className={`${s.td} ${s.numberCell}`}>{o.number}</td>
           <td className={s.td} style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>
             {new Date(o.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
@@ -435,19 +463,33 @@ export default function SalesOrdersPage({ isWindow }) {
           <td className={s.td} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               {['DRAFT', 'CONFIRMED'].includes(o.status) && (
-                <button onClick={() => handleDelete(o.id, o.number)} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Eliminar Orden">
+                <button onClick={(e) => { e.stopPropagation(); handleDelete(o.id, o.number); }} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Eliminar Orden">
                   <Trash2 size={18} />
                 </button>
               )}
-              <button onClick={() => handlePreviewPdf(o.id)} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Documento Oficial">
+              <button onClick={(e) => { e.stopPropagation(); handlePreviewPdf(o.id); }} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Documento Oficial">
                 <FileText size={18} />
               </button>
-              <button onClick={() => handleOpenDetail(o.id, o.number)} style={{ all: 'unset', cursor: 'pointer', color: 'var(--accent-indigo)' }} title="Consultar Registro">
+              <button onClick={(e) => { e.stopPropagation(); handleOpenDetail(o.id, o.number); }} style={{ all: 'unset', cursor: 'pointer', color: 'var(--accent-indigo)' }} title="Consultar Registro">
                 <ArrowUpRight size={18} />
               </button>
             </div>
           </td>
         </tr>
+        
+        {/* Fila expandible */}
+        {quickViewId === o.id && (
+          <tr className="animate-slide-down">
+            <td colSpan={8} style={{ padding: 0, borderBottom: '1px solid var(--border-color)' }}>
+              <div style={{ padding: '16px 32px', background: '#f8fafc', borderTop: '1px dashed var(--border-color)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
+                {quickViewLoading ? <Skeleton width="100%" height={150} /> : quickViewError ? <ErrorState title="Error" message={quickViewError} /> : (
+                  <SalesOrderQuickPreview detail={quickViewDetail} entities={entities} warehouses={warehouses} onOpenFull={handleOpenDetail} onPrint={handlePreviewPdf} />
+                )}
+              </div>
+            </td>
+          </tr>
+        )}
+        </Fragment>
       ))
     )
   };

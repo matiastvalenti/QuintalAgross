@@ -1162,6 +1162,11 @@ def recalculate_sales_order_traceability(
     
     old_status = order.status.value if order.status else None
     
+    # 1. Reparar links y qty_invoiced de los remitos (Idempotente)
+    from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+    reconcile_sales_order_invoice_delivery_links(db, order_id)
+
+    # 2. Recalcular cantidades de la OV
     recalculated_lines = recalc_sales_order_traceability_strict(db, order)
     
     db.commit()
