@@ -239,6 +239,15 @@ export default function InvoicesPage() {
     });
   }, [filtered, sortBy, sortDir, entities]);
 
+  const getPending = (inv) => {
+    if (inv.pending_amount != null) return Number(inv.pending_amount);
+    if (inv.balance != null) return Number(inv.balance);
+    if (inv.open_balance != null) return Number(inv.open_balance);
+    if (inv.amount_due != null) return Number(inv.amount_due);
+    if (inv.amount_applied != null) return Number(inv.total_amount || 0) - Number(inv.amount_applied);
+    return Number(inv.total_amount || 0); // fallback for KPI
+  };
+
   const stats = useMemo(() => {
     const now = new Date();
     const currentMonth = now.getMonth();
@@ -250,12 +259,17 @@ export default function InvoicesPage() {
     });
 
     const pendingDocs = invoices.filter(inv => inv.status === 'OPEN' || inv.status === 'PARTIAL');
+    
+    const nowZero = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const overdueDocs = pendingDocs.filter(inv => inv.due_date && new Date(inv.due_date) < nowZero);
 
     return {
       monthTotal: monthDocs.reduce((acc, inv) => acc + Number(inv.total_amount || 0), 0),
       monthCount: monthDocs.length,
-      pendingTotal: pendingDocs.reduce((acc, inv) => acc + Number(inv.total_amount || 0), 0),
+      pendingTotal: pendingDocs.reduce((acc, inv) => acc + getPending(inv), 0),
       pendingCount: pendingDocs.length,
+      overdueTotal: overdueDocs.reduce((acc, inv) => acc + getPending(inv), 0),
+      overdueCount: overdueDocs.length,
       totalCount: invoices.filter(inv => inv.status !== 'CANCELLED').length
     };
   }, [invoices]);
@@ -353,6 +367,12 @@ export default function InvoicesPage() {
       label: "PENDIENTE DE COBRO",
       value: fmt(stats.pendingTotal),
       sub: "Saldo abierto",
+      type: "Info"
+    },
+    {
+      label: "VENCIDO",
+      value: fmt(stats.overdueTotal),
+      sub: "Fuera de término",
       type: "Warning"
     },
     {
@@ -464,22 +484,24 @@ export default function InvoicesPage() {
               style={{ cursor: 'pointer', width: 18, height: 18, accentColor: 'var(--primary)' }}
           />
         </th>
-        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>Nº COMPROBANTE</th>
+        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>COMPROBANTE</th>
         <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>FECHA</th>
         <th className={s.th} onClick={() => toggleSort('entity_id')} style={{ cursor: 'pointer' }}>CLIENTE</th>
-        <th className={s.th}>VENCIMIENTO</th>
+        <th className={s.th}>ORIGEN</th>
+        <th className={s.th} onClick={() => toggleSort('due_date')} style={{ cursor: 'pointer' }}>VENCIMIENTO</th>
         <th className={s.th} style={{ textAlign: 'right' }} onClick={() => toggleSort('total_amount')}>TOTAL</th>
+        <th className={s.th} style={{ textAlign: 'right' }}>SALDO</th>
         <th className={s.th} style={{ textAlign: 'center' }}>ESTADO</th>
         <th className={s.th} style={{ textAlign: 'right' }}>ACCIONES</th>
       </>
     ),
     body: loading ? (
-        <TableRowSkeleton rows={10} cols={8} />
+        <TableRowSkeleton rows={10} cols={10} />
     ) : error ? (
-        <tr><td colSpan="8"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
+        <tr><td colSpan="10"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
     ) : sorted.length === 0 ? (
       <tr>
-        <td colSpan="8">
+        <td colSpan="10">
           <EmptyState 
               icon={Layers} 
               title="Sin facturas coincidentes"
@@ -490,7 +512,52 @@ export default function InvoicesPage() {
         </td>
       </tr>
     ) : (
-      paginatedData.map((inv) => (
+      paginatedData.map((inv) => {
+          const ovs = inv.sales_orders || [];
+          const rems = inv.delivery_notes || [];
+          let originText = "Directa";
+          if (ovs.length > 0 || rems.length > 0) {
+              const ovStr = ovs.length > 0 ? `OV ${ovs.map(o => o.number).join(', ')}` : '';
+              const remStr = rems.length > 0 ? `RE ${rems.map(r => r.number).join(', ')}` : '';
+              if (ovStr && remStr) originText = `${ovStr} · ${remStr}`;
+              else originText = ovStr || remStr;
+          }
+
+          let saldoStr = '-';
+          let saldoNum = null;
+          if (inv.pending_amount != null) saldoNum = Number(inv.pending_amount);
+          else if (inv.balance != null) saldoNum = Number(inv.balance);
+          else if (inv.open_balance != null) saldoNum = Number(inv.open_balance);
+          else if (inv.amount_due != null) saldoNum = Number(inv.amount_due);
+          else if (inv.amount_applied != null) saldoNum = Number(inv.total_amount || 0) - Number(inv.amount_applied);
+          
+          if (saldoNum != null && (inv.status === 'OPEN' || inv.status === 'PARTIAL')) {
+              saldoStr = Number(saldoNum).toLocaleString('es-AR', { minimumFractionDigits: 2 });
+          } else if (inv.status === 'CLOSED') {
+              saldoStr = '0,00';
+          }
+
+          let vencimientoEl = <span style={{ color: 'var(--text-secondary)' }}>-</span>;
+          if (inv.due_date) {
+              const dueDate = new Date(inv.due_date);
+              const today = new Date();
+              today.setHours(0,0,0,0);
+              dueDate.setHours(0,0,0,0);
+              
+              const dateStr = dueDate.toLocaleDateString('es-AR');
+              
+              if (inv.status === 'CLOSED' || inv.status === 'CANCELLED') {
+                  vencimientoEl = <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>;
+              } else if (dueDate < today) {
+                  vencimientoEl = <span style={{ background: '#fef2f2', color: '#ef4444', padding: '2px 8px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>Vencida</span>;
+              } else if (dueDate.getTime() === today.getTime()) {
+                  vencimientoEl = <span style={{ background: '#fefce8', color: '#eab308', padding: '2px 8px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>Hoy</span>;
+              } else {
+                  vencimientoEl = <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>;
+              }
+          }
+
+          return (
         <Fragment key={inv.id}>
         <tr className={`${s.row} ${quickViewId === inv.id ? s.selectedRow : ""} ${selectedInvoices.includes(inv.id) ? s.rowSelected : ""}`} onClick={() => handleRowClick(inv.id)} onDoubleClick={() => handleOpenDetail(inv.id, inv.number)}>
           <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 40, padding: '0 12px' }}>
@@ -503,19 +570,25 @@ export default function InvoicesPage() {
                 style={{ cursor: 'pointer', width: 17, height: 17, accentColor: 'var(--primary)' }}
             />
           </td>
-          <td className={`${s.td} ${s.numberCell}`}>{inv.number}</td>
+          <td className={`${s.td} ${s.numberCell}`} style={{ color: 'var(--primary)' }}>{inv.number}</td>
           <td className={s.td} style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600 }}>
             {new Date(inv.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
           </td>
           <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{inv.entity_name || entityName(inv.entity_id)}</td>
+          <td className={s.td} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {originText}
+          </td>
           <td className={s.td} style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            {inv.due_date ? new Date(inv.due_date).toLocaleDateString('es-AR') : '-'}
+            {vencimientoEl}
           </td>
           <td className={`${s.td} ${s.totalCell}`}>
             <span className={s.currencyLabel}>{inv.currency}</span>
             {Number(inv.total_amount)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
           </td>
-          <td className={s.td} style={{ textAlign: 'center', width: 200 }}>
+          <td className={s.td} style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
+            {saldoStr !== '-' ? <><span className={s.currencyLabel}>{inv.currency}</span>{saldoStr}</> : saldoStr}
+          </td>
+          <td className={s.td} style={{ textAlign: 'center', width: 180 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                 <StatusBadge status={
                     inv.status === "OPEN" ? "PENDIENTE" :
@@ -529,25 +602,29 @@ export default function InvoicesPage() {
           <td className={s.td} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button 
-                onClick={(e) => { e.stopPropagation(); window.open(`/standalone/notas-debito/nueva?factura_id=${inv.id}`, `nota-debito-factura-${inv.id}`, 'width=1280,height=820,left=100,top=100'); }} 
-                style={{ all: 'unset', cursor: 'pointer', opacity: 0.6 }} 
-                title="Crear Nota de Débito"
+                onClick={(e) => { e.stopPropagation(); handleRowClick(inv.id); }} 
+                style={{ all: 'unset', cursor: 'pointer', color: 'var(--primary)', opacity: 0.8 }} 
+                title="Ver Detalle"
               >
                 <PlusCircle size={18} />
               </button>
               {inv.attachment_url && (
-                <button onClick={() => setPreviewUrl(inv.attachment_url)} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Ver Adjunto">
-                  <Eye size={18} />
+                <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(inv.attachment_url); }} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Imprimir / Ver PDF">
+                  <FileText size={18} />
                 </button>
               )}
-              {inv.status !== 'CANCELLED' && (
+              <button 
+                onClick={(e) => { e.stopPropagation(); handleOpenDetail(inv.id, inv.number); }} 
+                style={{ all: 'unset', cursor: 'pointer', color: 'var(--primary)' }} 
+                title="Abrir Completo"
+              >
+                <ArrowUpRight size={18} />
+              </button>
+              {inv.status !== 'CANCELLED' && inv.status !== 'CLOSED' && (
                 <button onClick={(e) => handleAnnul(e, inv.id, inv.number)} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Anular Factura">
                   <Trash2 size={18} />
                 </button>
               )}
-              <button onClick={() => handleOpenDetail(inv.id, inv.number)} style={{ all: 'unset', cursor: 'pointer', color: 'var(--accent-indigo)' }} title="Consultar Registro">
-                <ArrowUpRight size={18} />
-              </button>
             </div>
           </td>
         </tr>
@@ -555,7 +632,7 @@ export default function InvoicesPage() {
         {/* Fila expandible */}
         {quickViewId === inv.id && (
           <tr className="animate-slide-down">
-            <td colSpan={8} style={{ padding: 0, borderBottom: '1px solid var(--border-color)' }}>
+            <td colSpan={10} style={{ padding: 0, borderBottom: '1px solid var(--border-color)' }}>
               <div style={{ padding: '16px 32px', background: '#f8fafc', borderTop: '1px dashed var(--border-color)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
                 {quickViewLoading ? <Skeleton width="100%" height={150} /> : quickViewError ? <ErrorState title="Error" message={quickViewError} /> : (
                   <InvoiceQuickPreview detail={quickViewDetail} entities={entities} onOpenFull={handleOpenDetail} onPrint={(id) => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} />
@@ -565,7 +642,7 @@ export default function InvoicesPage() {
           </tr>
         )}
         </Fragment>
-      ))
+      )})
     )
   };
 

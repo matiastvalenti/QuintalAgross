@@ -62,6 +62,13 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
               <span>·</span>
               <span>Moneda: <strong style={{ color: 'var(--text)' }}>{detail.currency || 'ARS'}</strong></span>
               
+              {detail.condition && (
+                <>
+                  <span>·</span>
+                  <span>Condición: <strong style={{ color: 'var(--text)' }}>{detail.condition}</strong></span>
+                </>
+              )}
+              
               {salesOrders.length > 0 && (
                 <>
                   <span>·</span>
@@ -106,6 +113,7 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
           <thead style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-page)', fontSize: 11 }}>
             <tr>
               <th className={t.th}>CONCEPTO / PRODUCTO</th>
+              <th className={t.th} style={{ textAlign: 'center' }}>ENVASES</th>
               <th className={t.th} style={{ textAlign: 'center' }}>CANTIDAD</th>
               <th className={t.th} style={{ textAlign: 'center' }}>UNIDAD</th>
               <th className={t.th} style={{ textAlign: 'right' }}>PRECIO U.</th>
@@ -119,6 +127,7 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
             {(detail.lines || []).map((line, idx) => {
               const productName = getLineProductName(line);
               const qty = parseFloat(line.qty) || 0;
+              const envases = parseFloat(line.containers || line.container_qty || line.packages) || 0;
               const price = parseFloat(line.unit_price) || 0;
               const vatRate = parseFloat(line.vat_rate) || 0.21;
               const lineNeto = qty * price;
@@ -129,6 +138,9 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
                 <tr key={idx} className={t.row} style={{ fontSize: 12 }}>
                   <td className={t.td} style={{ fontWeight: 600, color: 'var(--text)' }}>
                     {productName}
+                  </td>
+                  <td className={t.td} style={{ textAlign: 'center', color: 'var(--muted)' }}>
+                    {envases > 0 ? formatQty(envases) : '-'}
                   </td>
                   <td className={t.td} style={{ textAlign: 'center', fontWeight: 700 }}>
                     {formatQty(qty)}
@@ -171,8 +183,33 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
           </div>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
             <span style={{ color: 'var(--muted)', fontWeight: 600 }}>Total Factura</span>
-            <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--primary)' }}>{detail.currency || 'ARS'} {(detail.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+            <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--text)' }}>{detail.currency || 'ARS'} {(detail.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
           </div>
+          {(() => {
+            let saldoNum = null;
+            if (detail.pending_amount != null) saldoNum = Number(detail.pending_amount);
+            else if (detail.balance != null) saldoNum = Number(detail.balance);
+            else if (detail.open_balance != null) saldoNum = Number(detail.open_balance);
+            else if (detail.amount_due != null) saldoNum = Number(detail.amount_due);
+            else if (detail.amount_applied != null) saldoNum = Number(detail.total_amount || 0) - Number(detail.amount_applied);
+
+            if (saldoNum != null && (detail.status === 'OPEN' || detail.status === 'PARTIAL')) {
+              return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingLeft: 24, borderLeft: '1px solid var(--border-color)' }}>
+                  <span style={{ color: 'var(--muted)', fontWeight: 600 }}>Saldo Pendiente</span>
+                  <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--primary)' }}>{detail.currency || 'ARS'} {saldoNum.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</span>
+                </div>
+              );
+            } else if (detail.status === 'CLOSED') {
+               return (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', paddingLeft: 24, borderLeft: '1px solid var(--border-color)' }}>
+                  <span style={{ color: 'var(--muted)', fontWeight: 600 }}>Saldo Pendiente</span>
+                  <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--success)' }}>{detail.currency || 'ARS'} 0,00</span>
+                </div>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
     </div>

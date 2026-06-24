@@ -2,7 +2,7 @@
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: var(--s-3);
+    margin-bottom: var(--s-1);
 }
 
 .left {}
@@ -13,7 +13,7 @@
     gap: var(--s-2);
     font-size: var(--text-xs);
     color: var(--subtle);
-    margin-bottom: var(--s-1);
+    margin-bottom: 0;
 }
 
 .breadcrumbs a {
@@ -31,7 +31,7 @@
 }
 
 .title {
-    font-size: var(--text-xl);
+    font-size: var(--text-lg);
     font-weight: var(--font-bold);
     color: var(--text);
 }
