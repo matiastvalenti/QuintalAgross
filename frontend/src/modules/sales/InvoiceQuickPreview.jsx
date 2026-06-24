@@ -35,7 +35,11 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
   };
 
   const salesOrders = detail.sales_orders || [];
-  const deliveryNotes = detail.delivery_notes || [];
+  const isCancelledDn = (status) => {
+    const raw = String(status || '').toUpperCase();
+    return ['CANCELLED', 'CANCELED', 'ANULLED', 'VOID', 'VOIDED', 'ANULADO', 'CANCELADO'].includes(raw);
+  };
+  const deliveryNotes = (detail.delivery_notes || []).filter(dn => !isCancelledDn(dn.status));
   const isDirect = salesOrders.length === 0 && deliveryNotes.length === 0;
 
   return (
@@ -76,10 +80,14 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
                 </>
               )}
 
-              {deliveryNotes.length > 0 && (
+              {(salesOrders.length > 0 || (detail.delivery_notes && detail.delivery_notes.length > 0)) && (
                 <>
                   <span>·</span>
-                  <span style={{ color: 'var(--primary)' }}>Remito: <strong>{deliveryNotes.map(n => n.number).join(', ')}</strong></span>
+                  {deliveryNotes.length > 0 ? (
+                    <span style={{ color: 'var(--primary)' }}>Remito: <strong>{deliveryNotes.map(n => n.number).join(', ')}</strong></span>
+                  ) : (
+                    <span style={{ color: 'var(--text)' }}>Remito: <strong>Sin remito vinculado</strong></span>
+                  )}
                 </>
               )}
 

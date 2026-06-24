@@ -138,38 +138,6 @@ def _recalc_document_commission(doc: Document, db: Session):
     db.flush()
 
 
-def _sanitize_document_for_response(doc: models.Document, db: Session):
-    """
-    Inyecta datos adicionales necesarios para el frontend en el objeto Document
-    (ej: remitos vinculados, órdenes de venta, etc.) para que pydantic los serialice.
-    """
-    # 1. Remitos Vinculados
-    links = db.query(InvoiceDeliveryNoteLink).filter(InvoiceDeliveryNoteLink.document_id == doc.id).all()
-    doc.delivery_notes = []
-    seen_ov = set()
-    doc.sales_orders = []
-    
-    for lnk in links:
-        dn = lnk.delivery_note
-        if dn:
-            doc.delivery_notes.append({
-                "id": dn.id,
-                "number": dn.number,
-                "date": dn.date
-            })
-            # 2. Órdenes de Venta Vinculadas (via remitos)
-            if dn.sales_order_id and dn.sales_order_id not in seen_ov:
-                so = dn.sales_order
-                if so:
-                    doc.sales_orders.append({
-                        "id": so.id,
-                        "number": so.number,
-                        "date": so.date
-                    })
-                    seen_ov.add(so.id)
-    return doc
-
-
 def _recalc_document_status(doc: models.Document, db: Session):
     """
     Recalcula el estado de un documento basándose en sus aplicaciones (financieras)
@@ -238,6 +206,11 @@ def _recalc_document_status(doc: models.Document, db: Session):
     else:
         doc.status = DocumentStatus.OPEN
 
+def _is_cancelled_status(status):
+    raw = getattr(status, "value", status)
+    raw = str(raw or "").upper()
+    return raw in {"CANCELLED", "CANCELED", "ANULLED", "VOID", "VOIDED", "ANULADO", "CANCELADO"}
+
 def _sanitize_document_for_response(doc, db: Session = None):
     """Asegura que campos requeridos no sean nulos para el schema de respuesta."""
     if not doc: return
@@ -245,6 +218,19 @@ def _sanitize_document_for_response(doc, db: Session = None):
     if getattr(doc, "total_amount_ars", None) is None: doc.total_amount_ars = 0.0
     if getattr(doc, "total_amount", None) is None: doc.total_amount = 0.0
     if getattr(doc, "exchange_rate", None) is None: doc.exchange_rate = 1.0
+    
+    doc.sales_orders = getattr(doc, "sales_orders", [])
+    doc.delivery_notes = getattr(doc, "delivery_notes", [])
+    doc.amount_applied = 0.0
+    doc.pending_amount = 0.0
+
+    total_applied = sum(float(getattr(app, "amount_applied", 0) or 0) for app in getattr(doc, "applied_by", []))
+    doc.amount_applied = total_applied
+
+    if getattr(doc, "status", None) in [DocumentStatus.CLOSED, DocumentStatus.CANCELLED]:
+        doc.pending_amount = 0.0
+    else:
+        doc.pending_amount = max(float(getattr(doc, "total_amount", 0) or 0) - total_applied, 0.0)
     
     # Inyectar info de entidad
     if getattr(doc, "entity", None):
@@ -315,19 +301,22 @@ def _sanitize_document_for_response(doc, db: Session = None):
             for (did,) in bridge_links: dn_ids.add(did)
 
             # 3. Indirectamente vía Pedidos (si el pedido del documento tiene remitos)
-            if so_lines:
+            if not dn_ids and so_lines:
                 # Buscar todos los remitos asociados a los pedidos que originaron esta factura
                 so_ids = use_db.query(SalesOrder.id).join(SalesOrderLine).filter(SalesOrderLine.id.in_(so_lines)).all()
                 so_id_list = [sid for (sid,) in so_ids]
                 if so_id_list:
-                    dn_via_so = use_db.query(DeliveryNote.id).filter(DeliveryNote.sales_order_id.in_(so_id_list)).all()
-                    for (did,) in dn_via_so: dn_ids.add(did)
+                    dn_via_so = use_db.query(DeliveryNote).filter(DeliveryNote.sales_order_id.in_(so_id_list)).all()
+                    for dn in dn_via_so:
+                        if not _is_cancelled_status(dn.status):
+                            dn_ids.add(dn.id)
 
             # 4. Poblar lista de remitos vinculados
             doc.delivery_notes = []
             if dn_ids:
                 delivery_notes = use_db.query(DeliveryNote).filter(DeliveryNote.id.in_(dn_ids)).all()
-                doc.delivery_notes = [{"id": dn.id, "number": dn.number, "date": dn.date.isoformat() if dn.date else None, "status": dn.status.value if hasattr(dn.status, 'value') else str(dn.status)} for dn in delivery_notes]
+                valid_delivery_notes = [dn for dn in delivery_notes if not _is_cancelled_status(dn.status)]
+                doc.delivery_notes = [{"id": dn.id, "number": dn.number, "date": dn.date.isoformat() if dn.date else None, "status": dn.status.value if hasattr(dn.status, 'value') else str(dn.status)} for dn in valid_delivery_notes]
 
             # 5. Calcular porcentajes de progreso para el documento actual (Traceabilidad)
             total_qty = sum(float(l.qty or 0) for l in doc.lines)
@@ -1169,7 +1158,11 @@ def get_documents(
         if not has_any:
             raise HTTPException(status_code=403, detail="No tiene permisos para ver documentos")
 
-    query = db.query(models.Document).options(joinedload(models.Document.entity))
+    query = db.query(models.Document).options(
+        joinedload(models.Document.entity),
+        joinedload(models.Document.applied_by),
+        joinedload(models.Document.lines)
+    )
     
     if doc_type:
         query = query.filter(models.Document.doc_type == doc_type)

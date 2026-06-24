@@ -86,12 +86,27 @@ export default function InvoicesPage() {
     try {
       const data = await api.get(`/accounting/documents/${id}`);
       setQuickViewDetail(data);
+      // Merge trazabilidad en la fila del listado para que ORIGEN se actualice aunque el listado haya venido sin esos campos
+      setInvoices((prev) =>
+        prev.map((inv) =>
+          inv.id === id
+            ? {
+                ...inv,
+                sales_orders: data.sales_orders || inv.sales_orders || [],
+                delivery_notes: data.delivery_notes || inv.delivery_notes || [],
+                pending_amount: data.pending_amount ?? inv.pending_amount,
+                amount_applied: data.amount_applied ?? inv.amount_applied,
+              }
+            : inv
+        )
+      );
     } catch (e) {
       setQuickViewError(e.message || "Error al cargar");
     } finally {
       setQuickViewLoading(false);
     }
   };
+
 
   const handleRowClick = (id) => {
     if (quickViewId === id) setQuickViewId(null);
@@ -244,7 +259,7 @@ export default function InvoicesPage() {
     if (inv.balance != null) return Number(inv.balance);
     if (inv.open_balance != null) return Number(inv.open_balance);
     if (inv.amount_due != null) return Number(inv.amount_due);
-    if (inv.amount_applied != null) return Number(inv.total_amount || 0) - Number(inv.amount_applied);
+    if (inv.status === 'CLOSED' || inv.status === 'CANCELLED') return 0;
     return Number(inv.total_amount || 0); // fallback for KPI
   };
 
@@ -484,15 +499,15 @@ export default function InvoicesPage() {
               style={{ cursor: 'pointer', width: 18, height: 18, accentColor: 'var(--primary)' }}
           />
         </th>
-        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>COMPROBANTE</th>
-        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>FECHA</th>
+        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer', width: 120 }}>COMPROBANTE</th>
+        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer', width: 75 }}>FECHA</th>
         <th className={s.th} onClick={() => toggleSort('entity_id')} style={{ cursor: 'pointer' }}>CLIENTE</th>
-        <th className={s.th}>ORIGEN</th>
-        <th className={s.th} onClick={() => toggleSort('due_date')} style={{ cursor: 'pointer' }}>VENCIMIENTO</th>
-        <th className={s.th} style={{ textAlign: 'right' }} onClick={() => toggleSort('total_amount')}>TOTAL</th>
-        <th className={s.th} style={{ textAlign: 'right' }}>SALDO</th>
-        <th className={s.th} style={{ textAlign: 'center' }}>ESTADO</th>
-        <th className={s.th} style={{ textAlign: 'right' }}>ACCIONES</th>
+        <th className={s.th} style={{ width: 140 }}>ORIGEN</th>
+        <th className={s.th} onClick={() => toggleSort('due_date')} style={{ cursor: 'pointer', width: 110 }}>VENCIMIENTO</th>
+        <th className={s.th} style={{ textAlign: 'right', width: 115 }} onClick={() => toggleSort('total_amount')}>TOTAL</th>
+        <th className={s.th} style={{ textAlign: 'right', width: 115 }}>SALDO</th>
+        <th className={s.th} style={{ textAlign: 'center', width: 110 }}>ESTADO</th>
+        <th className={s.th} style={{ textAlign: 'right', width: 100 }}>ACCIONES</th>
       </>
     ),
     body: loading ? (
@@ -513,14 +528,29 @@ export default function InvoicesPage() {
       </tr>
     ) : (
       paginatedData.map((inv) => {
+          const isCancelledDn = (status) => {
+            const raw = String(status || '').toUpperCase();
+            return ['CANCELLED', 'CANCELED', 'ANULLED', 'VOID', 'VOIDED', 'ANULADO', 'CANCELADO'].includes(raw);
+          };
+          const shortDocNumber = (number) => {
+            if (!number) return '';
+            const raw = String(number);
+            const last = raw.split('-').pop();
+            const clean = last.replace(/^0+/, '');
+            return clean || last;
+          };
+
           const ovs = inv.sales_orders || [];
-          const rems = inv.delivery_notes || [];
-          let originText = "Directa";
+          const rems = (inv.delivery_notes || []).filter((dn) => !isCancelledDn(dn.status));
+          let originText = 'Directa';
+          let originTooltip = '';
           if (ovs.length > 0 || rems.length > 0) {
-              const ovStr = ovs.length > 0 ? `OV ${ovs.map(o => o.number).join(', ')}` : '';
-              const remStr = rems.length > 0 ? `RE ${rems.map(r => r.number).join(', ')}` : '';
-              if (ovStr && remStr) originText = `${ovStr} · ${remStr}`;
-              else originText = ovStr || remStr;
+              const ovShort = ovs.length > 0 ? `OV ${ovs.map(o => shortDocNumber(o.number)).join(', ')}` : '';
+              const remShort = rems.length > 0 ? `RE ${rems.map(r => shortDocNumber(r.number)).join(', ')}` : '';
+              const ovFull  = ovs.length > 0 ? `OV ${ovs.map(o => o.number).join(', ')}` : '';
+              const remFull = rems.length > 0 ? `RE ${rems.map(r => r.number).join(', ')}` : '';
+              originText = [ovShort, remShort].filter(Boolean).join(' · ');
+              originTooltip = [ovFull, remFull].filter(Boolean).join(' · ');
           }
 
           let saldoStr = '-';
@@ -529,12 +559,15 @@ export default function InvoicesPage() {
           else if (inv.balance != null) saldoNum = Number(inv.balance);
           else if (inv.open_balance != null) saldoNum = Number(inv.open_balance);
           else if (inv.amount_due != null) saldoNum = Number(inv.amount_due);
-          else if (inv.amount_applied != null) saldoNum = Number(inv.total_amount || 0) - Number(inv.amount_applied);
           
-          if (saldoNum != null && (inv.status === 'OPEN' || inv.status === 'PARTIAL')) {
-              saldoStr = Number(saldoNum).toLocaleString('es-AR', { minimumFractionDigits: 2 });
-          } else if (inv.status === 'CLOSED') {
+          if (inv.status === 'CLOSED' || inv.status === 'CANCELLED') {
               saldoStr = '0,00';
+          } else if (saldoNum != null) {
+              saldoStr = Number(saldoNum).toLocaleString('es-AR', { minimumFractionDigits: 2 });
+          } else if (inv.status === 'OPEN') {
+              saldoStr = Number(inv.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 });
+          } else if (inv.status === 'PARTIAL') {
+              saldoStr = '-';
           }
 
           let vencimientoEl = <span style={{ color: 'var(--text-secondary)' }}>-</span>;
@@ -575,7 +608,7 @@ export default function InvoicesPage() {
             {new Date(inv.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
           </td>
           <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{inv.entity_name || entityName(inv.entity_id)}</td>
-          <td className={s.td} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 600, whiteSpace: 'nowrap' }}>
+          <td className={s.td} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140, width: 140 }} title={originTooltip || originText}>
             {originText}
           </td>
           <td className={s.td} style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
@@ -599,8 +632,8 @@ export default function InvoicesPage() {
                 } />
             </div>
           </td>
-          <td className={s.td} onClick={(e) => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 100 }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
               <button 
                 onClick={(e) => { e.stopPropagation(); handleRowClick(inv.id); }} 
                 style={{ all: 'unset', cursor: 'pointer', color: 'var(--primary)', opacity: 0.8 }} 

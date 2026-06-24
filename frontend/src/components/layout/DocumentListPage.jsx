@@ -80,7 +80,7 @@ export default function DocumentListPage({
       {table && (
         <div className={s.cardTable}>
           <div className={s.tableWrap}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
                   {table.columns}

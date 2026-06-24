@@ -252,14 +252,18 @@ class DocumentResponse(DocumentBase):
     delivered_pct: float = 0.0
     invoiced_pct: float = 0.0
     paid_pct: float = 0.0
+
+    # Trazabilidad OV / Remito y saldo
+    sales_orders: List[Dict[str, Any]] = []
+    delivery_notes: List[Dict[str, Any]] = []
+    pending_amount: Optional[float] = None
+    amount_applied: Optional[float] = None
     
     model_config = ConfigDict(from_attributes=True)
 
 class DocumentWithLinesResponse(DocumentResponse):
     lines: List[DocumentLineResponse] = []
     payments: List[PaymentItemResponse] = []
-    sales_orders: List[dict] = []
-    delivery_notes: List[dict] = []
 
 
 

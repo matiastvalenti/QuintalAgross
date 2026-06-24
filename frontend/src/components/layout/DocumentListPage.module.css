@@ -251,8 +251,13 @@
 
 .tableWrap {
     width: 100%;
-    overflow-x: auto;
+    overflow-x: hidden;
     overflow-y: visible;
+}
+
+.tableFixed {
+    table-layout: fixed;
+    width: 100%;
 }
 
 .th {
