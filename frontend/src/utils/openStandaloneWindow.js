@@ -215,12 +215,53 @@ export function openEditFacturaCompra(id, options = {}) {
 // === RECIBOS Y PAGOS ===
 export function openNuevoRecibo(options = {}) {
   const entityId = options.entityId ? `?entityId=${options.entityId}` : "";
-  return openStandaloneWindow(`/standalone/recibos/nuevo${entityId}`, "recibo-nuevo", options);
+  return openStandaloneWindow(`/standalone/recibos/nuevo${entityId}`, "recibo-nuevo", { width: 1280, height: 820, ...options });
 }
+
+export const INVOICE_COLLECTION_WINDOW_WIDTH = 1280;
+export const INVOICE_COLLECTION_WINDOW_HEIGHT = 820;
+
+export function openInvoiceCollectionFromInvoice(invoiceIdOrInvoice, options = {}) {
+  const id = typeof invoiceIdOrInvoice === 'object' ? invoiceIdOrInvoice?.id : invoiceIdOrInvoice;
+  if (!id) return;
+  const path = `/standalone/cobros/factura/${id}`;
+  const popup = openStandaloneWindow(path, `invoice-collection-${id}`, { width: INVOICE_COLLECTION_WINDOW_WIDTH, height: INVOICE_COLLECTION_WINDOW_HEIGHT, ...options });
+  
+  if (popup) {
+    try {
+      popup.resizeTo(INVOICE_COLLECTION_WINDOW_WIDTH, INVOICE_COLLECTION_WINDOW_HEIGHT);
+    } catch (e) {
+      console.warn("No se pudo redimensionar popup", e);
+    }
+  }
+  return popup;
+}
+
+export function openInvoiceCollectionReceipt(receiptId, mode = "view", options = {}) {
+  const path = `/standalone/cobros/recibo/${receiptId}?mode=${mode}`;
+  const popup = openStandaloneWindow(path, `invoice-collection-receipt-${receiptId}`, { width: INVOICE_COLLECTION_WINDOW_WIDTH, height: INVOICE_COLLECTION_WINDOW_HEIGHT, ...options });
+  
+  if (popup) {
+    try {
+      popup.resizeTo(INVOICE_COLLECTION_WINDOW_WIDTH, INVOICE_COLLECTION_WINDOW_HEIGHT);
+    } catch (e) {
+      console.warn("No se pudo redimensionar popup", e);
+    }
+  }
+  return popup;
+}
+
+/**
+ * Abre un recibo/cobro prellenado desde una factura. (Alias de openInvoiceCollectionFromInvoice)
+ */
+export function openNuevoReciboDesdeFactura(invoice, options = {}) {
+  return openInvoiceCollectionFromInvoice(invoice, options);
+}
+
 
 export function openEditRecibo(id, options = {}) {
   const mode = options.mode || "view";
-  return openStandaloneWindow(`/standalone/recibos/${id}?mode=${mode}`, `recibo-${id}`, options);
+  return openStandaloneWindow(`/standalone/recibos/${id}?mode=${mode}`, `recibo-${id}`, { width: 1280, height: 820, ...options });
 }
 
 export function openNuevoPago(options = {}) {

@@ -1,0 +1,1558 @@
+diff --git a/frontend/src/components/layout/StandaloneLayout.jsx b/frontend/src/components/layout/StandaloneLayout.jsx
+index 56aa5016..9da0c459 100644
+--- a/frontend/src/components/layout/StandaloneLayout.jsx
++++ b/frontend/src/components/layout/StandaloneLayout.jsx
+@@ -15,11 +15,15 @@ import { WindowProvider } from "../../context/WindowContext";
+ import { CostCenterProvider } from "../../context/CostCenterContext";
+ import { ToastProvider } from "../../context/ToastContext";
+ 
+-export default function StandaloneLayout() {
++export default function StandaloneLayout({ bgLight = false }) {
+   useEffect(() => {
+     document.body.classList.add("standalone-document-body");
+-    return () => document.body.classList.remove("standalone-document-body");
+-  }, []);
++    if (bgLight) document.body.style.background = "var(--bg-light)";
++    return () => {
++      document.body.classList.remove("standalone-document-body");
++      if (bgLight) document.body.style.background = "";
++    };
++  }, [bgLight]);
+   return (
+     <CostCenterProvider>
+       <AuthProvider>
+@@ -32,7 +36,7 @@ export default function StandaloneLayout() {
+                 maxHeight: "100vh",
+                 overflowY: "auto",
+                 overflowX: "hidden",
+-                background: "#fff",
++                background: bgLight ? "var(--bg-light)" : "#fff",
+                 boxSizing: "border-box",
+                 display: "block",
+               }}
+diff --git a/frontend/src/modules/finance/ReceiptForm.jsx b/frontend/src/modules/finance/ReceiptForm.jsx
+index b9699540..1eb9e924 100644
+--- a/frontend/src/modules/finance/ReceiptForm.jsx
++++ b/frontend/src/modules/finance/ReceiptForm.jsx
+@@ -51,6 +51,8 @@ export default function ReceiptForm({
+   initialExchangeRate = null,
+   isPayment = false,
+   initialDate = null,
++  initialObservations = "",
++  sourceInvoice = null,
+ }) {
+   const id = receiptId || propId;
+   const { closeWindow, openWindow } = useWindow();
+@@ -102,7 +104,7 @@ export default function ReceiptForm({
+   const [number, setNumber] = useState("");
+   const [currency, setCurrency] = useState(initialCurrency);
+   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate || 1);
+-  const [observations, setObservations] = useState("");
++  const [observations, setObservations] = useState(initialObservations || "");
+   const [pointsOfSale, setPointsOfSale] = useState([]);
+   const [pv, setPv] = useState("");
+   const [un, setUn] = useState("1");
+@@ -305,14 +307,19 @@ export default function ReceiptForm({
+     }
+   };
+ 
++  const isFromInvoice = Boolean(sourceInvoice);
++
+   const addPayment = (type) => {
++    const diffToPay = Math.max(0, totalApplied - totalPayments - totalRetentions);
++    const amt = diffToPay > 0 ? diffToPay : 0;
++
+     if (type === "CHECK") {
+       const existingChecks = payments.filter(p => p.type === "CHECK");
+       // If we are adding via button, we normally want to open the multi-grid
+       setModalChecks(existingChecks.length > 0 ? existingChecks : [{
+         id: Math.random(),
+         type: "CHECK",
+-        amount: 0,
++        amount: amt,
+         description: "",
+         bank_name: "",
+         reference_number: "",
+@@ -330,7 +337,7 @@ export default function ReceiptForm({
+     const newPayment = {
+       id: newId,
+       type,
+-      amount: 0,
++      amount: amt,
+       description: "",
+       bank_name: "",
+       reference_number: "",
+@@ -530,7 +537,23 @@ export default function ReceiptForm({
+       setLoading(true);
+       const savedDoc = await api.post('/accounting/documents/', payload);
+       showToast("Recibo guardado", "success");
+-      window.dispatchEvent(new CustomEvent("receipt-changed"));
++      // Notificar a ventanas abiertas (BroadcastChannel + CustomEvent)
++      const invoiceIds = applications.map(a => a.to_document_id).filter(Boolean);
++      const bcPayload = {
++        type: "QUINTAL_DOCUMENT_SAVED",
++        documentType: "receipt",
++        receiptId: savedDoc.id,
++        invoiceIds,
++        entityId: entity?.id,
++        timestamp: Date.now(),
++      };
++      try {
++        const bc = new BroadcastChannel("quintal_events");
++        bc.postMessage(bcPayload);
++        bc.close();
++      } catch (_) {}
++      window.dispatchEvent(new CustomEvent("receipt-changed", { detail: bcPayload }));
++      window.dispatchEvent(new CustomEvent("invoice-changed", { detail: bcPayload }));
+       setShowFxModalForDoc(savedDoc.id);
+     } catch (e) {
+       console.error(e);
+@@ -600,15 +623,15 @@ export default function ReceiptForm({
+   if (loading && !isSaving && mode === "edit") return <LoadingScreen message="Cargando información..." />;
+ 
+   return (
+-    <div className={s.container}>
++    <div className={`${s.container} ${isFromInvoice ? s.containerInvoiceMode : ''}`}>
+       <div
+-        className={s.header}
++        className={`${s.header} ${isFromInvoice ? s.compactHeader : ''}`}
+         style={{
+           pointerEvents: mode === "edit" ? "none" : "auto",
+           opacity: mode === "edit" ? 0.8 : 1,
+         }}
+       >
+-        <div className={s.headerGrid}>
++        <div className={`${s.headerGrid} ${isFromInvoice ? s.compactHeaderGrid : ''}`}>
+           <div className={s.headerGroup} style={{ gridColumn: "span 6" }}>
+             <Autocomplete
+               label={isPayment ? "Proveedor" : "Cliente / Entidad"}
+@@ -703,352 +726,643 @@ export default function ReceiptForm({
+         </div>
+       </div>
+ 
+-      <div className={s.tabs}>
+-        <button
+-          className={`${s.tab} ${activeTab === "vista360" ? s.active : ""}`}
+-          onClick={() => setActiveTab("vista360")}
+-          disabled={!entity}
+-          title={!entity ? "Seleccione un cliente para ver su estado" : "Vista 360 del Cliente"}
+-        >
+-          <LayoutIcon size={16} /> Vista 360
+-        </button>
+-        <button
+-          className={`${s.tab} ${activeTab === "payments" ? s.active : ""}`}
+-          onClick={() => setActiveTab("payments")}
+-        >
+-          <CreditCard size={16} /> Medios de Pago
+-        </button>
+-        <button
+-          className={`${s.tab} ${activeTab === "applications" ? s.active : ""}`}
+-          onClick={() => setActiveTab("applications")}
+-        >
+-          <Link2 size={16} /> {isPayment ? "Comprobantes (Aplicaciones)" : "Facturas (Aplicaciones)"}
+-        </button>
+-        <button
+-          className={`${s.tab} ${activeTab === "retentions" ? s.active : ""}`}
+-          onClick={() => setActiveTab("retentions")}
+-        >
+-          <Tag size={16} /> Retenciones
+-        </button>
+-        <button
+-          className={`${s.tab} ${activeTab === "history" ? s.active : ""}`}
+-          onClick={() => setActiveTab("history")}
+-        >
+-          <Calendar size={16} /> Historial
+-        </button>
+-      </div>
+-
+-      <div className={s.content}>
+-        {activeTab === "vista360" && entity && (
+-           <div className={s.tabContent} style={{ padding: 0 }}>
+-             <EntityDashboard 
+-                entityId={entity.id} 
+-                entityName={entity.name} 
+-                onNavigate={({ type, mode: newMode, docId }) => {
+-                    if (type === 'invoice-form') {
+-                      openEditFactura(docId, { mode: newMode, title: `Factura ${docId}`, width: 1100, height: 800 });
+-                    }
+-                }}
+-             />
+-           </div>
+-        )}
+-        {activeTab === "applications" && (
+-          <div className={s.tabContent}>
+-            <div className={s.actionsBar}>
+-              {mode === "new" && (
+-                <div className={s.barActions}>
+-                  <Button variant="secondary" size="sm" onClick={() => setShowInvoiceModal(true)} disabled={!entity}>
+-                    <Plus size={16} /> {isPayment ? "Vincular Comprobantes" : "Vincular Facturas"}
+-                  </Button>
+-                  <Button variant="outline" size="sm" onClick={autoApply} disabled={!entity || totalPayments + totalRetentions <= 0}>
+-                    <Search size={16} /> Saldar Automático
+-                  </Button>
+-                </div>
+-              )}
++      {isFromInvoice ? (
++        <div className={s.invoiceModeLayout}>
++          <div className={s.leftColumn}>
++            <div className={s.invoiceCardFull}>
++               <h3 className={s.invoiceCardTitle}>Factura a cobrar</h3>
++               <div className={s.invoiceCardDetails}>
++                 <span className={s.invNumber}>{sourceInvoice.number}</span>
++                 <span className={s.invClient}>{entity?.name || sourceInvoice.entity_name}</span>
++                 <span className={s.invTotal}>Total: {sourceInvoice.currency} {Number(sourceInvoice.total_amount).toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
++                 <span className={s.invPending}>Saldo: {sourceInvoice.currency} {(() => {
++                    const pending = sourceInvoice.pending_amount != null ? Number(sourceInvoice.pending_amount) : Math.max(0, Number(sourceInvoice.total_amount || 0) - Number(sourceInvoice.amount_applied || 0));
++                    return pending.toLocaleString('es-AR', { minimumFractionDigits: 2 });
++                 })()}</span>
++                 <span className={s.invApplied}>Aplicado: {sourceInvoice.currency} {Number(applications[0]?.amount_applied || 0).toLocaleString('es-AR', {minimumFractionDigits: 2})}</span>
++               </div>
+             </div>
+ 
+-            <div className={s.tableWrap}>
+-              <table className={t.table}>
+-                <thead>
+-                  <tr>
+-                    <th>Factura</th>
+-                    <th>Fecha</th>
+-                    <th style={{ textAlign: "right" }}>Saldo Original</th>
+-                    <th style={{ textAlign: "right", width: 140 }}>Aplicado ({applications[0]?.currency})</th>
+-                    {currency !== applications[0]?.currency && (
+-                      <th style={{ textAlign: "right", width: 140 }}>Equiv. ({currency})</th>
+-                    )}
+-                    {isPayment && <th style={{ textAlign: "right", width: 140 }}>Monto Aplicado</th>}
+-                    <th style={{ width: 40 }}></th>
+-                  </tr>
+-                </thead>
+-                <tbody>
+-                  {applications.map((app) => {
+-                    const isDiffCurrency = currency !== app.currency;
+-                    const equivAmount = isDiffCurrency ? (Number(app.amount_applied) * exchangeRate) : Number(app.amount_applied);
+-
+-                    return (
+-                      <tr key={app.to_document_id}>
+-                        <td>{app.number}</td>
+-                        <td>{new Date(app.date).toLocaleDateString()}</td>
+-                        <td style={{ textAlign: "right" }}>{fmt(app.remaining)} (<strong>{app.currency}</strong>)</td>
+-                        <td style={{ textAlign: "right" }}>
+-                          <input
+-                            type="text"
+-                            className={s.cellInput}
+-                            style={{ textAlign: "right", fontWeight: 700 }}
+-                            value={app.temp_amount ?? formatCurrencyInput(app.amount_applied)}
+-                            onFocus={() => {
+-                              app.temp_amount = formatCurrencyInput(app.amount_applied);
+-                              setApplications([...applications]);
+-                            }}
+-                            onBlur={() => {
+-                              delete app.temp_amount;
+-                              setApplications([...applications]);
+-                            }}
+-                            onChange={(e) => {
+-                              const raw = e.target.value;
+-                              let cleanStr = raw.replace(/[^\d,]/g, "");
+-                              if ((cleanStr.match(/,/g) || []).length > 1) return;
+-                              
+-                              let parts = cleanStr.split(",");
+-                              parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+-                              const visualVal = parts.join(",");
+-                              
+-                              const val = parseCurrencyInput(cleanStr);
+-                              app.amount_applied = val;
+-                              app.temp_amount = visualVal;
+-                              setApplications([...applications]);
+-                            }}
+-                          />
+-                        </td>
+-                        {isDiffCurrency && (
+-                          <td style={{ textAlign: "right", fontWeight: 600, color: '#64748b' }}>
+-                            {fmt(equivAmount)}
+-                          </td>
+-                        )}
+-                        <td style={{ textAlign: "center" }}>
+-                          {mode === "new" && (
+-                            <button className={s.deleteBtn} onClick={() => toggleInvoiceApplication({ id: app.to_document_id })}>
+-                              <X size={16} />
+-                            </button>
+-                          )}
+-                        </td>
+-                      </tr>
+-                    );
+-                  })}
+-                  {applications.length === 0 && (
+-                    <tr>
+-                      <td colSpan={6} className={s.emptyState}>
+-                        No hay {isPayment ? "comprobantes vinculados" : "facturas vinculadas"}. Use el botón pertinente.
+-                      </td>
+-                    </tr>
+-                  )}
+-                </tbody>
+-              </table>
+-            </div>
+-          </div>
+-        )}
+-
+-        {activeTab === "payments" && (
+-          <div className={s.tabContent}>
+-            <div className={s.actionsBar}>
+-              <div className={s.payButtons}>
++            <div className={s.sectionBlock}>
++              <h3 className={s.sectionTitle}>Medios de pago</h3>
++              <div className={s.paymentCardsGrid}>
+                 {paymentMethods.map((m) => (
+-                  <button key={m.value} className={s.payTypeBtn} onClick={() => addPayment(m.value)}>
++                  <button key={m.value} className={s.payCardBtn} onClick={() => addPayment(m.value)}>
+                     {m.icon} <span>{m.label}</span>
+                   </button>
+                 ))}
+               </div>
++              
++              {payments.length === 0 ? (
++                <div className={s.emptyStateCompact}>
++                  <strong>Sin medios de pago cargados</strong>
++                  <span>Seleccioná una forma de cobro para completar el recibo.</span>
++                </div>
++              ) : (
++                <div className={s.tableWrapCompact}>
++                  <table className={t.table}>
++                    <thead>
++                      <tr>
++                        <th>Tipo</th>
++                        <th>Bancos / Detalle</th>
++                        <th>Referencia</th>
++                        <th>Vencimiento</th>
++                        <th style={{ textAlign: "right", width: 140 }}>Importe</th>
++                        <th style={{ width: 40 }}></th>
++                      </tr>
++                    </thead>
++                    <tbody>
++                      {payments.map((p) => (
++                        <tr key={p.id}>
++                          <td>
++                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
++                              <Badge variant="secondary">{p.type}</Badge>
++                              {p.type === "CHECK" && (
++                                <button className={s.iconBtnSmall} onClick={() => { 
++                                  const allChecks = payments.filter(pay => pay.type === "CHECK");
++                                  setModalChecks(allChecks);
++                                  setShowCheckModal(true); 
++                                }}>
++                                  <Search size={14} />
++                                </button>
++                              )}
++                            </div>
++                          </td>
++                          <td>
++                            {(p.type === 'CHECK' || p.type === 'TRANSFER') ? (
++                              <Select 
++                                value={p.type === 'CHECK' ? (p.bank_name || "") : (p.description || "")} 
++                                onChange={(e) => {
++                                  const val = e.target.value;
++                                  if (p.type === 'CHECK') updatePayment(p.id, "bank_name", val);
++                                  else updatePayment(p.id, "description", val);
++                                }}
++                              >
++                                <option value="">Seleccione Banco...</option>
++                                {banks.map(b => (
++                                  <option key={b.id} value={b.name}>{b.name}</option>
++                                ))}
++                              </Select>
++                            ) : (
++                              <input type="text" className={s.cellInput} value={p.description || ""} onChange={(e) => updatePayment(p.id, "description", e.target.value)} placeholder="Ej: Galicia..." />
++                            )}
++                          </td>
++                          <td>
++                            <input type="text" className={s.cellInput} value={p.reference_number || ""} onChange={(e) => updatePayment(p.id, "reference_number", e.target.value)} />
++                          </td>
++                          <td>{p.type === "CHECK" ? <input type="date" className={s.cellInput} value={p.due_date} onChange={(e) => updatePayment(p.id, "due_date", e.target.value)} /> : "-"}</td>
++                          <td style={{ textAlign: "right" }}>
++                            <input 
++                              type="text" 
++                              className={s.cellInput} 
++                              style={{ textAlign: "right", fontWeight: 700 }} 
++                              value={p.temp_amount ?? formatCurrencyInput(p.amount)} 
++                              onFocus={() => {
++                                p.temp_amount = formatCurrencyInput(p.amount);
++                                setPayments([...payments]);
++                              }}
++                              onBlur={() => {
++                                delete p.temp_amount;
++                                setPayments([...payments]);
++                              }}
++                              onChange={(e) => {
++                                const raw = e.target.value;
++                                let cleanStr = raw.replace(/[^\d,]/g, "");
++                                if ((cleanStr.match(/,/g) || []).length > 1) return;
++                                
++                                let parts = cleanStr.split(",");
++                                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
++                                const visualVal = parts.join(",");
++                                
++                                const val = parseCurrencyInput(cleanStr);
++                                p.amount = val;
++                                p.temp_amount = visualVal;
++                                setPayments([...payments]);
++                              }} 
++                            />
++                          </td>
++                          <td style={{ textAlign: "center" }}>
++                            <button className={s.deleteBtn} onClick={() => removePayment(p.id)}><X size={16} /></button>
++                          </td>
++                        </tr>
++                      ))}
++                    </tbody>
++                  </table>
++                </div>
++              )}
+             </div>
+ 
+-            <div className={s.tableWrap}>
+-              <table className={t.table}>
+-                <thead>
+-                  <tr>
+-                    <th>Tipo</th>
+-                    <th>Bancos / Detalle</th>
+-                    <th>Referencia</th>
+-                    <th>Vencimiento</th>
+-                    <th style={{ textAlign: "right", width: 140 }}>Importe</th>
+-                    <th style={{ width: 40 }}></th>
+-                  </tr>
+-                </thead>
+-                <tbody>
+-                  {payments.length === 0 && (
+-                    <tr>
+-                      <td colSpan={6} className={s.emptyState}>No hay medios de pago cargados.</td>
+-                    </tr>
+-                  )}
+-                  {payments.map((p) => (
+-                    <tr key={p.id}>
+-                      <td>
+-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+-                          <Badge variant="secondary">{p.type}</Badge>
+-                          {p.type === "CHECK" && (
+-                            <button className={s.iconBtnSmall} onClick={() => { 
+-                              const allChecks = payments.filter(pay => pay.type === "CHECK");
+-                              setModalChecks(allChecks);
+-                              setShowCheckModal(true); 
+-                            }}>
+-                              <Search size={14} />
+-                            </button>
+-                          )}
+-                        </div>
+-                      </td>
+-                      <td>
+-                        {(p.type === 'CHECK' || p.type === 'TRANSFER') ? (
+-                          <Select 
+-                            value={p.type === 'CHECK' ? (p.bank_name || "") : (p.description || "")} 
+-                            onChange={(e) => {
+-                              const val = e.target.value;
+-                              if (p.type === 'CHECK') updatePayment(p.id, "bank_name", val);
+-                              else updatePayment(p.id, "description", val);
+-                            }}
+-                          >
+-                            <option value="">Seleccione Banco...</option>
+-                            {banks.map(b => (
+-                              <option key={b.id} value={b.name}>{b.name}</option>
+-                            ))}
+-                          </Select>
+-                        ) : (
+-                          <input type="text" className={s.cellInput} value={p.description || ""} onChange={(e) => updatePayment(p.id, "description", e.target.value)} placeholder="Ej: Galicia..." />
+-                        )}
+-                      </td>
+-                      <td>
+-                        <input type="text" className={s.cellInput} value={p.reference_number || ""} onChange={(e) => updatePayment(p.id, "reference_number", e.target.value)} />
+-                      </td>
+-                      <td>{p.type === "CHECK" ? <input type="date" className={s.cellInput} value={p.due_date} onChange={(e) => updatePayment(p.id, "due_date", e.target.value)} /> : "-"}</td>
+-                      <td style={{ textAlign: "right" }}>
+-                        <input 
+-                          type="text" 
+-                          className={s.cellInput} 
+-                          style={{ textAlign: "right", fontWeight: 700 }} 
+-                          value={p.temp_amount ?? formatCurrencyInput(p.amount)} 
+-                          onFocus={() => {
+-                            p.temp_amount = formatCurrencyInput(p.amount);
+-                            setPayments([...payments]);
+-                          }}
+-                          onBlur={() => {
+-                            delete p.temp_amount;
+-                            setPayments([...payments]);
+-                          }}
+-                          onChange={(e) => {
+-                            const raw = e.target.value;
+-                            let cleanStr = raw.replace(/[^\d,]/g, "");
+-                            if ((cleanStr.match(/,/g) || []).length > 1) return;
+-                            
+-                            let parts = cleanStr.split(",");
+-                            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+-                            const visualVal = parts.join(",");
+-                            
+-                            const val = parseCurrencyInput(cleanStr);
+-                            p.amount = val;
+-                            p.temp_amount = visualVal;
+-                            setPayments([...payments]);
+-                          }} 
+-                        />
+-                      </td>
+-                      <td style={{ textAlign: "center" }}>
+-                        <button className={s.deleteBtn} onClick={() => removePayment(p.id)}><X size={16} /></button>
+-                      </td>
+-                    </tr>
+-                  ))}
+-                </tbody>
+-              </table>
+-            </div>
+-          </div>
+-        )}
+-
+-        {activeTab === "retentions" && (
+-          <div className={s.tabContent}>
+-            <div className={s.actionsBar}>
+-              <Button variant="secondary" size="sm" onClick={() => setRetentions([...retentions, { id: Date.now(), type: "IIBB", jurisdiction: "ARBA", amount: 0, base_amount: totalApplied, reference: "" }])}>
+-                <Plus size={16} /> Agregar Retención
+-              </Button>
++            <div className={s.sectionBlock}>
++              <h3 className={s.sectionTitle}>Aplicación</h3>
++              <div className={s.applicationSummary}>
++                 <strong>Factura {sourceInvoice.number}</strong>
++                 <span>Aplicado: {currency} {fmt(totalApplied)}</span>
++                 <span>Saldo posterior: {currency} {fmt(Math.max(0, (sourceInvoice.pending_amount != null ? Number(sourceInvoice.pending_amount) : Math.max(0, Number(sourceInvoice.total_amount || 0) - Number(sourceInvoice.amount_applied || 0))) - totalApplied))}</span>
++              </div>
+             </div>
+-            <div className={s.tableWrap}>
+-              <table className={t.table}>
+-                <thead>
+-                  <tr>
+-                    <th>Impuesto</th>
+-                    <th>Jurisdicción</th>
+-                    <th>Referencia</th>
+-                    <th style={{ textAlign: "right" }}>Base Imp.</th>
+-                    <th style={{ textAlign: "right", width: 140 }}>Importe</th>
+-                    <th style={{ width: 40 }}></th>
+-                  </tr>
+-                </thead>
+-                <tbody>
+-                  {retentions.map((r) => (
+-                    <tr key={r.id}>
+-                      <td><Select value={r.type} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, type: e.target.value } : re))}><option value="IVA">IVA</option><option value="IIBB">IIBB</option><option value="GANANCIAS">Ganancias</option></Select></td>
+-                      <td><Select value={r.jurisdiction} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, jurisdiction: e.target.value } : re))} disabled={r.type !== "IIBB"}><option value="ARBA">ARBA</option><option value="AGIP">AGIP</option></Select></td>
+-                      <td><input type="text" className={s.cellInput} value={r.reference} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, reference: e.target.value } : re))} /></td>
+-                      <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right" }} value={r.base_amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, base_amount: Number(e.target.value) } : re))} /></td>
+-                      <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right", fontWeight: 700 }} value={r.amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, amount: Number(e.target.value) } : re))} /></td>
+-                      <td style={{ textAlign: "center" }}><button className={s.deleteBtn} onClick={() => setRetentions(retentions.filter(re => re.id !== r.id))}><X size={16} /></button></td>
+-                    </tr>
+-                  ))}
+-                </tbody>
+-              </table>
++
++            <div className={s.sectionBlock}>
++               <details className={s.retentionsDetails}>
++                 <summary className={s.retentionsSummary}>
++                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-secondary)', fontWeight: 600 }}>
++                        <Plus size={16} /> <span>Agregar Retención</span>
++                    </div>
++                 </summary>
++                 <div className={s.retentionsContent}>
++                    <div className={s.actionsBarCompact}>
++                      <Button variant="secondary" size="sm" onClick={() => setRetentions([...retentions, { id: Date.now(), type: "IIBB", jurisdiction: "ARBA", amount: 0, base_amount: totalApplied, reference: "" }])}>
++                        <Plus size={16} /> Nueva Retención
++                      </Button>
++                    </div>
++                    {retentions.length > 0 && (
++                      <div className={s.tableWrapCompact}>
++                        <table className={t.table}>
++                          <thead>
++                            <tr>
++                              <th>Impuesto</th>
++                              <th>Jurisdicción</th>
++                              <th>Referencia</th>
++                              <th style={{ textAlign: "right" }}>Base Imp.</th>
++                              <th style={{ textAlign: "right", width: 140 }}>Importe</th>
++                              <th style={{ width: 40 }}></th>
++                            </tr>
++                          </thead>
++                          <tbody>
++                            {retentions.map((r) => (
++                              <tr key={r.id}>
++                                <td><Select value={r.type} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, type: e.target.value } : re))}><option value="IVA">IVA</option><option value="IIBB">IIBB</option><option value="GANANCIAS">Ganancias</option></Select></td>
++                                <td><Select value={r.jurisdiction} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, jurisdiction: e.target.value } : re))} disabled={r.type !== "IIBB"}><option value="ARBA">ARBA</option><option value="AGIP">AGIP</option></Select></td>
++                                <td><input type="text" className={s.cellInput} value={r.reference} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, reference: e.target.value } : re))} /></td>
++                                <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right" }} value={r.base_amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, base_amount: Number(e.target.value) } : re))} /></td>
++                                <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right", fontWeight: 700 }} value={r.amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, amount: Number(e.target.value) } : re))} /></td>
++                                <td style={{ textAlign: "center" }}><button className={s.deleteBtn} onClick={() => setRetentions(retentions.filter(re => re.id !== r.id))}><X size={16} /></button></td>
++                              </tr>
++                            ))}
++                          </tbody>
++                        </table>
++                      </div>
++                    )}
++                 </div>
++               </details>
+             </div>
+           </div>
+-        )}
+-
+-        {activeTab === "history" && (
+-          <div className={s.tabContent} style={{ padding: 24 }}>
+-            <Card title="Historial">
+-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+-                {history.map((h, i) => (
+-                  <div key={i} style={{ padding: 12, background: '#f8fafc', borderRadius: 8, fontSize: 13 }}>
+-                    <strong>{h.action}</strong> - {h.date} ({h.user})
+-                  </div>
+-                ))}
+-              </div>
+-            </Card>
+-          </div>
+-        )}
+-      </div>
+ 
+-      <div className={s.footer}>
+-        <div className={s.footerLeft}>
+-          <Button onClick={handleSave} disabled={loading || isSaving} className={s.confirmBtn}>
+-            <Save size={18} /> {mode === "edit" ? "Guardar Cambios" : isPayment ? "Confirmar Pago" : "Confirmar Recibo"}
+-          </Button>
+-          {mode === "view" || mode === "edit" ? (
+-             <Button onClick={handleDelete} variant="danger" disabled={loading || isSaving} style={{ marginLeft: '12px' }}>
+-                <Trash2 size={18} /> Eliminar
+-             </Button>
+-          ) : null}
+-          <div className={s.footerTools}>
+-            <button onClick={handlePrint} className={s.toolBtn} title="Imprimir"><Printer size={18} /></button>
+-            <button onClick={handleSendEmail} className={s.toolBtn} title="Enviar por Email"><Mail size={18} /></button>
++          <div className={s.rightColumn}>
++             <div className={s.summaryCardFixed}>
++               <h3 className={s.summaryCardTitle}>Resumen del cobro</h3>
++               
++               <div className={s.summaryCardRow}>
++                 <span>Total factura</span>
++                 <strong>{fmt(Number(sourceInvoice.total_amount || 0))}</strong>
++               </div>
++               <div className={s.summaryCardRow}>
++                 <span>Saldo pendiente</span>
++                 <strong>{fmt(sourceInvoice.pending_amount != null ? Number(sourceInvoice.pending_amount) : Math.max(0, Number(sourceInvoice.total_amount || 0) - Number(sourceInvoice.amount_applied || 0)))}</strong>
++               </div>
++               
++               <hr className={s.summaryCardDivider} />
++               
++               <div className={s.summaryCardRow}>
++                 <span>Aplicado</span>
++                 <strong>{fmt(totalApplied)}</strong>
++               </div>
++               <div className={s.summaryCardRow}>
++                 <span>Total pagado</span>
++                 <strong>{fmt(totalPayments)}</strong>
++               </div>
++               <div className={s.summaryCardRow}>
++                 <span>Retenciones</span>
++                 <strong>{fmt(totalRetentions)}</strong>
++               </div>
++
++               {(() => {
++                 const hasPayments = payments.length > 0;
++                 const isMatch = Math.abs(difference) < 0.01;
++                 
++                 if (!hasPayments) {
++                   return (
++                     <div className={`${s.diffBlockFinal} ${s.diffInfoFinal}`}>
++                       <span>Falta cargar medio de pago</span>
++                     </div>
++                   );
++                 }
++                 if (isMatch) {
++                   return (
++                     <div className={`${s.diffBlockFinal} ${s.diffSuccessFinal}`}>
++                       <span>Listo para confirmar</span>
++                     </div>
++                   );
++                 }
++                 return (
++                   <div className={`${s.diffBlockFinal} ${s.hasDiffFinal}`}>
++                     <span>Diferencia: {fmt(difference)}</span>
++                   </div>
++                 );
++               })()}
++
++               <div className={s.summaryCardFooter}>
++                 {(() => {
++                   const canSave = payments.length > 0 && totalPayments > 0 && Math.abs(difference) < 0.01 && totalApplied > 0;
++                   const isSaveDisabled = loading || isSaving || !canSave;
++                   return (
++                     <>
++                       <Button onClick={handleSave} disabled={isSaveDisabled} className={s.confirmBtnFullWidth}>
++                         <Save size={18} /> Confirmar Recibo
++                       </Button>
++                       {!canSave && (
++                         <div className={s.confirmHint}>Cargá un medio de pago para confirmar.</div>
++                       )}
++                       {canSave && (
++                         <div className={s.confirmHintReady}>Listo para confirmar el recibo.</div>
++                       )}
++                     </>
++                   );
++                 })()}
++               </div>
++             </div>
+           </div>
+         </div>
+-        
+-        <div className={s.footerRight}>
+-          <div className={s.summaryItem}>
+-            <span className={s.summaryLabel}>Total {isPayment ? "Pagos" : "Pagado"}</span>
+-            <span className={s.summaryValue}>{fmt(totalPayments)}</span>
+-          </div>
+-          <div className={s.summaryDivider} />
+-          <div className={s.summaryItem}>
+-            <span className={s.summaryLabel}>Retenciones</span>
+-            <span className={s.summaryValue}>{fmt(totalRetentions)}</span>
++      ) : (
++        <>
++          <div className={s.tabs}>
++            <button
++              className={`${s.tab} ${activeTab === "vista360" ? s.active : ""}`}
++              onClick={() => setActiveTab("vista360")}
++              disabled={!entity}
++              title={!entity ? "Seleccione un cliente para ver su estado" : "Vista 360 del Cliente"}
++            >
++              <LayoutIcon size={16} /> Vista 360
++            </button>
++            <button
++              className={`${s.tab} ${activeTab === "payments" ? s.active : ""}`}
++              onClick={() => setActiveTab("payments")}
++            >
++              <CreditCard size={16} /> Medios de Pago
++            </button>
++            <button
++              className={`${s.tab} ${activeTab === "applications" ? s.active : ""}`}
++              onClick={() => setActiveTab("applications")}
++            >
++              <Link2 size={16} /> {isPayment ? "Comprobantes (Aplicaciones)" : "Facturas (Aplicaciones)"}
++            </button>
++            <button
++              className={`${s.tab} ${activeTab === "retentions" ? s.active : ""}`}
++              onClick={() => setActiveTab("retentions")}
++            >
++              <Tag size={16} /> Retenciones
++            </button>
++            <button
++              className={`${s.tab} ${activeTab === "history" ? s.active : ""}`}
++              onClick={() => setActiveTab("history")}
++            >
++              <Calendar size={16} /> Historial
++            </button>
+           </div>
+-          <div className={s.summaryDivider} />
+-          <div className={s.summaryItem}>
+-            <span className={s.summaryLabel}>Aplicado</span>
+-            <span className={s.summaryValue}>{fmt(totalApplied)}</span>
++
++          <div className={s.content}>
++            {activeTab === "vista360" && entity && (
++               <div className={s.tabContent} style={{ padding: 0 }}>
++                 <EntityDashboard 
++                    entityId={entity.id} 
++                    entityName={entity.name} 
++                    onNavigate={({ type, mode: newMode, docId }) => {
++                        if (type === 'invoice-form') {
++                          openEditFactura(docId, { mode: newMode, title: `Factura ${docId}`, width: 1100, height: 800 });
++                        }
++                    }}
++                 />
++               </div>
++            )}
++            {activeTab === "applications" && (
++              <div className={s.tabContent}>
++                <div className={s.actionsBar}>
++                  {mode === "new" && (
++                    <div className={s.barActions}>
++                      <Button variant="secondary" size="sm" onClick={() => setShowInvoiceModal(true)} disabled={!entity}>
++                        <Plus size={16} /> {isPayment ? "Vincular Comprobantes" : "Vincular Facturas"}
++                      </Button>
++                      <Button variant="outline" size="sm" onClick={autoApply} disabled={!entity || totalPayments + totalRetentions <= 0}>
++                        <Search size={16} /> Saldar Automático
++                      </Button>
++                    </div>
++                  )}
++                </div>
++
++                <div className={s.tableWrap}>
++                  <table className={t.table}>
++                    <thead>
++                      <tr>
++                        <th>Factura</th>
++                        <th>Fecha</th>
++                        <th style={{ textAlign: "right" }}>Saldo Original</th>
++                        <th style={{ textAlign: "right", width: 140 }}>Aplicado ({applications[0]?.currency})</th>
++                        {currency !== applications[0]?.currency && (
++                          <th style={{ textAlign: "right", width: 140 }}>Equiv. ({currency})</th>
++                        )}
++                        {isPayment && <th style={{ textAlign: "right", width: 140 }}>Monto Aplicado</th>}
++                        <th style={{ width: 40 }}></th>
++                      </tr>
++                    </thead>
++                    <tbody>
++                      {applications.map((app) => {
++                        const isDiffCurrency = currency !== app.currency;
++                        const equivAmount = isDiffCurrency ? (Number(app.amount_applied) * exchangeRate) : Number(app.amount_applied);
++
++                        return (
++                          <tr key={app.to_document_id}>
++                            <td>{app.number}</td>
++                            <td>{new Date(app.date).toLocaleDateString()}</td>
++                            <td style={{ textAlign: "right" }}>{fmt(app.remaining)} (<strong>{app.currency}</strong>)</td>
++                            <td style={{ textAlign: "right" }}>
++                              <input
++                                type="text"
++                                className={s.cellInput}
++                                style={{ textAlign: "right", fontWeight: 700 }}
++                                value={app.temp_amount ?? formatCurrencyInput(app.amount_applied)}
++                                onFocus={() => {
++                                  app.temp_amount = formatCurrencyInput(app.amount_applied);
++                                  setApplications([...applications]);
++                                }}
++                                onBlur={() => {
++                                  delete app.temp_amount;
++                                  setApplications([...applications]);
++                                }}
++                                onChange={(e) => {
++                                  const raw = e.target.value;
++                                  let cleanStr = raw.replace(/[^\d,]/g, "");
++                                  if ((cleanStr.match(/,/g) || []).length > 1) return;
++                                  
++                                  let parts = cleanStr.split(",");
++                                  parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
++                                  const visualVal = parts.join(",");
++                                  
++                                  const val = parseCurrencyInput(cleanStr);
++                                  app.amount_applied = val;
++                                  app.temp_amount = visualVal;
++                                  setApplications([...applications]);
++                                }}
++                              />
++                            </td>
++                            {isDiffCurrency && (
++                              <td style={{ textAlign: "right", fontWeight: 600, color: '#64748b' }}>
++                                {fmt(equivAmount)}
++                              </td>
++                            )}
++                            <td style={{ textAlign: "center" }}>
++                              {mode === "new" && (
++                                <button className={s.deleteBtn} onClick={() => toggleInvoiceApplication({ id: app.to_document_id })}>
++                                  <X size={16} />
++                                </button>
++                              )}
++                            </td>
++                          </tr>
++                        );
++                      })}
++                      {applications.length === 0 && (
++                        <tr>
++                          <td colSpan={6} className={s.emptyState}>
++                            No hay {isPayment ? "comprobantes vinculados" : "facturas vinculadas"}. Use el botón pertinente.
++                          </td>
++                        </tr>
++                      )}
++                    </tbody>
++                  </table>
++                </div>
++              </div>
++            )}
++
++            {activeTab === "payments" && (
++              <div className={s.tabContent}>
++                <div className={s.actionsBar}>
++                  <div className={s.payButtons}>
++                    {paymentMethods.map((m) => (
++                      <button key={m.value} className={s.payTypeBtn} onClick={() => addPayment(m.value)}>
++                        {m.icon} <span>{m.label}</span>
++                      </button>
++                    ))}
++                  </div>
++                </div>
++
++                <div className={s.tableWrap}>
++                  <table className={t.table}>
++                    <thead>
++                      <tr>
++                        <th>Tipo</th>
++                        <th>Bancos / Detalle</th>
++                        <th>Referencia</th>
++                        <th>Vencimiento</th>
++                        <th style={{ textAlign: "right", width: 140 }}>Importe</th>
++                        <th style={{ width: 40 }}></th>
++                      </tr>
++                    </thead>
++                    <tbody>
++                      {payments.length === 0 && (
++                        <tr>
++                          <td colSpan={6} className={s.emptyState}>No hay medios de pago cargados.</td>
++                        </tr>
++                      )}
++                      {payments.map((p) => (
++                        <tr key={p.id}>
++                          <td>
++                            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
++                              <Badge variant="secondary">{p.type}</Badge>
++                              {p.type === "CHECK" && (
++                                <button className={s.iconBtnSmall} onClick={() => { 
++                                  const allChecks = payments.filter(pay => pay.type === "CHECK");
++                                  setModalChecks(allChecks);
++                                  setShowCheckModal(true); 
++                                }}>
++                                  <Search size={14} />
++                                </button>
++                              )}
++                            </div>
++                          </td>
++                          <td>
++                            {(p.type === 'CHECK' || p.type === 'TRANSFER') ? (
++                              <Select 
++                                value={p.type === 'CHECK' ? (p.bank_name || "") : (p.description || "")} 
++                                onChange={(e) => {
++                                  const val = e.target.value;
++                                  if (p.type === 'CHECK') updatePayment(p.id, "bank_name", val);
++                                  else updatePayment(p.id, "description", val);
++                                }}
++                              >
++                                <option value="">Seleccione Banco...</option>
++                                {banks.map(b => (
++                                  <option key={b.id} value={b.name}>{b.name}</option>
++                                ))}
++                              </Select>
++                            ) : (
++                              <input type="text" className={s.cellInput} value={p.description || ""} onChange={(e) => updatePayment(p.id, "description", e.target.value)} placeholder="Ej: Galicia..." />
++                            )}
++                          </td>
++                          <td>
++                            <input type="text" className={s.cellInput} value={p.reference_number || ""} onChange={(e) => updatePayment(p.id, "reference_number", e.target.value)} />
++                          </td>
++                          <td>{p.type === "CHECK" ? <input type="date" className={s.cellInput} value={p.due_date} onChange={(e) => updatePayment(p.id, "due_date", e.target.value)} /> : "-"}</td>
++                          <td style={{ textAlign: "right" }}>
++                            <input 
++                              type="text" 
++                              className={s.cellInput} 
++                              style={{ textAlign: "right", fontWeight: 700 }} 
++                              value={p.temp_amount ?? formatCurrencyInput(p.amount)} 
++                              onFocus={() => {
++                                p.temp_amount = formatCurrencyInput(p.amount);
++                                setPayments([...payments]);
++                              }}
++                              onBlur={() => {
++                                delete p.temp_amount;
++                                setPayments([...payments]);
++                              }}
++                              onChange={(e) => {
++                                const raw = e.target.value;
++                                let cleanStr = raw.replace(/[^\d,]/g, "");
++                                if ((cleanStr.match(/,/g) || []).length > 1) return;
++                                
++                                let parts = cleanStr.split(",");
++                                parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
++                                const visualVal = parts.join(",");
++                                
++                                const val = parseCurrencyInput(cleanStr);
++                                p.amount = val;
++                                p.temp_amount = visualVal;
++                                setPayments([...payments]);
++                              }} 
++                            />
++                          </td>
++                          <td style={{ textAlign: "center" }}>
++                            <button className={s.deleteBtn} onClick={() => removePayment(p.id)}><X size={16} /></button>
++                          </td>
++                        </tr>
++                      ))}
++                    </tbody>
++                  </table>
++                </div>
++              </div>
++            )}
++
++            {activeTab === "retentions" && (
++              <div className={s.tabContent}>
++                <div className={s.actionsBar}>
++                  <Button variant="secondary" size="sm" onClick={() => setRetentions([...retentions, { id: Date.now(), type: "IIBB", jurisdiction: "ARBA", amount: 0, base_amount: totalApplied, reference: "" }])}>
++                    <Plus size={16} /> Agregar Retención
++                  </Button>
++                </div>
++                <div className={s.tableWrap}>
++                  <table className={t.table}>
++                    <thead>
++                      <tr>
++                        <th>Impuesto</th>
++                        <th>Jurisdicción</th>
++                        <th>Referencia</th>
++                        <th style={{ textAlign: "right" }}>Base Imp.</th>
++                        <th style={{ textAlign: "right", width: 140 }}>Importe</th>
++                        <th style={{ width: 40 }}></th>
++                      </tr>
++                    </thead>
++                    <tbody>
++                      {retentions.map((r) => (
++                        <tr key={r.id}>
++                          <td><Select value={r.type} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, type: e.target.value } : re))}><option value="IVA">IVA</option><option value="IIBB">IIBB</option><option value="GANANCIAS">Ganancias</option></Select></td>
++                          <td><Select value={r.jurisdiction} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, jurisdiction: e.target.value } : re))} disabled={r.type !== "IIBB"}><option value="ARBA">ARBA</option><option value="AGIP">AGIP</option></Select></td>
++                          <td><input type="text" className={s.cellInput} value={r.reference} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, reference: e.target.value } : re))} /></td>
++                          <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right" }} value={r.base_amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, base_amount: Number(e.target.value) } : re))} /></td>
++                          <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right", fontWeight: 700 }} value={r.amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, amount: Number(e.target.value) } : re))} /></td>
++                          <td style={{ textAlign: "center" }}><button className={s.deleteBtn} onClick={() => setRetentions(retentions.filter(re => re.id !== r.id))}><X size={16} /></button></td>
++                        </tr>
++                      ))}
++                    </tbody>
++                  </table>
++                </div>
++              </div>
++            )}
++
++            {activeTab === "history" && (
++              <div className={s.tabContent} style={{ padding: 24 }}>
++                <Card title="Historial">
++                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
++                    {history.map((h, i) => (
++                      <div key={i} style={{ padding: 12, background: '#f8fafc', borderRadius: 8, fontSize: 13 }}>
++                        <strong>{h.action}</strong> - {h.date} ({h.user})
++                      </div>
++                    ))}
++                  </div>
++                </Card>
++              </div>
++            )}
+           </div>
+-          
+-          <div className={`${s.diffBlock} ${Math.abs(difference) > 0.01 ? s.hasDiff : ""}`}>
+-            <span className={s.diffLabel}>Diferencia</span>
+-            <span className={s.diffValue}>{fmt(difference)}</span>
++
++          <div className={s.footer}>
++            <div className={s.footerLeft}>
++              {(() => {
++                 const canSave = payments.length > 0 && totalPayments > 0 && Math.abs(difference) < 0.01 && totalApplied > 0;
++                 const isSaveDisabled = loading || isSaving || (mode === "new" && !canSave);
++                 return (
++                    <div title={mode === "new" && !canSave ? "Cargá un medio de pago válido y asegurate de que la diferencia sea cero para confirmar." : ""}>
++                      <Button onClick={handleSave} disabled={isSaveDisabled} className={s.confirmBtn}>
++                        <Save size={18} /> {mode === "edit" ? "Guardar Cambios" : isPayment ? "Confirmar Pago" : "Confirmar Recibo"}
++                      </Button>
++                    </div>
++                 );
++              })()}
++              {mode === "view" || mode === "edit" ? (
++                 <Button onClick={handleDelete} variant="danger" disabled={loading || isSaving} style={{ marginLeft: '12px' }}>
++                    <Trash2 size={18} /> Eliminar
++                 </Button>
++              ) : null}
++              <div className={s.footerTools}>
++                <button onClick={handlePrint} className={s.toolBtn} title="Imprimir"><Printer size={18} /></button>
++                <button onClick={handleSendEmail} className={s.toolBtn} title="Enviar por Email"><Mail size={18} /></button>
++              </div>
++            </div>
++            
++            <div className={s.footerRight}>
++              <div className={s.summaryItem}>
++                <span className={s.summaryLabel}>Total {isPayment ? "Pagos" : "Pagado"}</span>
++                <span className={s.summaryValue}>{fmt(totalPayments)}</span>
++              </div>
++              <div className={s.summaryDivider} />
++              <div className={s.summaryItem}>
++                <span className={s.summaryLabel}>Retenciones</span>
++                <span className={s.summaryValue}>{fmt(totalRetentions)}</span>
++              </div>
++              <div className={s.summaryDivider} />
++              <div className={s.summaryItem}>
++                <span className={s.summaryLabel}>Aplicado</span>
++                <span className={s.summaryValue}>{fmt(totalApplied)}</span>
++              </div>
++              
++              {(() => {
++                const hasPayments = payments.length > 0;
++                const isMatch = Math.abs(difference) < 0.01;
++                
++                if (!hasPayments) {
++                  return (
++                    <div className={`${s.diffBlock} ${s.diffInfo}`} style={{ background: '#f1f5f9', color: '#475569', borderColor: '#cbd5e1' }}>
++                      <span className={s.diffLabel}>Falta cargar medio de pago por</span>
++                      <span className={s.diffValue}>{fmt(Math.abs(difference))}</span>
++                    </div>
++                  );
++                }
++                if (isMatch) {
++                  return (
++                    <div className={`${s.diffBlock} ${s.diffSuccess}`} style={{ background: '#ecfdf5', color: '#059669', borderColor: '#a7f3d0' }}>
++                      <span className={s.diffLabel}>Diferencia</span>
++                      <span className={s.diffValue}>{fmt(0)}</span>
++                    </div>
++                  );
++                }
++                return (
++                  <div className={`${s.diffBlock} ${s.hasDiff}`}>
++                    <span className={s.diffLabel}>Diferencia</span>
++                    <span className={s.diffValue}>{fmt(difference)}</span>
++                  </div>
++                );
++              })()}
++            </div>
+           </div>
+-        </div>
+-      </div>
++        </>
++      )}
+ 
+       {showFxModalForDoc && <FxAdjustmentDocModal documentId={showFxModalForDoc} onClose={() => { setShowFxModalForDoc(null); closeWindow(windowId); }} onConfirmed={() => { const docId = showFxModalForDoc; setShowFxModalForDoc(null); if (payments.some(p => p.type === "CHECK")) setShowInterestModalForDoc(docId); else closeWindow(windowId); }} />}
+       {showInterestModalForDoc && <CheckInterestModal receiptId={showInterestModalForDoc} onClose={() => { setShowInterestModalForDoc(null); closeWindow(windowId); }} onConfirmed={() => { setShowInterestModalForDoc(null); closeWindow(windowId); }} />}
+diff --git a/frontend/src/modules/finance/ReceiptForm.module.css b/frontend/src/modules/finance/ReceiptForm.module.css
+index afd210dc..e4c9b505 100644
+--- a/frontend/src/modules/finance/ReceiptForm.module.css
++++ b/frontend/src/modules/finance/ReceiptForm.module.css
+@@ -398,6 +398,16 @@
+     background: #fef2f2;
+ }
+ 
++.diffBlock.diffInfo {
++    border-color: #cbd5e1;
++    background: #f1f5f9;
++}
++
++.diffBlock.diffSuccess {
++    border-color: #a7f3d0;
++    background: #ecfdf5;
++}
++
+ .diffLabel {
+     font-size: 9px;
+     font-weight: 800;
+@@ -848,4 +858,329 @@
+     border-color: var(--primary);
+     color: var(--primary);
+     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
++}
++
++/* ========================================================= */
++/* INVOICE MODE STYLES (COBRO DESDE FACTURA)                 */
++/* ========================================================= */
++
++.compactHeader {
++    padding: 12px 24px !important;
++}
++
++.compactHeaderGrid {
++    gap: 8px 10px !important;
++}
++
++.compactHeaderGrid :global(input),
++.compactHeaderGrid :global(select) {
++    height: 34px !important;
++    font-size: 13px !important;
++}
++
++.compactHeaderGrid :global(label) {
++    font-size: 11px !important;
++    margin-bottom: 2px !important;
++}
++
++.containerInvoiceMode {
++    height: auto !important;
++    min-height: 0 !important;
++    display: block !important;
++    overflow: visible !important;
++    background: var(--bg-light) !important;
++    padding-bottom: 24px !important;
++}
++
++.invoiceModeLayout {
++    display: grid;
++    grid-template-columns: minmax(0, 1fr) 280px;
++    gap: 16px;
++    padding: 16px 24px 0 24px;
++    align-items: start;
++    height: auto !important;
++    min-height: 0 !important;
++    background: var(--bg-light);
++}
++
++.leftColumn {
++    display: flex;
++    flex-direction: column;
++    gap: 12px;
++    min-height: 0;
++    overflow: visible;
++}
++
++.rightColumn {
++    display: flex;
++    flex-direction: column;
++    align-self: start;
++}
++
++/* Invoice Context Card */
++.invoiceCardFull {
++    background: white;
++    border: 1px solid var(--border);
++    border-radius: 8px;
++    padding: 12px 16px;
++    box-shadow: var(--shadow-sm);
++    display: flex;
++    flex-direction: column;
++    gap: 6px;
++}
++
++.invoiceCardTitle {
++    margin: 0;
++    font-size: 10px;
++    font-weight: 800;
++    text-transform: uppercase;
++    color: #64748b;
++    letter-spacing: 0.05em;
++}
++
++.invoiceCardDetails {
++    display: flex;
++    align-items: center;
++    gap: 10px;
++    font-size: 13px;
++    flex-wrap: wrap;
++}
++
++.invNumber {
++    font-weight: 800;
++    color: var(--primary);
++}
++
++.invClient {
++    color: #475569;
++}
++
++.invTotal, .invApplied {
++    color: #64748b;
++    font-size: 12px;
++    padding-left: 8px;
++    border-left: 1px solid #e2e8f0;
++}
++
++.invPending {
++    font-weight: 700;
++    color: #059669;
++    font-size: 12px;
++    padding-left: 8px;
++    border-left: 1px solid #e2e8f0;
++}
++
++/* Sections */
++.sectionBlock {
++    background: white;
++    border: 1px solid var(--border);
++    border-radius: 8px;
++    padding: 16px;
++    box-shadow: var(--shadow-sm);
++    display: flex;
++    flex-direction: column;
++    gap: 12px;
++}
++
++.sectionTitle {
++    margin: 0;
++    font-size: 13px;
++    font-weight: 700;
++    color: var(--primary);
++}
++
++/* Payment Methods Grid */
++.paymentCardsGrid {
++    display: flex;
++    gap: 8px;
++    flex-wrap: wrap;
++}
++
++.payCardBtn {
++    background: white;
++    border: 1px solid var(--border);
++    border-radius: 6px;
++    padding: 6px 12px;
++    font-size: 12px;
++    font-weight: 600;
++    color: #334155;
++    cursor: pointer;
++    display: flex;
++    align-items: center;
++    gap: 6px;
++    height: 34px;
++    transition: all 0.2s;
++}
++
++.payCardBtn:hover {
++    border-color: #3b82f6;
++    color: #2563eb;
++    background: #eff6ff;
++}
++
++.emptyStateCompact {
++    background: #f8fafc;
++    border: 1px dashed #cbd5e1;
++    border-radius: 6px;
++    padding: 16px;
++    text-align: center;
++    display: flex;
++    flex-direction: column;
++    gap: 4px;
++    color: #64748b;
++    font-size: 12px;
++    max-height: 80px;
++    justify-content: center;
++}
++
++.emptyStateCompact strong {
++    color: #334155;
++    font-size: 13px;
++}
++
++.tableWrapCompact {
++    border: 1px solid var(--border);
++    border-radius: 6px;
++    overflow: hidden;
++}
++
++/* Application Summary */
++.applicationSummary {
++    display: flex;
++    align-items: center;
++    gap: 12px;
++    background: #f8fafc;
++    padding: 8px 12px;
++    border-radius: 6px;
++    font-size: 12px;
++    color: #334155;
++}
++
++/* Retentions Foldable */
++.retentionsDetails {
++    background: transparent;
++}
++
++.retentionsSummary {
++    cursor: pointer;
++    user-select: none;
++    list-style: none;
++    height: 24px;
++    display: flex;
++    align-items: center;
++}
++
++.retentionsSummary::-webkit-details-marker {
++    display: none;
++}
++
++.retentionsContent {
++    margin-top: 12px;
++    display: flex;
++    flex-direction: column;
++    gap: 10px;
++}
++
++.actionsBarCompact {
++    display: flex;
++    justify-content: flex-end;
++}
++
++/* Right Summary Card */
++.summaryCardFixed {
++    background: white;
++    border: 1px solid var(--border);
++    border-radius: 8px;
++    padding: 18px;
++    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
++    display: flex;
++    flex-direction: column;
++    gap: 12px;
++    position: sticky;
++    top: 16px;
++    height: fit-content;
++}
++
++.summaryCardTitle {
++    margin: 0 0 4px 0;
++    font-size: 14px;
++    font-weight: 800;
++    color: var(--primary);
++}
++
++.summaryCardRow {
++    display: flex;
++    justify-content: space-between;
++    align-items: center;
++    font-size: 12px;
++    color: #475569;
++}
++
++.summaryCardRow strong {
++    font-size: 13px;
++    color: var(--primary);
++}
++
++.summaryCardDivider {
++    border: none;
++    border-top: 1px dashed var(--border);
++    margin: 2px 0;
++}
++
++.diffBlockFinal {
++    padding: 10px 12px;
++    border-radius: 6px;
++    text-align: center;
++    font-weight: 700;
++    font-size: 13px;
++    margin-top: 4px;
++    border: 1px solid transparent;
++}
++
++.diffInfoFinal {
++    background: #f1f5f9;
++    color: #475569;
++    border-color: #cbd5e1;
++}
++
++.diffSuccessFinal {
++    background: #ecfdf5;
++    color: #059669;
++    border-color: #a7f3d0;
++}
++
++.hasDiffFinal {
++    background: #fef2f2;
++    color: #dc2626;
++    border-color: #fecaca;
++}
++
++.summaryCardFooter {
++    margin-top: 10px;
++    display: flex;
++    flex-direction: column;
++    gap: 6px;
++}
++
++.confirmBtnFullWidth {
++    width: 100%;
++    justify-content: center;
++    padding: 0 16px;
++    height: 40px;
++    font-size: 13px;
++    border-radius: 6px;
++}
++
++.confirmHint, .confirmHintReady {
++    text-align: center;
++    font-size: 11px;
++}
++
++.confirmHint {
++    color: #64748b;
++}
++
++.confirmHintReady {
++    color: #059669;
++    font-weight: 600;
+ }
+\ No newline at end of file
+diff --git a/frontend/src/modules/finance/ReceiptStandalonePage.jsx b/frontend/src/modules/finance/ReceiptStandalonePage.jsx
+index bafc0c1f..22e883da 100644
+--- a/frontend/src/modules/finance/ReceiptStandalonePage.jsx
++++ b/frontend/src/modules/finance/ReceiptStandalonePage.jsx
+@@ -5,8 +5,10 @@
+  */
+ import { useSearchParams, useParams } from "react-router-dom";
+ import { useAuth } from "../../context/AuthContext";
++import { useState, useEffect } from "react";
+ import ReceiptForm from "./ReceiptForm";
+ import LoadingScreen from "../../components/ui/LoadingScreen";
++import api from "../../services/api";
+ 
+ function StandaloneGuard({ children }) {
+   const { user, loading } = useAuth();
+@@ -38,6 +40,59 @@ export default function ReceiptStandalonePage() {
+   const mode = id ? (searchParams.get("mode") || "view") : "new";
+   const isPayment = searchParams.get("isPayment") === "true" || searchParams.get("context") === "payments";
+   const entityId = searchParams.get("entityId");
++  const invoiceId = searchParams.get("invoice_id");
++  const invoiceNotes = searchParams.get("notes") || "";
++
++  // Estado para la factura pre-cargada (cobro desde factura)
++  const [invoiceLoaded, setInvoiceLoaded] = useState(false);
++  const [preloadedEntityId, setPreloadedEntityId] = useState(entityId || null);
++  const [preloadedApplications, setPreloadedApplications] = useState(null);
++  const [preloadedCurrency, setPreloadedCurrency] = useState("ARS");
++  const [preloadedInvoice, setPreloadedInvoice] = useState(null);
++
++  useEffect(() => {
++    if (!invoiceId || id) return; // Solo en modo nuevo con invoice_id
++    const loadInvoice = async () => {
++      try {
++        const inv = await api.get(`/accounting/documents/${invoiceId}`);
++        const pending = (inv.pending_amount != null)
++          ? Number(inv.pending_amount)
++          : Math.max(0, Number(inv.total_amount || 0) - Number(inv.amount_applied || 0));
++        setPreloadedEntityId(inv.entity_id);
++        setPreloadedCurrency(inv.currency || "ARS");
++        setPreloadedInvoice(inv);
++        setPreloadedApplications([{
++          to_document_id: inv.id,
++          number: inv.number,
++          date: inv.date,
++          remaining: pending,
++          currency: inv.currency || "ARS",
++          amount_applied: pending,
++        }]);
++      } catch (e) {
++        console.error("Error cargando factura para cobro", e);
++      } finally {
++        setInvoiceLoaded(true);
++      }
++    };
++    loadInvoice();
++  }, [invoiceId]);
++
++  const isFromInvoice = invoiceId && !id;
++
++  useEffect(() => {
++    if (isFromInvoice) {
++      document.body.style.background = "var(--bg-light)";
++      return () => {
++        document.body.style.background = "";
++      };
++    }
++  }, [isFromInvoice]);
++
++  // Si hay invoice_id pero aún no cargó, mostrar loading
++  if (invoiceId && !id && !invoiceLoaded) {
++    return <LoadingScreen message="Cargando datos de la factura..." />;
++  }
+ 
+   let initialPayments = null;
+   if (draftId) {
+@@ -53,18 +108,26 @@ export default function ReceiptStandalonePage() {
+       <div
+         style={{
+           width: "100%",
+-          height: "100%",
+-          display: "flex",
+-          flexDirection: "column",
++          height: (invoiceId && !id) ? "auto" : "100%",
++          minHeight: (invoiceId && !id) ? "0" : "100vh",
++          display: (invoiceId && !id) ? "block" : "flex",
++          flexDirection: (invoiceId && !id) ? "unset" : "column",
++          paddingBottom: (invoiceId && !id) ? "16px" : "0",
++          background: (invoiceId && !id) ? "var(--bg-light)" : "white"
+         }}
+       >
+         <ReceiptForm
+           mode={mode}
+           id={id || null}
+           isPayment={isPayment}
+-          initialEntityId={entityId}
++          initialEntityId={preloadedEntityId || entityId}
++          initialApplications={preloadedApplications}
+           initialPayments={initialPayments}
++          initialCurrency={preloadedCurrency}
++          initialDate={new Date().toISOString().split("T")[0]}
+           isStandalone={true}
++          initialObservations={invoiceNotes}
++          sourceInvoice={preloadedInvoice}
+         />
+       </div>
+     </StandaloneGuard>

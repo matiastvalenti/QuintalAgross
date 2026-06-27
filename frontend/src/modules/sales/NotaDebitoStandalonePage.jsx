@@ -47,6 +47,7 @@ export default function NotaDebitoStandalonePage() {
     <StandaloneGuard>
       <div style={{ width: "100vw", height: "100vh", overflow: "hidden", backgroundColor: "var(--bg-primary)" }}>
         <InvoiceForm
+          mode={id ? "edit" : "new"}
           id={id}
           initialSourceType={facturaId ? "invoice" : null}
           initialSourceId={facturaId}

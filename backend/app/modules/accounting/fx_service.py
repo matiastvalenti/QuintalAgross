@@ -65,12 +65,30 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
     doc_type = models.DocumentType.DEBIT_NOTE if result.sign == "ND" else models.DocumentType.CREDIT_NOTE
     sign_label = "ND" if result.sign == "ND" else "NC"
     
+    from app.modules.sales import numbering_service
+
     if mode == "COMPENSATION":
         doc_number = f"COMP-FX-{app_id[:8]}".upper()
         notes = f"Compensación interna CC por diferencia de cambio (TC {to_doc.exchange_rate} -> {app.exchange_rate})"
     else:
-        doc_number = f"{sign_label}-FX-{app_id[:8]}".upper()
-        notes = f"Ajuste automático por diferencia de cambio (TC {to_doc.exchange_rate} -> {app.exchange_rate})"
+        import re
+        # Extraer PV de la factura origen
+        pv = "0001"
+        if to_doc.number:
+            parts = to_doc.number.split("-")
+            pv_part = parts[-2] if len(parts) >= 2 else parts[0]
+            pv_match = re.search(r'\d+', pv_part)
+            if pv_match: pv = pv_match.group().zfill(4)
+        
+
+        # Determinar doc_tag correcto (NDA, NDB, etc)
+        letter = to_doc.line or "A"
+        doc_tag = f"ND{letter}" if result.sign == "ND" else f"NC{letter}"
+        
+        doc_number = numbering_service.get_next_number(db, pv, doc_tag)
+        numbering_service.increment_last_number(db, pv, doc_tag)
+        
+        notes = f"Ajuste automático por diferencia de cambio (TC {to_doc.exchange_rate} -> {app.exchange_rate}). Recibo: {app.from_document.number} [ID:{app.from_document_id}]"
         
     new_doc = models.Document(
         entity_id=to_doc.entity_id,
@@ -85,10 +103,14 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
         line=to_doc.line,
         notes=notes,
         salesperson_id=to_doc.salesperson_id,
-        vendedor=to_doc.vendedor
+        vendedor=to_doc.vendedor,
+        cost_center=to_doc.cost_center,           # heredar centro de costos de la factura
+        source_invoice_id=to_doc.id,              # trazabilidad con la factura origen
+        reason_type=models.DocumentReasonType.EXCHANGE_DIFFERENCE,
+        is_exchange_difference=True,
     )
     db.add(new_doc)
-    db.flush() 
+    db.flush()
 
     # 4. Create lines
     for i, line in enumerate(result.lines):

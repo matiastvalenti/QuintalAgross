@@ -241,11 +241,16 @@ def _sanitize_document_for_response(doc, db: Session = None):
     # Traceabilidad para aplicaciones (especialmente para recibos)
     from sqlalchemy.orm import object_session
     for app in getattr(doc, "applied_to", []):
+        if getattr(app, "amount_applied_ars", None) is None:
+            app.amount_applied_ars = getattr(app, "amount_applied", 0.0)
+        if getattr(app, "exchange_rate", None) is None:
+            app.exchange_rate = 1.0
         if getattr(app, "to_document", None):
             app.to_document_number = app.to_document.number
             app.to_document_date = app.to_document.date
             app.to_document_total = app.to_document.total_amount
             app.to_document_currency = app.to_document.currency
+            app.to_document_exchange_rate = app.to_document.exchange_rate
             # Calcular cuánto se aplicó ya a esa factura (incluyendo otros recibos)
             use_db = db or object_session(app)
             if use_db:
@@ -254,6 +259,17 @@ def _sanitize_document_for_response(doc, db: Session = None):
                     models.Application.to_document_id == app.to_document_id
                 ).scalar() or 0.0
                 app.to_document_applied = total_applied
+
+    for app in getattr(doc, "applied_by", []):
+        if getattr(app, "amount_applied_ars", None) is None:
+            app.amount_applied_ars = getattr(app, "amount_applied", 0.0)
+        if getattr(app, "exchange_rate", None) is None:
+            app.exchange_rate = 1.0
+        if getattr(app, "from_document", None):
+            app.from_document_number = app.from_document.number
+            app.from_document_date = app.from_document.date
+            app.from_document_total = app.from_document.total_amount
+            app.from_document_currency = app.from_document.currency
 
     for line in getattr(doc, "lines", []):
         if getattr(line, "description", None) is None: line.description = ""
@@ -404,6 +420,317 @@ def _sanitize_document_for_response(doc, db: Session = None):
                         so_dict["paid_pct"] = 0.0
 
     return doc
+
+
+from pydantic import BaseModel
+
+class VoidRequest(BaseModel):
+    reason: str = "Anulación desde pantalla de recibos"
+    void_date: Optional[str] = None
+
+@router.post("/{document_id}/void")
+def void_document(
+    document_id: str, 
+    payload: VoidRequest = None,
+    db: Session = Depends(get_db), 
+    current_user: models.User = Depends(get_current_user)
+):
+    try:
+        doc = db.query(models.Document).filter(models.Document.id == document_id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+            
+        if doc.doc_type != models.DocumentType.RECEIPT:
+            raise HTTPException(status_code=400, detail="Solo se pueden anular recibos a través de este endpoint")
+            
+        if _is_cancelled_status(doc.status):
+            return {
+                "ok": True,
+                "document_id": str(doc.id),
+                "status": "CANCELLED",
+                "already_cancelled": True,
+                "reverted_applications": [],
+                "warnings": ["El recibo ya se encontraba anulado."]
+            }
+            
+        reason = payload.reason if payload else "Anulación desde pantalla de recibos"
+        
+        # 1. Cargar aplicaciones donde este recibo es el origen
+        applications = db.query(models.Application).filter(
+            models.Application.from_document_id == document_id
+        ).all()
+        
+        invoice_ids = [app.to_document_id for app in applications if app.to_document_id]
+        
+        # FIND FX NOTES BEFORE DELETING APPLICATIONS
+        import re
+        from app.modules.sales import numbering_service
+        
+        fx_notes_candidatas = db.query(models.Document).filter(
+            models.Document.reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE,
+            models.Document.entity_id == doc.entity_id,
+            models.Document.status != models.DocumentStatus.CANCELLED,
+            models.Document.doc_type.in_([models.DocumentType.DEBIT_NOTE, models.DocumentType.CREDIT_NOTE])
+        ).all()
+        
+        fx_notes_exact = []
+        fx_notes_fallback = []
+        
+        for fx in fx_notes_candidatas:
+            if f"[ID:{document_id}]" in (fx.notes or ""):
+                fx_notes_exact.append(fx)
+            elif fx.source_invoice_id in invoice_ids:
+                fx_notes_fallback.append(fx)
+                
+        # Si hay coincidencias exactas por ID, usamos esas (pueden ser varias si cobró varias facturas).
+        # Si no hay exactas, y hay EXACTAMENTE UNA por fallback, usamos esa.
+        # Si hay ms de una por fallback y ninguna exacta, no podemos asegurar cul es, as que no revertimos y agregamos warning.
+        
+        fx_notes = fx_notes_exact
+        warning_multiple_fx = False
+        if not fx_notes_exact:
+            if len(fx_notes_fallback) == 1:
+                fx_notes = fx_notes_fallback
+            elif len(fx_notes_fallback) > 1:
+                warning_multiple_fx = True
+        
+        
+        reverted_applications = []
+        affected_docs = set()
+        
+        for app in applications:
+            to_doc = app.to_document
+            if to_doc:
+                affected_docs.add(to_doc)
+                reverted_applications.append({
+                    "document_id": to_doc.id,
+                    "number": to_doc.number,
+                    "amount": app.amount_applied,
+                    "currency": str(to_doc.currency.value if hasattr(to_doc.currency, 'value') else to_doc.currency),
+                })
+                
+                # Auditoría en el comprobante afectado antes de borrar
+                _log_history(
+                    db=db, 
+                    doc_id=to_doc.id, 
+                    action="Aplicación Revertida", 
+                    details=f"Se revierte aplicación desde Recibo {doc.number} por {app.amount_applied} USD/ARS por anulación del recibo. Relación eliminada por limitación técnica. Motivo: {reason}",
+                    current_user=current_user
+                )
+                
+            # Auditoría en el recibo mismo para esta aplicación
+            _log_history(
+                db=db,
+                doc_id=doc.id,
+                action="Aplicación Eliminada",
+                details=f"Se elimina relación con {to_doc.number if to_doc else 'Desconocido'} por {app.amount_applied}. Limitación técnica. Motivo: {reason}",
+                current_user=current_user
+            )
+            
+            db.delete(app)
+            
+        # 2. Registrar en historial del recibo principal que fue anulado
+        _log_history(
+            db=db,
+            doc_id=doc.id,
+            action="Anulado",
+            details=f"El recibo fue anulado. Motivo: {reason}",
+            current_user=current_user
+        )
+        
+        # 3. Marcar el recibo como CANCELLED
+        doc.status = models.DocumentStatus.CANCELLED
+        
+        # Guardamos cambios pendientes para que _recalc sume sin las aplicaciones
+        db.flush()
+        
+        # 4. Recalcular saldo de facturas afectadas
+        for affected in affected_docs:
+            _recalc_document_status(affected, db)
+            
+        # 5. Reverse any FX Notes generated by this receipt (fx_notes found earlier)
+        fx_reversals_created = []
+        
+        for fx in fx_notes:
+            existing = db.query(models.Document).filter(
+                models.Document.reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE,
+                models.Document.notes.like(f"%Cancela {fx.number} [ID:{fx.id}]%")
+            ).first()
+            if existing:
+                continue
+                
+            reverse_type = models.DocumentType.CREDIT_NOTE if fx.doc_type == models.DocumentType.DEBIT_NOTE else models.DocumentType.DEBIT_NOTE
+            
+            def is_valid_sales_point(value):
+                if value is None: return False
+                v = str(value).strip()
+                return v.isdigit() and len(v) == 4 and v != "0000"
+            
+            sales_point = None
+            
+            # 1. Try FX note
+            if fx.number:
+                parts = fx.number.split("-")
+                pv_part = parts[-2] if len(parts) >= 2 else parts[0]
+                pv_match_re = re.search(r'\d+', pv_part)
+                if pv_match_re: 
+                    candidate = pv_match_re.group().zfill(4)
+                    if is_valid_sales_point(candidate):
+                        sales_point = candidate
+            
+            # 2. Fallback to origin invoice
+            origin_invoice = None
+            if not sales_point and fx.source_invoice_id:
+                origin_invoice = db.query(models.Document).filter(models.Document.id == fx.source_invoice_id).first()
+                if origin_invoice and origin_invoice.number:
+                    parts = origin_invoice.number.split("-")
+                    pv_part = parts[-2] if len(parts) >= 2 else parts[0]
+                    pv_match_re = re.search(r'\d+', pv_part)
+                    if pv_match_re:
+                        candidate = pv_match_re.group().zfill(4)
+                        if is_valid_sales_point(candidate):
+                            sales_point = candidate
+                            
+            if not is_valid_sales_point(sales_point):
+                raise ValueError(f"No se pudo determinar un punto de venta válido para la reversa FX. FX note={fx.id}, number={fx.number}, source_invoice_id={fx.source_invoice_id}")
+                
+            letter = fx.line or "A"
+            doc_tag = f"NC{letter}" if reverse_type == models.DocumentType.CREDIT_NOTE else f"ND{letter}"
+            new_num = numbering_service.get_next_number(db, sales_point, doc_tag)
+            
+            numbering_service.increment_last_number(db, sales_point, doc_tag)
+            
+            notes = f"Reversa por anulación de recibo. Cancela {fx.number} [ID:{fx.id}]"
+            
+            new_doc = models.Document(
+                entity_id=fx.entity_id,
+                doc_type=reverse_type,
+                number=new_num,
+                date=datetime.utcnow(),
+                currency=models.CurrencyType.ARS,
+                exchange_rate=1.0,
+                total_amount=fx.total_amount,
+                total_amount_ars=fx.total_amount_ars,
+                status=models.DocumentStatus.OPEN,
+                line=fx.line,
+                notes=notes,
+                salesperson_id=fx.salesperson_id,
+                vendedor=fx.vendedor,
+                cost_center=fx.cost_center,
+                source_invoice_id=fx.source_invoice_id,
+                reason_type=models.DocumentReasonType.EXCHANGE_DIFFERENCE,
+                is_exchange_difference=True,
+            )
+            db.add(new_doc)
+            db.flush()
+            
+            for line in fx.lines:
+                new_line = models.DocumentLine(
+                    document_id=new_doc.id,
+                    product_id=line.product_id,
+                    description=line.description,
+                    qty_packages=line.qty_packages,
+                    package_size=line.package_size,
+                    package_unit=line.package_unit,
+                    qty=line.qty,
+                    unit_price=line.unit_price,
+                    discount_pct=line.discount_pct,
+                    net_amount=line.net_amount,
+                    vat_rate=line.vat_rate,
+                    vat_amount=line.vat_amount,
+                    total_amount=line.total_amount,
+                    unit_cost=line.unit_cost,
+                    total_cost=line.total_cost,
+                    line_order=line.line_order,
+                    accounting_account_id=line.accounting_account_id
+                )
+                db.add(new_line)
+                
+            if reverse_type == models.DocumentType.CREDIT_NOTE:
+                from_doc_id, to_doc_id = new_doc.id, fx.id
+            else:
+                from_doc_id, to_doc_id = fx.id, new_doc.id
+                
+            existing_app = db.query(models.Application).filter(
+                models.Application.from_document_id == from_doc_id,
+                models.Application.to_document_id == to_doc_id
+            ).first()
+            
+            if existing_app:
+                auto_application_created = False
+                auto_application_already_exists = True
+                auto_application_id = existing_app.id
+            else:
+                app_rev = models.Application(
+                    from_document_id=from_doc_id,
+                    to_document_id=to_doc_id,
+                    amount_applied=fx.total_amount,
+                    amount_applied_ars=fx.total_amount_ars,
+                    exchange_rate=1.0,
+                    created_at=datetime.utcnow()
+                )
+                db.add(app_rev)
+                db.flush()
+                
+                auto_application_created = True
+                auto_application_already_exists = False
+                auto_application_id = app_rev.id
+                
+                # Recalcular estados
+                debit_doc = new_doc if reverse_type == models.DocumentType.DEBIT_NOTE else fx
+                credit_doc = fx if reverse_type == models.DocumentType.DEBIT_NOTE else new_doc
+                
+                _recalc_document_status(debit_doc, db)
+                _recalc_document_status(credit_doc, db)
+                
+
+
+            fx_reversals_created.append({
+                "original_fx_note_id": fx.id,
+                "reverse_fx_note_id": new_doc.id,
+                "reverse_type": reverse_type.value if hasattr(reverse_type, 'value') else reverse_type,
+                "number": new_num,
+                "auto_application_created": auto_application_created,
+                "auto_application_already_exists": auto_application_already_exists,
+                "auto_application_id": auto_application_id
+            })
+            
+            _log_history(db, fx.id, "ANULACION_FISCAL", f"Se generó NC/ND reversa {new_num} por anulación de recibo.", current_user)
+            _log_history(db, new_doc.id, "GENERACION", f"Reversa automática de {fx.number} por anulación de recibo.", current_user)
+
+        db.commit()
+        
+        # Reformatear reverted applications con el nuevo status de la factura
+        final_reverted = []
+        for r in reverted_applications:
+            # refetch the affected to get updated balance info
+            d = db.query(models.Document).filter(models.Document.id == r['document_id']).first()
+            if d:
+                # El saldo pendiente en QAgross no se guarda explícito si no que surge, 
+                # pero mandamos el nuevo status
+                r["new_status"] = str(d.status.value if hasattr(d.status, 'value') else d.status)
+                # El "new_pending_amount" idealmente es total - sum(applications). No es estrictamente necesario, el user pidió algo representativo.
+            final_reverted.append(r)
+            
+        warnings = [
+            "Se han eliminado físicamente las relaciones de aplicación por limitación técnica, dejando rastro en auditoría.",
+            "Si el cobro poseía Diferencias de Cambio asociadas, requieren revisión y reversión manual."
+        ]
+        
+        return {
+            "ok": True,
+            "document_id": doc.id,
+            "status": "CANCELLED",
+            "reverted_applications": final_reverted,
+            "fx_reversals_created": fx_reversals_created,
+            "warnings": warnings
+        }
+    except HTTPException:
+        db.rollback()
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"No se pudo crear la nota reversa por diferencia de cambio (o anular recibo): {str(e)}")
 
 @router.post("/", response_model=document_schemas.DocumentResponse)
 def create_document(
@@ -938,9 +1265,14 @@ def create_document(
                         db.add(db_app)
                         db.flush() # Ensure ID is available for FX adjustment
                         
-                        # Trigger FX adjustment if needed (destination is USD)
+                        # Trigger FX adjustment if needed:
+                        # SOLO cuando la factura es USD y el RECIBO es ARS
+                        # Si recibo USD + factura USD: NO generar DDC (mismo universo monetario)
                         try:
-                            if str(to_doc.currency) in ("USD", "CurrencyType.USD"):
+                            receipt_is_ars = str(db_doc.currency) not in ("USD", "CurrencyType.USD")
+                            invoice_is_usd = str(to_doc.currency) in ("USD", "CurrencyType.USD")
+                            if receipt_is_ars and invoice_is_usd:
+
                                 generate_fx_adjustment(db_app.id, db)
                         except Exception as e:
                             logger.error(f"Error generando ajuste FX en create_document: {e}")
@@ -1775,7 +2107,7 @@ def get_next_document_number(pv: str, doc_type: str, db: Session = Depends(get_d
 @router.put("/{id}", response_model=document_schemas.DocumentResponse, dependencies=[Depends(check_permission("sales_invoices", "edit"))])
 def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
     try:
-        print(f"UPDATE DOCUMENT PAYLOAD: {data.model_dump()}")
+
         doc = db.query(models.Document).filter(models.Document.id == id).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Documento no encontrado")

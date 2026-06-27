@@ -398,6 +398,16 @@
     background: #fef2f2;
 }
 
+.diffBlock.diffInfo {
+    border-color: #cbd5e1;
+    background: #f1f5f9;
+}
+
+.diffBlock.diffSuccess {
+    border-color: #a7f3d0;
+    background: #ecfdf5;
+}
+
 .diffLabel {
     font-size: 9px;
     font-weight: 800;
@@ -848,4 +858,323 @@
     border-color: var(--primary);
     color: var(--primary);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+/* ========================================================= */
+/* INVOICE MODE STYLES (COBRO DESDE FACTURA)                 */
+/* ========================================================= */
+
+.compactHeader {
+    padding: 12px 24px !important;
+}
+
+.compactHeaderGrid {
+    gap: 8px 10px !important;
+}
+
+.compactHeaderGrid :global(input),
+.compactHeaderGrid :global(select) {
+    height: 34px !important;
+    font-size: 13px !important;
+}
+
+.compactHeaderGrid :global(label) {
+    font-size: 11px !important;
+    margin-bottom: 2px !important;
+}
+
+.containerInvoiceMode {
+    background: var(--bg-light);
+}
+
+.invoiceModeLayout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 280px;
+    gap: 16px;
+    padding: 16px 24px 24px 24px;
+    align-items: start;
+    height: 100%;
+    background: var(--bg-light);
+}
+
+.leftColumn {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow: visible;
+}
+
+.rightColumn {
+    display: flex;
+    flex-direction: column;
+    align-self: start;
+}
+
+/* Invoice Context Card */
+.invoiceCardFull {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.invoiceCardTitle {
+    margin: 0;
+    font-size: 10px;
+    font-weight: 800;
+    text-transform: uppercase;
+    color: #64748b;
+    letter-spacing: 0.05em;
+}
+
+.invoiceCardDetails {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    flex-wrap: wrap;
+}
+
+.invNumber {
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.invClient {
+    color: #475569;
+}
+
+.invTotal, .invApplied {
+    color: #64748b;
+    font-size: 12px;
+    padding-left: 8px;
+    border-left: 1px solid #e2e8f0;
+}
+
+.invPending {
+    font-weight: 700;
+    color: #059669;
+    font-size: 12px;
+    padding-left: 8px;
+    border-left: 1px solid #e2e8f0;
+}
+
+/* Sections */
+.sectionBlock {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.sectionTitle {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+/* Payment Methods Grid */
+.paymentCardsGrid {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.payCardBtn {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #334155;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    height: 34px;
+    transition: all 0.2s;
+}
+
+.payCardBtn:hover {
+    border-color: #3b82f6;
+    color: #2563eb;
+    background: #eff6ff;
+}
+
+.emptyStateCompact {
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    border-radius: 6px;
+    padding: 16px;
+    text-align: center;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    color: #64748b;
+    font-size: 12px;
+    max-height: 80px;
+    justify-content: center;
+}
+
+.emptyStateCompact strong {
+    color: #334155;
+    font-size: 13px;
+}
+
+.tableWrapCompact {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    overflow: hidden;
+}
+
+/* Application Summary */
+.applicationSummary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: #f8fafc;
+    padding: 8px 12px;
+    border-radius: 6px;
+    font-size: 12px;
+    color: #334155;
+}
+
+/* Retentions Foldable */
+.retentionsDetails {
+    background: transparent;
+}
+
+.retentionsSummary {
+    cursor: pointer;
+    user-select: none;
+    list-style: none;
+    height: 24px;
+    display: flex;
+    align-items: center;
+}
+
+.retentionsSummary::-webkit-details-marker {
+    display: none;
+}
+
+.retentionsContent {
+    margin-top: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.actionsBarCompact {
+    display: flex;
+    justify-content: flex-end;
+}
+
+/* Right Summary Card */
+.summaryCardFixed {
+    background: white;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    position: sticky;
+    top: 16px;
+    height: fit-content;
+}
+
+.summaryCardTitle {
+    margin: 0 0 4px 0;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--primary);
+}
+
+.summaryCardRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 12px;
+    color: #475569;
+}
+
+.summaryCardRow strong {
+    font-size: 13px;
+    color: var(--primary);
+}
+
+.summaryCardDivider {
+    border: none;
+    border-top: 1px dashed var(--border);
+    margin: 2px 0;
+}
+
+.diffBlockFinal {
+    padding: 10px 12px;
+    border-radius: 6px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 13px;
+    margin-top: 4px;
+    border: 1px solid transparent;
+}
+
+.diffInfoFinal {
+    background: #f1f5f9;
+    color: #475569;
+    border-color: #cbd5e1;
+}
+
+.diffSuccessFinal {
+    background: #ecfdf5;
+    color: #059669;
+    border-color: #a7f3d0;
+}
+
+.hasDiffFinal {
+    background: #fef2f2;
+    color: #dc2626;
+    border-color: #fecaca;
+}
+
+.summaryCardFooter {
+    margin-top: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.confirmBtnFullWidth {
+    width: 100%;
+    justify-content: center;
+    padding: 0 16px;
+    height: 40px;
+    font-size: 13px;
+    border-radius: 6px;
+}
+
+.confirmHint, .confirmHintReady {
+    text-align: center;
+    font-size: 11px;
+}
+
+.confirmHint {
+    color: #64748b;
+}
+
+.confirmHintReady {
+    color: #059669;
+    font-weight: 600;
 }

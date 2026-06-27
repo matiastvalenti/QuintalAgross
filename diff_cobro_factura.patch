@@ -1,0 +1,208 @@
+diff --git a/frontend/src/App.jsx b/frontend/src/App.jsx
+index 2e7d9a8d..4cda17c0 100644
+--- a/frontend/src/App.jsx
++++ b/frontend/src/App.jsx
+@@ -82,6 +82,7 @@ import { WindowProvider, useWindow } from "./context/WindowContext";
+ const OrdenVentaStandalonePage = lazy(() => import("./modules/sales/OrdenVentaStandalonePage"));
+ const RemitoStandalonePage = lazy(() => import("./modules/sales/RemitoStandalonePage"));
+ const FacturaStandalonePage = lazy(() => import("./modules/sales/FacturaStandalonePage"));
++const InvoiceCollectionStandalonePage = lazy(() => import("./modules/sales/InvoiceCollectionStandalonePage"));
+ const NotaDebitoStandalonePage = lazy(() => import("./modules/sales/NotaDebitoStandalonePage"));
+ const CreditNoteStandalonePage = lazy(() => import("./modules/sales/CreditNoteStandalonePage"));
+ const PurchaseOrderStandalonePage = lazy(() => import("./modules/purchases/PurchaseOrderStandalonePage"));
+@@ -151,6 +152,9 @@ export default function App() {
+               {/* Facturas */}
+               <Route path="/standalone/facturas/nueva" element={<FacturaStandalonePage />} />
+               <Route path="/standalone/facturas/:id" element={<FacturaStandalonePage />} />
++              
++              {/* Cobros de Factura */}
++              <Route path="/standalone/cobros/factura/:id" element={<InvoiceCollectionStandalonePage />} />
+ 
+               {/* Notas de Débito */}
+               <Route path="/standalone/notas-debito/nueva" element={<NotaDebitoStandalonePage />} />
+diff --git a/frontend/src/modules/finance/ReceiptStandalonePage.jsx b/frontend/src/modules/finance/ReceiptStandalonePage.jsx
+index bafc0c1f..124560d8 100644
+--- a/frontend/src/modules/finance/ReceiptStandalonePage.jsx
++++ b/frontend/src/modules/finance/ReceiptStandalonePage.jsx
+@@ -5,8 +5,11 @@
+  */
+ import { useSearchParams, useParams } from "react-router-dom";
+ import { useAuth } from "../../context/AuthContext";
++import { useState, useEffect } from "react";
+ import ReceiptForm from "./ReceiptForm";
++import InvoiceCollectionReadonlyView from "../sales/InvoiceCollectionReadonlyView";
+ import LoadingScreen from "../../components/ui/LoadingScreen";
++import api from "../../services/api";
+ 
+ function StandaloneGuard({ children }) {
+   const { user, loading } = useAuth();
+@@ -38,13 +41,115 @@ export default function ReceiptStandalonePage() {
+   const mode = id ? (searchParams.get("mode") || "view") : "new";
+   const isPayment = searchParams.get("isPayment") === "true" || searchParams.get("context") === "payments";
+   const entityId = searchParams.get("entityId");
++  const invoiceId = searchParams.get("invoice_id");
++  const invoiceNotes = searchParams.get("notes") || "";
++
++  // Estado para la factura pre-cargada (cobro desde factura)
++  const [invoiceLoaded, setInvoiceLoaded] = useState(false);
++  const [preloadedEntityId, setPreloadedEntityId] = useState(entityId || null);
++  const [preloadedApplications, setPreloadedApplications] = useState(null);
++  const [preloadedCurrency, setPreloadedCurrency] = useState("ARS");
++  const [preloadedInvoice, setPreloadedInvoice] = useState(null);
++
++  useEffect(() => {
++    if (!invoiceId || id) return; // Solo en modo nuevo con invoice_id
++    const loadInvoice = async () => {
++      try {
++        const inv = await api.get(`/accounting/documents/${invoiceId}`);
++        const pending = (inv.pending_amount != null)
++          ? Number(inv.pending_amount)
++          : Math.max(0, Number(inv.total_amount || 0) - Number(inv.amount_applied || 0));
++        setPreloadedEntityId(inv.entity_id);
++        setPreloadedCurrency(inv.currency || "ARS");
++        setPreloadedInvoice(inv);
++        setPreloadedApplications([{
++          to_document_id: inv.id,
++          number: inv.number,
++          date: inv.date,
++          remaining: pending,
++          currency: inv.currency || "ARS",
++          amount_applied: pending,
++        }]);
++      } catch (e) {
++        console.error("Error cargando factura para cobro", e);
++      } finally {
++        setInvoiceLoaded(true);
++      }
++    };
++    loadInvoice();
++  }, [invoiceId]);
++
++  const isFromInvoice = invoiceId && !id;
++
++  // Cargar el recibo existente si existe un ID para saber si es readonly
++  const [existingReceipt, setExistingReceipt] = useState(null);
++  const [loadingReceipt, setLoadingReceipt] = useState(false);
++
++  useEffect(() => {
++    if (!id || mode !== 'view') return;
++    
++    let mounted = true;
++    const loadReceipt = async () => {
++      setLoadingReceipt(true);
++      try {
++        const res = await api.get(`/accounting/documents/${id}`);
++        if (mounted) setExistingReceipt(res);
++      } catch (e) {
++        console.error("Error al cargar recibo existente", e);
++      } finally {
++        if (mounted) setLoadingReceipt(false);
++      }
++    };
++    loadReceipt();
++
++    return () => { mounted = false; };
++  }, [id, mode]);
++
++  useEffect(() => {
++    if (!isFromInvoice) return;
++
++    const t = setTimeout(() => {
++      try {
++        window.resizeTo(1240, 620);
++      } catch (e) {
++        console.warn("No se pudo ajustar tamaño del popup", e);
++      }
++    }, 150);
++
++    return () => clearTimeout(t);
++  }, [isFromInvoice]);
++
++  // Si hay invoice_id pero aún no cargó, mostrar loading
++  if (invoiceId && !id && !invoiceLoaded) {
++    return <LoadingScreen message="Cargando datos de la factura..." />;
++  }
++
++  // Si está cargando el recibo existente
++  if (loadingReceipt) {
++    return <LoadingScreen message="Cargando datos del recibo..." />;
++  }
++
++  // Lógica de desvío a la vista Readonly si es un cobro de factura
++  if (id && mode === 'view' && existingReceipt && existingReceipt.applied_to && existingReceipt.applied_to.length > 0) {
++    return (
++      <StandaloneGuard>
++        <div style={{ width: "100%", height: "100%", overflow: "hidden" }}>
++          <InvoiceCollectionReadonlyView receipt={existingReceipt} />
++        </div>
++      </StandaloneGuard>
++    );
++  }
+ 
+   let initialPayments = null;
+   if (draftId) {
+     const draftStr = localStorage.getItem(`receipt_draft_${draftId}`);
+     if (draftStr) {
+-      const draft = JSON.parse(draftStr);
+-      initialPayments = draft.initialPayments;
++      try {
++        const parsed = JSON.parse(draftStr);
++        if (parsed.payments) initialPayments = parsed.payments;
++      } catch (e) {
++        console.error("Error al cargar draft", e);
++      }
+     }
+   }
+ 
+@@ -62,9 +167,14 @@ export default function ReceiptStandalonePage() {
+           mode={mode}
+           id={id || null}
+           isPayment={isPayment}
+-          initialEntityId={entityId}
++          initialEntityId={preloadedEntityId || entityId}
++          initialApplications={preloadedApplications}
+           initialPayments={initialPayments}
++          initialCurrency={preloadedCurrency}
++          initialDate={new Date().toISOString().split("T")[0]}
+           isStandalone={true}
++          initialObservations={invoiceNotes}
++          sourceInvoice={preloadedInvoice}
+         />
+       </div>
+     </StandaloneGuard>
+diff --git a/frontend/src/utils/openStandaloneWindow.js b/frontend/src/utils/openStandaloneWindow.js
+index 22ed7c01..ea188e7d 100644
+--- a/frontend/src/utils/openStandaloneWindow.js
++++ b/frontend/src/utils/openStandaloneWindow.js
+@@ -218,6 +218,31 @@ export function openNuevoRecibo(options = {}) {
+   return openStandaloneWindow(`/standalone/recibos/nuevo${entityId}`, "recibo-nuevo", options);
+ }
+ 
++const INVOICE_RECEIPT_POPUP_WIDTH = 1280;
++const INVOICE_RECEIPT_POPUP_HEIGHT = 820;
++
++/**
++ * Abre un recibo/cobro prellenado desde una factura.
++ * @param {Object} invoice - Objeto factura con { id, number, entity_id, currency, pending_amount, total_amount, amount_applied }
++ * @param {Object} options - Opciones de ventana
++ */
++export function openNuevoReciboDesdeFactura(invoice, options = {}) {
++  if (!invoice?.id) return;
++  const path = `/standalone/cobros/factura/${invoice.id}`;
++  const popup = openStandaloneWindow(path, `receipt-invoice-${invoice.id}`, { width: INVOICE_RECEIPT_POPUP_WIDTH, height: INVOICE_RECEIPT_POPUP_HEIGHT, ...options });
++  
++  if (popup) {
++    try {
++      popup.resizeTo(INVOICE_RECEIPT_POPUP_WIDTH, INVOICE_RECEIPT_POPUP_HEIGHT);
++    } catch (e) {
++      console.warn("No se pudo redimensionar popup de recibo", e);
++    }
++  }
++  
++  return popup;
++}
++
++
+ export function openEditRecibo(id, options = {}) {
+   const mode = options.mode || "view";
+   return openStandaloneWindow(`/standalone/recibos/${id}?mode=${mode}`, `recibo-${id}`, options);

@@ -45,6 +45,7 @@ export default function CreditNoteStandalonePage() {
     <StandaloneGuard>
       <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#f8fafc' }}>
         <InvoiceForm 
+          mode={id ? "edit" : "new"}
           id={id} 
           isStandalone={true} 
           initialDocType="CREDIT_NOTE"

@@ -159,6 +159,9 @@ class ApplicationResponse(ApplicationBase):
     to_document_date: Optional[datetime] = None
     to_document_total: Optional[float] = None
     to_document_applied: Optional[float] = None
+    # Campos de la factura destino necesarios para reconstruir TC Factura y moneda
+    to_document_currency: Optional[str] = None        # moneda de la factura (USD, ARS)
+    to_document_exchange_rate: Optional[float] = None # TC histórico de la factura
     model_config = ConfigDict(from_attributes=True)
 
 # ──────────────────────────────────────────────

@@ -481,18 +481,18 @@
 }
 
 .footerCompact {
-    margin-top: 2px;
-    margin-bottom: 2px;
+    margin-top: 4px;
+    margin-bottom: 0px;
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    gap: 8px;
-    padding: 1px 4px;
+    gap: 16px;
+    padding: 4px 12px;
     background: #ffffff;
     border-top: 1px solid var(--border-color);
-    border-radius: 12px;
-    height: 32px;
-    min-height: 32px;
+    border-radius: 8px;
+    height: auto;
+    min-height: auto;
     flex-shrink: 0;
 }
 

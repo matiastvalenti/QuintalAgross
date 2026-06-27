@@ -29,6 +29,7 @@ export default function ReceiptsPage() {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [showFilters, setShowFilters] = useState(false);
+  const [showCancelledReceipts, setShowCancelledReceipts] = useState(false);
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -49,7 +50,15 @@ export default function ReceiptsPage() {
     window.addEventListener("receipt-changed", onRefresh);
     window.addEventListener("invoice-changed", onRefresh);
     window.addEventListener("cost-center-changed", onRefresh);
+
+    const bc = new BroadcastChannel('quintal_events');
+    bc.onmessage = (event) => {
+      if (event.data && event.data.type === 'QUINTAL_DOCUMENT_VOIDED') {
+        onRefresh();
+      }
+    };
     return () => {
+      bc.close();
       window.removeEventListener("receipt-changed", onRefresh);
       window.removeEventListener("invoice-changed", onRefresh);
       window.removeEventListener("cost-center-changed", onRefresh);
@@ -79,6 +88,7 @@ export default function ReceiptsPage() {
 
   const filtered = useMemo(() => {
     return receipts.filter((rec) => {
+      if (!showCancelledReceipts && rec.status === 'CANCELLED') return false;
       if (search.trim()) {
         const q = search.toLowerCase();
         const matchesSearch = String(rec.number).toLowerCase().includes(q) || entityName(rec.entity_id).toLowerCase().includes(q);
@@ -100,27 +110,27 @@ export default function ReceiptsPage() {
     });
   }, [receipts, search, selectedEntityId, dateFrom, dateTo, sortBy, sortDir, entities]);
 
+  const activeReceipts = useMemo(() => {
+    return filtered.filter(r => r.status !== 'CANCELLED');
+  }, [filtered]);
+
   const paginated = useMemo(() => {
     const start = (currentPage - 1) * pageSize;
     return filtered.slice(start, start + pageSize);
   }, [filtered, currentPage]);
 
-  const totalPages = Math.ceil(filtered.length / pageSize);
+  const totalPages = Math.ceil(activeReceipts.length / pageSize);
 
   const handleHandleNew = () => {
     openNuevoRecibo({ 
-      title: 'Nuevo Recibo', 
-      width: 1100, 
-      height: 800,
+      title: 'Nuevo Recibo'
     });
   };
 
   const handleOpen = (id) => {
     openEditRecibo(id, { 
       mode: 'view',
-      title: `Recibo ${receipts.find(r => r.id === id)?.number || ''}`, 
-      width: 1100, 
-      height: 800 
+      title: `Recibo ${receipts.find(r => r.id === id)?.number || ''}`
     });
   };
 
@@ -160,7 +170,7 @@ export default function ReceiptsPage() {
                 </div>
                 <div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Total Recibidos</div>
-                    <div style={{ fontSize: 20, fontWeight: 700 }}>{filtered.length}</div>
+                    <div style={{ fontSize: 20, fontWeight: 700 }}>{activeReceipts.length}</div>
                 </div>
             </Card>
             <Card style={{ padding: '16px', display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -170,7 +180,7 @@ export default function ReceiptsPage() {
                 <div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Monto Total (ARS)</div>
                     <div style={{ fontSize: 20, fontWeight: 700 }}>
-                        {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(filtered.reduce((acc, curr) => acc + (curr.total_amount_ars || 0), 0))}
+                        {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(activeReceipts.reduce((acc, curr) => acc + (curr.total_amount_ars || 0), 0))}
                     </div>
                 </div>
             </Card>
@@ -181,7 +191,7 @@ export default function ReceiptsPage() {
                 <div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Pendientes de Aplicar</div>
                     <div style={{ fontSize: 20, fontWeight: 700 }}>
-                        {filtered.filter(r => r.status === 'OPEN').length}
+                        {activeReceipts.filter(r => r.status === 'OPEN').length}
                     </div>
                 </div>
             </Card>
@@ -192,7 +202,7 @@ export default function ReceiptsPage() {
                 <div>
                     <div style={{ fontSize: 12, color: 'var(--text-secondary)', fontWeight: 500 }}>Recibos en Dólares</div>
                     <div style={{ fontSize: 20, fontWeight: 700 }}>
-                        {filtered.filter(r => r.currency === 'USD').length}
+                        {activeReceipts.filter(r => r.currency === 'USD').length}
                     </div>
                 </div>
             </Card>
@@ -236,6 +246,27 @@ export default function ReceiptsPage() {
                 >
                     Filtros {showFilters ? <ChevronUp size={14}/> : <ChevronDown size={14}/>}
                 </Button>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginLeft: 8, color: 'var(--text-secondary)', userSelect: 'none' }}>
+                  <span
+                    role="switch"
+                    aria-checked={showCancelledReceipts}
+                    onClick={() => setShowCancelledReceipts(v => !v)}
+                    style={{
+                      display: 'inline-flex', alignItems: 'center',
+                      width: 36, height: 20, borderRadius: 10,
+                      background: showCancelledReceipts ? 'var(--primary, #6366f1)' : '#cbd5e1',
+                      cursor: 'pointer', position: 'relative', flexShrink: 0,
+                      transition: 'background 0.2s'
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute', width: 16, height: 16, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                      left: showCancelledReceipts ? 18 : 2, transition: 'left 0.2s'
+                    }} />
+                  </span>
+                  Ver anulados
+                </label>
             </div>
             
             <div style={{ display: 'flex', gap: 8 }}>
@@ -407,3 +438,5 @@ export default function ReceiptsPage() {
     </div>
   );
 }
+
+

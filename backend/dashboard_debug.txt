@@ -536,3 +536,21 @@ AttributeError: type object 'CashPosition' has no attribute 'cost_center'
 [2026-06-24 08:35:05.361161] Starting dashboard summary (Refreshed) - CostCenter: 1
 [2026-06-24 08:35:05.684454] Error in critical stock: type object 'Product' has no attribute 'track_stock'
 [2026-06-24 08:35:08.372395] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-24 12:42:31.953548] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-24 12:42:31.964996] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-24 12:42:34.250414] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-25 10:10:02.927447] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-25 10:10:03.222844] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-25 10:10:05.914336] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-26 00:34:14.308881] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-26 00:34:14.660994] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-26 00:34:16.574264] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-26 08:31:57.457490] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-26 08:31:57.806875] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-26 08:32:00.398716] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-26 15:12:43.343746] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-26 15:12:43.591217] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-26 15:12:45.268421] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-27 19:21:02.792346] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-27 19:21:03.094849] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-27 19:21:05.088699] Error in funnel: type object 'Application' has no attribute 'date'

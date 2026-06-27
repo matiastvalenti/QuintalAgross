@@ -130,6 +130,8 @@ export default function InvoiceForm(props) {
   const { closeWindow, openWindow } = useWindow();
   const { showToast } = useToast();
   
+
+
   const [mode, setMode] = useState(initialMode);
   const [id, setId] = useState(initialId);
   const [loading, setLoading] = useState(initialMode === "edit");
@@ -295,6 +297,7 @@ export default function InvoiceForm(props) {
     const res = await fetch(`${API_URL}/accounting/documents/${docId}`, { headers: { Authorization: `Bearer ${token}` }});
     if (res.ok) {
         const data = await res.json();
+
         setFullInvoiceData(data);
         setEntity(data.entity_id ? { id: data.entity_id, name: data.entity_name } : null);
         setDate(data.date.split("T")[0]);
@@ -311,6 +314,7 @@ export default function InvoiceForm(props) {
         setStatus(data.status || "DRAFT");
         setDocType(data.doc_type || "INVOICE");
         setLetter(data.line || "A");
+        setReasonType(data.reason_type || "");
         
         // Para cada línea con producto, recuperar el contenido por envase
         // Funciona incluso para facturas viejas sin package_size guardado
@@ -590,7 +594,7 @@ export default function InvoiceForm(props) {
         }))
     };
     
-    console.log("UPDATE INVOICE PAYLOAD", payload);
+
     
     try {
         const url = mode === "edit" ? `${API_URL}/accounting/documents/${id}` : `${API_URL}/accounting/documents/`;

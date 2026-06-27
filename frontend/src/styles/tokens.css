@@ -135,10 +135,10 @@ body {
 }
 
 body.standalone-document-body {
-  background: #fff !important;
+  background: #fff;
 }
 body.standalone-document-body #root {
-  background: #fff !important;
+  background: transparent;
 }
 
 #root {

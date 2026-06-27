@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { ReceiptShell, ShellSection } from "./components/ReceiptShell/ReceiptShell";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
@@ -51,6 +52,8 @@ export default function ReceiptForm({
   initialExchangeRate = null,
   isPayment = false,
   initialDate = null,
+  initialObservations = "",
+  sourceInvoice = null,
 }) {
   const id = receiptId || propId;
   const { closeWindow, openWindow } = useWindow();
@@ -102,7 +105,7 @@ export default function ReceiptForm({
   const [number, setNumber] = useState("");
   const [currency, setCurrency] = useState(initialCurrency);
   const [exchangeRate, setExchangeRate] = useState(initialExchangeRate || 1);
-  const [observations, setObservations] = useState("");
+  const [observations, setObservations] = useState(initialObservations || "");
   const [pointsOfSale, setPointsOfSale] = useState([]);
   const [pv, setPv] = useState("");
   const [un, setUn] = useState("1");
@@ -305,14 +308,19 @@ export default function ReceiptForm({
     }
   };
 
+  const isFromInvoice = Boolean(sourceInvoice);
+
   const addPayment = (type) => {
+    const diffToPay = Math.max(0, totalApplied - totalPayments - totalRetentions);
+    const amt = diffToPay > 0 ? diffToPay : 0;
+
     if (type === "CHECK") {
       const existingChecks = payments.filter(p => p.type === "CHECK");
       // If we are adding via button, we normally want to open the multi-grid
       setModalChecks(existingChecks.length > 0 ? existingChecks : [{
         id: Math.random(),
         type: "CHECK",
-        amount: 0,
+        amount: amt,
         description: "",
         bank_name: "",
         reference_number: "",
@@ -330,7 +338,7 @@ export default function ReceiptForm({
     const newPayment = {
       id: newId,
       type,
-      amount: 0,
+      amount: amt,
       description: "",
       bank_name: "",
       reference_number: "",
@@ -530,7 +538,23 @@ export default function ReceiptForm({
       setLoading(true);
       const savedDoc = await api.post('/accounting/documents/', payload);
       showToast("Recibo guardado", "success");
-      window.dispatchEvent(new CustomEvent("receipt-changed"));
+      // Notificar a ventanas abiertas (BroadcastChannel + CustomEvent)
+      const invoiceIds = applications.map(a => a.to_document_id).filter(Boolean);
+      const bcPayload = {
+        type: "QUINTAL_DOCUMENT_SAVED",
+        documentType: "receipt",
+        receiptId: savedDoc.id,
+        invoiceIds,
+        entityId: entity?.id,
+        timestamp: Date.now(),
+      };
+      try {
+        const bc = new BroadcastChannel("quintal_events");
+        bc.postMessage(bcPayload);
+        bc.close();
+      } catch (_) {}
+      window.dispatchEvent(new CustomEvent("receipt-changed", { detail: bcPayload }));
+      window.dispatchEvent(new CustomEvent("invoice-changed", { detail: bcPayload }));
       setShowFxModalForDoc(savedDoc.id);
     } catch (e) {
       console.error(e);
@@ -600,726 +624,270 @@ export default function ReceiptForm({
   if (loading && !isSaving && mode === "edit") return <LoadingScreen message="Cargando información..." />;
 
   return (
-    <div className={s.container}>
-      <div
-        className={s.header}
-        style={{
-          pointerEvents: mode === "edit" ? "none" : "auto",
-          opacity: mode === "edit" ? 0.8 : 1,
-        }}
-      >
-        <div className={s.headerGrid}>
-          <div className={s.headerGroup} style={{ gridColumn: "span 6" }}>
-            <Autocomplete
-              label={isPayment ? "Proveedor" : "Cliente / Entidad"}
-              initialValue={entity}
-              onSearch={searchEntities}
-              onSelect={handleEntitySelect}
-              renderItem={(e) => `${e.name} (${e.tax_id || "S/C"})`}
-              valueDisplay={(e) => e.name}
-              placeholder={isPayment ? "Buscar proveedor..." : "Buscar cliente..."}
-              minChars={0}
-              disabled={mode === "edit"}
-            />
+    <ReceiptShell 
+      headerTitle={mode === 'new' ? 'Nuevo Recibo' : `Recibo N° ${number || ''}`}
+      headerSubtitle={isPayment ? 'Orden de Pago' : 'Recibo de Cobro'}
+      headerStats={[
+        { label: 'Estado', value: id ? 'Guardado' : 'Borrador', color: id ? 'var(--primary)' : 'var(--text-secondary)' },
+        { label: 'Entidad', value: entity?.name || 'No seleccionada' },
+        { label: 'Total Pagado', value: fmt(totalPayments + totalRetentions) }
+      ]}
+      topLeftContent={
+        <ShellSection title="Parámetros">
+          <div className={s.headerGrid} style={{ pointerEvents: mode === 'edit' ? 'none' : 'auto', opacity: mode === 'edit' ? 0.8 : 1 }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 6' }}>
+              <Autocomplete
+                label={isPayment ? "Proveedor" : "Cliente / Entidad"}
+                initialValue={entity}
+                onSearch={searchEntities}
+                onSelect={handleEntitySelect}
+                renderItem={(e) => `${e.name} (${e.tax_id || "S/C"})`}
+                valueDisplay={(e) => e.name}
+                placeholder={isPayment ? "Buscar proveedor..." : "Buscar cliente..."}
+                minChars={0}
+                disabled={mode === "edit"}
+              />
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+              <Input label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={mode === "edit"} />
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+              <Select label="Moneda" value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={mode === "edit"}>
+                <option value="ARS">ARS</option>
+                <option value="USD">USD</option>
+              </Select>
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+              <Input label="Cotización" type="number" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} disabled={mode === "edit"} />
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+              <Select label="PV" value={pv} onChange={(e) => setPv(e.target.value)} disabled={mode === "edit"}>
+                {pointsOfSale.map((p) => <option key={p.id} value={p.pv}>{p.pv}</option>)}
+              </Select>
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 6' }}>
+              <Input label="Número" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="0001-00000001" disabled={mode === "edit"} />
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 6' }}>
+              <Input label="Concepto / Detalle" value={observations} onChange={(e) => setObservations(e.target.value)} disabled={mode === 'edit'} />
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+              <Select label="C. Costo" value={ctroCosto} onChange={(e) => setCtroCosto(e.target.value)} disabled={mode === "edit"}>
+                <option value="1">1</option><option value="2">2</option>
+              </Select>
+            </div>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+              <label className={s.fileLabel}>
+                <Upload size={16} /> 
+                {uploading ? "Subiendo..." : (attachmentUrl ? "Cambiar Adjunto" : "Adjuntar Comprobante")}
+                <input type="file" onChange={handleFileUpload} style={{ display: "none" }} />
+              </label>
+              {attachmentUrl && <div className={s.fileOk} title={attachmentUrl}><Check size={12} /></div>}
+            </div>
           </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 2" }}>
-            <Input
-              label="Fecha"
-              type="date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              disabled={mode === "edit"}
-            />
+        </ShellSection>
+      }
+      summaryContent={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div className={s.summaryRow} style={{ color: 'var(--text-secondary)' }}>
+            <span>Total Aplicado a Facturas:</span>
+            <span>{fmt(totalApplied)}</span>
           </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 2" }}>
-            <Select
-              label="Moneda"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              disabled={mode === "edit"}
-            >
-              <option value="ARS">ARS</option>
-              <option value="USD">USD</option>
-            </Select>
+          <div className={s.summaryRow} style={{ color: 'var(--text-secondary)' }}>
+            <span>Total Medios de Pago:</span>
+            <span>{fmt(totalPayments)}</span>
           </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 2" }}>
-            <Input
-              label="Cotización"
-              type="number"
-              value={exchangeRate}
-              onChange={(e) => setExchangeRate(Number(e.target.value))}
-              disabled={mode === "edit"}
-            />
+          <div className={s.summaryRow} style={{ color: 'var(--text-secondary)' }}>
+            <span>Total Retenciones:</span>
+            <span>{fmt(totalRetentions)}</span>
           </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 2" }}>
-            <Select
-              label="PV"
-              value={pv}
-              onChange={(e) => setPv(e.target.value)}
-              disabled={mode === "edit"}
-            >
-              {pointsOfSale.map((p) => (
-                <option key={p.id} value={p.pv}>{p.pv}</option>
-              ))}
-            </Select>
+          <div className={`${s.summaryRow} ${s.total}`}>
+            <span>Total Recibo:</span>
+            <span>{fmt(totalPayments + totalRetentions)}</span>
           </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 3" }}>
-            <Input
-              label="Número"
-              value={number}
-              onChange={(e) => setNumber(e.target.value)}
-              placeholder="0001-00000001"
-              disabled={mode === "edit"}
-            />
-          </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 3" }}>
-            <Input 
-              label="Concepto / Detalle" 
-              value={observations} 
-              onChange={(e) => setObservations(e.target.value)} 
-              placeholder="Ej: Cobro de facturas..." 
-              disabled={mode === 'edit'} 
-            />
-          </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 2" }}>
-            <Select
-              label="C. Costo"
-              value={ctroCosto}
-              onChange={(e) => setCtroCosto(e.target.value)}
-              disabled={mode === "edit"}
-            >
-              <option value="1">1</option>
-              <option value="2">2</option>
-            </Select>
-          </div>
-          <div className={s.headerGroup} style={{ gridColumn: "span 2" }}>
-            <label className={s.fileLabel}>
-              <Upload size={16} /> 
-              {uploading ? "Subiendo..." : (attachmentUrl ? "Cambiar Adjunto" : "Adjuntar Comprobante")}
-              <input type="file" onChange={handleFileUpload} style={{ display: "none" }} />
-            </label>
-            {attachmentUrl && <div className={s.fileOk} title={attachmentUrl}><Check size={12} /></div>}
+          <div className={`${s.summaryRow} ${difference < -0.01 ? s.warning : ''}`} style={{ fontWeight: 600 }}>
+            <span>Diferencia:</span>
+            <span style={{ color: difference < -0.01 ? 'red' : 'inherit' }}>{fmt(difference)}</span>
           </div>
         </div>
-      </div>
-
-      <div className={s.tabs}>
-        <button
-          className={`${s.tab} ${activeTab === "vista360" ? s.active : ""}`}
-          onClick={() => setActiveTab("vista360")}
-          disabled={!entity}
-          title={!entity ? "Seleccione un cliente para ver su estado" : "Vista 360 del Cliente"}
-        >
-          <LayoutIcon size={16} /> Vista 360
-        </button>
-        <button
-          className={`${s.tab} ${activeTab === "payments" ? s.active : ""}`}
-          onClick={() => setActiveTab("payments")}
-        >
-          <CreditCard size={16} /> Medios de Pago
-        </button>
-        <button
-          className={`${s.tab} ${activeTab === "applications" ? s.active : ""}`}
-          onClick={() => setActiveTab("applications")}
-        >
-          <Link2 size={16} /> {isPayment ? "Comprobantes (Aplicaciones)" : "Facturas (Aplicaciones)"}
-        </button>
-        <button
-          className={`${s.tab} ${activeTab === "retentions" ? s.active : ""}`}
-          onClick={() => setActiveTab("retentions")}
-        >
-          <Tag size={16} /> Retenciones
-        </button>
-        <button
-          className={`${s.tab} ${activeTab === "history" ? s.active : ""}`}
-          onClick={() => setActiveTab("history")}
-        >
-          <Calendar size={16} /> Historial
-        </button>
-      </div>
-
-      <div className={s.content}>
-        {activeTab === "vista360" && entity && (
-           <div className={s.tabContent} style={{ padding: 0 }}>
-             <EntityDashboard 
-                entityId={entity.id} 
-                entityName={entity.name} 
-                onNavigate={({ type, mode: newMode, docId }) => {
-                    if (type === 'invoice-form') {
-                      openEditFactura(docId, { mode: newMode, title: `Factura ${docId}`, width: 1100, height: 800 });
-                    }
-                }}
-             />
-           </div>
-        )}
-        {activeTab === "applications" && (
-          <div className={s.tabContent}>
-            <div className={s.actionsBar}>
-              {mode === "new" && (
-                <div className={s.barActions}>
-                  <Button variant="secondary" size="sm" onClick={() => setShowInvoiceModal(true)} disabled={!entity}>
-                    <Plus size={16} /> {isPayment ? "Vincular Comprobantes" : "Vincular Facturas"}
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={autoApply} disabled={!entity || totalPayments + totalRetentions <= 0}>
-                    <Search size={16} /> Saldar Automático
-                  </Button>
-                </div>
-              )}
+      }
+      summaryFooter={
+        <>
+          {mode === 'edit' && id && (
+            <div style={{ backgroundColor: '#fff7ed', border: '1px solid #fed7aa', padding: '8px 12px', borderRadius: 6, fontSize: 13, color: '#9a3412', display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span>La edición directa de recibos aplicados no está soportada contablemente. Para modificarlo, anulá este cobro y generá uno nuevo.</span>
             </div>
-
-            <div className={s.tableWrap}>
+          )}
+          {mode === 'view' ? (
+            <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+              <button type="button" className={s.btnPrimary} style={{ flex: 1 }} onClick={() => window.location.href = window.location.href.replace('mode=view', 'mode=edit')}>
+                Editar
+              </button>
+              <button type="button" className={s.btnSecondary} onClick={handlePrint}>
+                Imprimir
+              </button>
+              <button type="button" className={s.btnSecondary} onClick={() => window.close()}>
+                Cerrar
+              </button>
+            </div>
+          ) : (
+            <button type="button" className={s.btnPrimary} disabled={isSaving || !entity || totalPayments + totalRetentions <= 0 || difference < -0.01} onClick={handleSave}>
+              <Save size={18} /> Confirmar
+            </button>
+          )}
+        </>
+      }
+      bottomContent={
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          
+          {/* APLICACIONES (FACTURAS) */}
+          <ShellSection title="Facturas Aplicadas">
+            {pendingInvoices.length > 0 && mode !== 'view' && (
+              <div style={{ marginBottom: 12 }}>
+                <button type="button" className={s.btnSecondary} onClick={autoApply}>
+                  Aplicar Automáticamente
+                </button>
+              </div>
+            )}
+            
+            {(mode === 'view' ? applications : pendingInvoices).length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                No hay facturas aplicadas.
+              </div>
+            ) : (
               <table className={t.table}>
                 <thead>
                   <tr>
-                    <th>Factura</th>
+                    <th>Documento</th>
                     <th>Fecha</th>
-                    <th style={{ textAlign: "right" }}>Saldo Original</th>
-                    <th style={{ textAlign: "right", width: 140 }}>Aplicado ({applications[0]?.currency})</th>
-                    {currency !== applications[0]?.currency && (
-                      <th style={{ textAlign: "right", width: 140 }}>Equiv. ({currency})</th>
-                    )}
-                    {isPayment && <th style={{ textAlign: "right", width: 140 }}>Monto Aplicado</th>}
-                    <th style={{ width: 40 }}></th>
+                    <th>Moneda</th>
+                    <th style={{ textAlign: 'right' }}>Saldo Pendiente</th>
+                    <th style={{ textAlign: 'right' }}>A Aplicar</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {applications.map((app) => {
-                    const isDiffCurrency = currency !== app.currency;
-                    const equivAmount = isDiffCurrency ? (Number(app.amount_applied) * exchangeRate) : Number(app.amount_applied);
-
+                  {(mode === 'view' ? applications : pendingInvoices).map((inv) => {
+                    const isSelected = applications.some((a) => a.to_document_id === inv.id || a.to_document_id === inv.to_document_id);
+                    const app = applications.find((a) => a.to_document_id === inv.id || a.to_document_id === inv.to_document_id);
                     return (
-                      <tr key={app.to_document_id}>
-                        <td>{app.number}</td>
-                        <td>{new Date(app.date).toLocaleDateString()}</td>
-                        <td style={{ textAlign: "right" }}>{fmt(app.remaining)} (<strong>{app.currency}</strong>)</td>
-                        <td style={{ textAlign: "right" }}>
-                          <input
-                            type="text"
-                            className={s.cellInput}
-                            style={{ textAlign: "right", fontWeight: 700 }}
-                            value={app.temp_amount ?? formatCurrencyInput(app.amount_applied)}
-                            onFocus={() => {
-                              app.temp_amount = formatCurrencyInput(app.amount_applied);
-                              setApplications([...applications]);
-                            }}
-                            onBlur={() => {
-                              delete app.temp_amount;
-                              setApplications([...applications]);
-                            }}
-                            onChange={(e) => {
-                              const raw = e.target.value;
-                              let cleanStr = raw.replace(/[^\d,]/g, "");
-                              if ((cleanStr.match(/,/g) || []).length > 1) return;
-                              
-                              let parts = cleanStr.split(",");
-                              parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                              const visualVal = parts.join(",");
-                              
-                              const val = parseCurrencyInput(cleanStr);
-                              app.amount_applied = val;
-                              app.temp_amount = visualVal;
-                              setApplications([...applications]);
-                            }}
-                          />
+                      <tr key={inv.id || inv.to_document_id} className={isSelected ? t.selectedRow : ""}>
+                        <td>
+                          {mode !== 'view' && (
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleInvoiceApplication(inv)}
+                              style={{ marginRight: 8 }}
+                            />
+                          )}
+                          {inv.number}
                         </td>
-                        {isDiffCurrency && (
-                          <td style={{ textAlign: "right", fontWeight: 600, color: '#64748b' }}>
-                            {fmt(equivAmount)}
-                          </td>
-                        )}
-                        <td style={{ textAlign: "center" }}>
-                          {mode === "new" && (
-                            <button className={s.deleteBtn} onClick={() => toggleInvoiceApplication({ id: app.to_document_id })}>
-                              <X size={16} />
-                            </button>
+                        <td>{new Date(inv.date).toLocaleDateString()}</td>
+                        <td>{inv.currency}</td>
+                        <td style={{ textAlign: 'right' }}>{fmt(inv.remaining)}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          {mode === 'view' ? (
+                            fmt(app?.amount_applied || 0)
+                          ) : (
+                            isSelected ? (
+                              <Input
+                                type="number"
+                                value={app?.amount_applied || 0}
+                                onChange={(e) => {
+                                  const val = Number(e.target.value);
+                                  setApplications(applications.map((a) => 
+                                    a.to_document_id === (inv.id || inv.to_document_id) ? { ...a, amount_applied: val } : a
+                                  ));
+                                }}
+                                style={{ width: 120, marginLeft: 'auto' }}
+                              />
+                            ) : (
+                              "-"
+                            )
                           )}
                         </td>
                       </tr>
                     );
                   })}
-                  {applications.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className={s.emptyState}>
-                        No hay {isPayment ? "comprobantes vinculados" : "facturas vinculadas"}. Use el botón pertinente.
-                      </td>
-                    </tr>
-                  )}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
+            )}
+          </ShellSection>
 
-        {activeTab === "payments" && (
-          <div className={s.tabContent}>
-            <div className={s.actionsBar}>
-              <div className={s.payButtons}>
-                {paymentMethods.map((m) => (
-                  <button key={m.value} className={s.payTypeBtn} onClick={() => addPayment(m.value)}>
-                    {m.icon} <span>{m.label}</span>
-                  </button>
-                ))}
+          {/* MEDIOS DE PAGO */}
+          <ShellSection 
+            title="Medios de Pago" 
+            toolbar={
+              mode !== 'view' && (
+                <div style={{ display: 'flex', gap: 8, padding: '12px 16px' }}>
+                  {[{ value: "CASH", label: "Efectivo" }, { value: "CHECK", label: "Cheque" }, { value: "TRANSFER", label: "Transferencia" }, { value: "OTHER", label: "Otro" }].map(m => (
+                    <button key={m.value} type="button" className={s.btnSecondary} onClick={() => addPayment(m.value)}>
+                      + {m.label}
+                    </button>
+                  ))}
+                </div>
+              )
+            }
+          >
+            {payments.length === 0 ? (
+              <div style={{ padding: '20px', textAlign: 'center', color: '#64748b' }}>
+                No hay medios de pago cargados.
               </div>
-            </div>
-
-            <div className={s.tableWrap}>
+            ) : (
               <table className={t.table}>
                 <thead>
                   <tr>
                     <th>Tipo</th>
-                    <th>Bancos / Detalle</th>
-                    <th>Referencia</th>
-                    <th>Vencimiento</th>
-                    <th style={{ textAlign: "right", width: 140 }}>Importe</th>
-                    <th style={{ width: 40 }}></th>
+                    <th>Detalle</th>
+                    <th style={{ textAlign: 'right' }}>Monto</th>
+                    {mode !== 'view' && <th style={{ width: 60 }}></th>}
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className={s.emptyState}>No hay medios de pago cargados.</td>
-                    </tr>
-                  )}
                   {payments.map((p) => (
                     <tr key={p.id}>
+                      <td>{p.type}</td>
                       <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <Badge variant="secondary">{p.type}</Badge>
-                          {p.type === "CHECK" && (
-                            <button className={s.iconBtnSmall} onClick={() => { 
-                              const allChecks = payments.filter(pay => pay.type === "CHECK");
-                              setModalChecks(allChecks);
-                              setShowCheckModal(true); 
-                            }}>
-                              <Search size={14} />
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      <td>
-                        {(p.type === 'CHECK' || p.type === 'TRANSFER') ? (
-                          <Select 
-                            value={p.type === 'CHECK' ? (p.bank_name || "") : (p.description || "")} 
-                            onChange={(e) => {
-                              const val = e.target.value;
-                              if (p.type === 'CHECK') updatePayment(p.id, "bank_name", val);
-                              else updatePayment(p.id, "description", val);
-                            }}
-                          >
-                            <option value="">Seleccione Banco...</option>
-                            {banks.map(b => (
-                              <option key={b.id} value={b.name}>{b.name}</option>
-                            ))}
-                          </Select>
+                        {mode === 'view' ? (
+                          p.type === 'CASH' ? 'Efectivo' :
+                          p.type === 'CHECK' ? `Cheque ${p.reference_number || ''}` :
+                          p.type === 'TRANSFER' ? `Transf. ${p.reference_number || ''}` : p.description
                         ) : (
-                          <input type="text" className={s.cellInput} value={p.description || ""} onChange={(e) => updatePayment(p.id, "description", e.target.value)} placeholder="Ej: Galicia..." />
+                          <Input 
+                            value={p.type === 'CHECK' ? p.reference_number : p.description} 
+                            onChange={(e) => updatePayment(p.id, p.type === 'CHECK' ? 'reference_number' : 'description', e.target.value)} 
+                            placeholder="Detalle..."
+                          />
                         )}
                       </td>
-                      <td>
-                        <input type="text" className={s.cellInput} value={p.reference_number || ""} onChange={(e) => updatePayment(p.id, "reference_number", e.target.value)} />
+                      <td style={{ textAlign: 'right' }}>
+                        {mode === 'view' ? (
+                          fmt(p.amount)
+                        ) : (
+                          <Input 
+                            type="number" 
+                            value={p.amount} 
+                            onChange={(e) => updatePayment(p.id, 'amount', e.target.value)}
+                            style={{ width: 120, marginLeft: 'auto' }}
+                          />
+                        )}
                       </td>
-                      <td>{p.type === "CHECK" ? <input type="date" className={s.cellInput} value={p.due_date} onChange={(e) => updatePayment(p.id, "due_date", e.target.value)} /> : "-"}</td>
-                      <td style={{ textAlign: "right" }}>
-                        <input 
-                          type="text" 
-                          className={s.cellInput} 
-                          style={{ textAlign: "right", fontWeight: 700 }} 
-                          value={p.temp_amount ?? formatCurrencyInput(p.amount)} 
-                          onFocus={() => {
-                            p.temp_amount = formatCurrencyInput(p.amount);
-                            setPayments([...payments]);
-                          }}
-                          onBlur={() => {
-                            delete p.temp_amount;
-                            setPayments([...payments]);
-                          }}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            let cleanStr = raw.replace(/[^\d,]/g, "");
-                            if ((cleanStr.match(/,/g) || []).length > 1) return;
-                            
-                            let parts = cleanStr.split(",");
-                            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                            const visualVal = parts.join(",");
-                            
-                            const val = parseCurrencyInput(cleanStr);
-                            p.amount = val;
-                            p.temp_amount = visualVal;
-                            setPayments([...payments]);
-                          }} 
-                        />
-                      </td>
-                      <td style={{ textAlign: "center" }}>
-                        <button className={s.deleteBtn} onClick={() => removePayment(p.id)}><X size={16} /></button>
-                      </td>
+                      {mode !== 'view' && (
+                        <td>
+                          <button type="button" className={s.iconBtn} onClick={() => removePayment(p.id)} style={{ color: 'red' }}>
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          </div>
-        )}
+            )}
+          </ShellSection>
 
-        {activeTab === "retentions" && (
-          <div className={s.tabContent}>
-            <div className={s.actionsBar}>
-              <Button variant="secondary" size="sm" onClick={() => setRetentions([...retentions, { id: Date.now(), type: "IIBB", jurisdiction: "ARBA", amount: 0, base_amount: totalApplied, reference: "" }])}>
-                <Plus size={16} /> Agregar Retención
-              </Button>
-            </div>
-            <div className={s.tableWrap}>
-              <table className={t.table}>
-                <thead>
-                  <tr>
-                    <th>Impuesto</th>
-                    <th>Jurisdicción</th>
-                    <th>Referencia</th>
-                    <th style={{ textAlign: "right" }}>Base Imp.</th>
-                    <th style={{ textAlign: "right", width: 140 }}>Importe</th>
-                    <th style={{ width: 40 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {retentions.map((r) => (
-                    <tr key={r.id}>
-                      <td><Select value={r.type} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, type: e.target.value } : re))}><option value="IVA">IVA</option><option value="IIBB">IIBB</option><option value="GANANCIAS">Ganancias</option></Select></td>
-                      <td><Select value={r.jurisdiction} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, jurisdiction: e.target.value } : re))} disabled={r.type !== "IIBB"}><option value="ARBA">ARBA</option><option value="AGIP">AGIP</option></Select></td>
-                      <td><input type="text" className={s.cellInput} value={r.reference} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, reference: e.target.value } : re))} /></td>
-                      <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right" }} value={r.base_amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, base_amount: Number(e.target.value) } : re))} /></td>
-                      <td style={{ textAlign: "right" }}><input type="number" className={s.cellInput} style={{ textAlign: "right", fontWeight: 700 }} value={r.amount} onChange={(e) => setRetentions(retentions.map(re => re.id === r.id ? { ...re, amount: Number(e.target.value) } : re))} /></td>
-                      <td style={{ textAlign: "center" }}><button className={s.deleteBtn} onClick={() => setRetentions(retentions.filter(re => re.id !== r.id))}><X size={16} /></button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {activeTab === "history" && (
-          <div className={s.tabContent} style={{ padding: 24 }}>
-            <Card title="Historial">
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                {history.map((h, i) => (
-                  <div key={i} style={{ padding: 12, background: '#f8fafc', borderRadius: 8, fontSize: 13 }}>
-                    <strong>{h.action}</strong> - {h.date} ({h.user})
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-        )}
-      </div>
-
-      <div className={s.footer}>
-        <div className={s.footerLeft}>
-          <Button onClick={handleSave} disabled={loading || isSaving} className={s.confirmBtn}>
-            <Save size={18} /> {mode === "edit" ? "Guardar Cambios" : isPayment ? "Confirmar Pago" : "Confirmar Recibo"}
-          </Button>
-          {mode === "view" || mode === "edit" ? (
-             <Button onClick={handleDelete} variant="danger" disabled={loading || isSaving} style={{ marginLeft: '12px' }}>
-                <Trash2 size={18} /> Eliminar
-             </Button>
-          ) : null}
-          <div className={s.footerTools}>
-            <button onClick={handlePrint} className={s.toolBtn} title="Imprimir"><Printer size={18} /></button>
-            <button onClick={handleSendEmail} className={s.toolBtn} title="Enviar por Email"><Mail size={18} /></button>
-          </div>
         </div>
-        
-        <div className={s.footerRight}>
-          <div className={s.summaryItem}>
-            <span className={s.summaryLabel}>Total {isPayment ? "Pagos" : "Pagado"}</span>
-            <span className={s.summaryValue}>{fmt(totalPayments)}</span>
-          </div>
-          <div className={s.summaryDivider} />
-          <div className={s.summaryItem}>
-            <span className={s.summaryLabel}>Retenciones</span>
-            <span className={s.summaryValue}>{fmt(totalRetentions)}</span>
-          </div>
-          <div className={s.summaryDivider} />
-          <div className={s.summaryItem}>
-            <span className={s.summaryLabel}>Aplicado</span>
-            <span className={s.summaryValue}>{fmt(totalApplied)}</span>
-          </div>
-          
-          <div className={`${s.diffBlock} ${Math.abs(difference) > 0.01 ? s.hasDiff : ""}`}>
-            <span className={s.diffLabel}>Diferencia</span>
-            <span className={s.diffValue}>{fmt(difference)}</span>
-          </div>
-        </div>
-      </div>
-
-      {showFxModalForDoc && <FxAdjustmentDocModal documentId={showFxModalForDoc} onClose={() => { setShowFxModalForDoc(null); closeWindow(windowId); }} onConfirmed={() => { const docId = showFxModalForDoc; setShowFxModalForDoc(null); if (payments.some(p => p.type === "CHECK")) setShowInterestModalForDoc(docId); else closeWindow(windowId); }} />}
-      {showInterestModalForDoc && <CheckInterestModal receiptId={showInterestModalForDoc} onClose={() => { setShowInterestModalForDoc(null); closeWindow(windowId); }} onConfirmed={() => { setShowInterestModalForDoc(null); closeWindow(windowId); }} />}
-      
-      {showCheckModal && (
-        <Modal 
-          open={showCheckModal} 
-          onClose={() => setShowCheckModal(false)} 
-          title="Alta de Cheques a Cobrar" 
-          wide 
-          maxWidth="95vw"
-        >
-          <div className={s.checkModalContainer}>
-            <div className={s.tableWrap} style={{ maxHeight: 600, overflow: 'auto', background: 'white', borderRadius: '16px', border: '1px solid #f1f5f9' }}>
-              <table className={s.eliteTable} style={{ minWidth: '1300px' }}>
-                <thead>
-                  <tr>
-                    <th style={{ width: 350 }}>Banco</th>
-                    <th style={{ width: 110 }}>N° Cheque</th>
-                    <th style={{ width: 170, textAlign: 'right' }}>Importe</th>
-                    <th style={{ width: 100 }}>Tipo</th>
-                    <th style={{ width: 100 }}>Emisión</th>
-                    <th style={{ width: 100 }}>Vencimiento</th>
-                    <th style={{ width: 110 }}>CUIT Emisor</th>
-                    <th>Observaciones</th>
-                    <th style={{ width: 40 }}></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {modalChecks.map((ch, idx) => (
-                    <tr key={idx}>
-                      <td>
-                        <Select 
-                          className={s.inputElite}
-                          style={{ fontWeight: 700, width: '100%', fontSize: '10px' }}
-                          value={ch.bank_name || ""} 
-                          onChange={(e) => {
-                            const newChecks = [...modalChecks];
-                            newChecks[idx].bank_name = e.target.value;
-                            setModalChecks(newChecks);
-                          }}
-                        >
-                          <option value="">Seleccione Banco...</option>
-                          {banks.map(b => <option key={b.id} value={b.name}>{b.name}</option>)}
-                        </Select>
-                      </td>
-                      <td>
-                        <input 
-                          type="text" 
-                          className={s.inputElite} 
-                          style={{ fontSize: '10px', width: '100%' }}
-                          placeholder="00000000"
-                          value={ch.reference_number || ""} 
-                          onChange={(e) => {
-                            const newChecks = [...modalChecks];
-                            newChecks[idx].reference_number = e.target.value;
-                            setModalChecks(newChecks);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input 
-                          type="text" 
-                          className={`${s.inputElite} ${s.amountElite}`} 
-                          style={{ fontSize: '12px', textAlign: 'right' }}
-                          placeholder="0,00"
-                          value={ch.temp_amount ?? formatCurrencyInput(ch.amount)} 
-                          onFocus={(e) => {
-                            const newChecks = [...modalChecks];
-                            newChecks[idx].temp_amount = formatCurrencyInput(ch.amount);
-                            setModalChecks(newChecks);
-                          }}
-                          onBlur={(e) => {
-                            const newChecks = [...modalChecks];
-                            delete newChecks[idx].temp_amount;
-                            setModalChecks(newChecks);
-                          }}
-                          onChange={(e) => {
-                            const raw = e.target.value;
-                            // Relax numeric cleaning to allow commas while typing
-                            let cleanStr = raw.replace(/[^\d,]/g, ""); // Only allow digits and COMMA
-                            // Prevent multiple commas
-                            if ((cleanStr.match(/,/g) || []).length > 1) return;
-                            
-                            // Visual formatting while typing
-                            let parts = cleanStr.split(",");
-                            parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
-                            const visualVal = parts.join(",");
-
-                            const parsed = parseCurrencyInput(cleanStr);
-                            const otherChecksTotal = modalChecks.reduce((s, c, i) => i !== idx ? s + (Number(c.amount) || 0) : s, 0);
-                            const otherPaymentsTotal = payments.filter(p => p.type !== "CHECK").reduce((s, p) => s + (Number(p.amount) || 0), 0) + totalRetentions;
-                            const maxAllowed = Math.max(0, totalApplied - otherPaymentsTotal - otherChecksTotal);
-                            
-                            const newChecks = [...modalChecks];
-                            if (parsed > maxAllowed + 0.01) {
-                              newChecks[idx].amount = maxAllowed;
-                              newChecks[idx].temp_amount = formatCurrencyInput(maxAllowed);
-                              showToast(`Monto excedido. Se ajustó al máximo: ${fmt(maxAllowed)}`, "warning");
-                            } else {
-                              newChecks[idx].amount = parsed;
-                              newChecks[idx].temp_amount = visualVal;
-                            }
-                            setModalChecks(newChecks);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <div className={`${s.badgeElite} ${ch.check_type === 'eCHEQ' ? s.typeEcheq : s.typeFisico}`} style={{ padding: '1px 6px', display: 'inline-flex' }}>
-                          <select 
-                            style={{ background: 'transparent', border: 'none', fontWeight: 800, fontSize: '8px', cursor: 'pointer', outline: 'none', color: 'inherit' }}
-                            value={ch.check_type || "FISICO"} 
-                            onChange={(e) => {
-                              const newChecks = [...modalChecks];
-                              newChecks[idx].check_type = e.target.value;
-                              setModalChecks(newChecks);
-                            }}
-                          >
-                            <option value="FISICO">FÍSICO</option>
-                            <option value="eCHEQ">E-CHEQ</option>
-                          </select>
-                        </div>
-                      </td>
-                      <td>
-                        <input 
-                          type="date" 
-                          className={s.inputElite} 
-                          style={{ fontSize: '9px' }}
-                          value={ch.issue_date || ""} 
-                          onChange={(e) => {
-                            const newChecks = [...modalChecks];
-                            newChecks[idx].issue_date = e.target.value;
-                            setModalChecks(newChecks);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input 
-                          type="date" 
-                          className={s.inputElite} 
-                          style={{ fontSize: '9px' }}
-                          value={ch.due_date || ""} 
-                          onChange={(e) => {
-                            const newChecks = [...modalChecks];
-                            newChecks[idx].due_date = e.target.value;
-                            setModalChecks(newChecks);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input 
-                          type="text" 
-                          className={s.inputElite} 
-                          style={{ fontSize: '10px', fontFamily: 'monospace' }}
-                          placeholder="CUIT..."
-                          value={ch.issuer_tax_id || ""} 
-                          onChange={(e) => {
-                            const newChecks = [...modalChecks];
-                            newChecks[idx].issuer_tax_id = formatTaxId(e.target.value);
-                            setModalChecks(newChecks);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <input 
-                          type="text" 
-                          className={s.inputElite} 
-                          style={{ fontSize: '10px' }}
-                          placeholder="Nota..."
-                          value={ch.description || ""} 
-                          onChange={(e) => {
-                            const newChecks = [...modalChecks];
-                            newChecks[idx].description = e.target.value;
-                            setModalChecks(newChecks);
-                          }}
-                        />
-                      </td>
-                      <td>
-                        <button className={s.deleteBtnElite} onClick={() => setModalChecks(modalChecks.filter((_, i) => i !== idx))}>
-                          <Trash2 size={13} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div className={s.addCheckRow} style={{ padding: '10px' }}>
-                <button className={s.addBtnElite} style={{ padding: '6px 14px', fontSize: '11px' }} onClick={() => setModalChecks([...modalChecks, { type: "CHECK", amount: 0, bank_name: "", reference_number: "", business_unit: "1", issue_date: new Date().toISOString().split('T')[0], due_date: new Date().toISOString().split('T')[0], check_type: "FISICO" }])}>
-                  <Plus size={14} /> Agregar nuevo valor
-                </button>
-              </div>
-            </div>
-
-            <div className={s.modalFooter}>
-              <div style={{ display: 'flex', gap: '32px', alignItems: 'center' }}>
-                <div>
-                  <div className={s.modalTotalLabel}>Saldo por Cubrir</div>
-                  <div className={s.modalTotalValue} style={{ color: '#64748b' }}>
-                    {fmt(totalApplied - (payments.filter(p => p.type !== "CHECK").reduce((s, p) => s + (Number(p.amount) || 0), 0) + totalRetentions))}
-                  </div>
-                </div>
-
-                <div style={{ width: 1, height: 24, background: '#e2e8f0' }} />
-
-                <div>
-                  <div className={s.modalTotalLabel}>Valores Cargados</div>
-                  <div className={s.modalTotalValue} style={{ color: '#2563eb' }}>
-                    {fmt(modalChecks.reduce((sum, c) => sum + (Number(c.amount) || 0), 0))}
-                  </div>
-                </div>
-                
-                {totalApplied > 0 && (
-                  <>
-                    <div style={{ width: 1, height: 24, background: '#e2e8f0' }} />
-                    <div>
-                      <div className={s.modalTotalLabel}>Diferencia / Restante</div>
-                      <div className={s.modalTotalValue} style={{ 
-                        color: (totalApplied - (payments.filter(p => p.type !== "CHECK").reduce((s, p) => s + (Number(p.amount) || 0), 0) + totalRetentions + modalChecks.reduce((sum, c) => sum + (Number(c.amount) || 0), 0))) > 0.01 ? '#dc2626' : '#059669' 
-                      }}>
-                        {fmt(Math.max(0, (totalApplied - (payments.filter(p => p.type !== "CHECK").reduce((s, p) => s + (Number(p.amount) || 0), 0) + totalRetentions)) - modalChecks.reduce((sum, c) => sum + (Number(c.amount) || 0), 0)))}
-                      </div>
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className={s.modalActions}>
-                <button className={s.cancelBtnElite} onClick={() => setShowCheckModal(false)}>
-                  Cancelar
-                </button>
-                <button 
-                  className={s.submitBtnElite}
-                  disabled={(modalChecks.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) + payments.filter(p => p.type !== "CHECK").reduce((s, p) => s + (Number(p.amount) || 0), 0) + totalRetentions) > totalApplied + 0.01}
-                  style={{ 
-                    opacity: (modalChecks.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) + payments.filter(p => p.type !== "CHECK").reduce((s, p) => s + (Number(p.amount) || 0), 0) + totalRetentions) > totalApplied + 0.01 ? 0.5 : 1,
-                    cursor: (modalChecks.reduce((sum, c) => sum + (Number(c.amount) || 0), 0) + payments.filter(p => p.type !== "CHECK").reduce((s, p) => s + (Number(p.amount) || 0), 0) + totalRetentions) > totalApplied + 0.01 ? 'not-allowed' : 'pointer'
-                  }}
-                  onClick={() => {
-                    const otherPayments = payments.filter(p => p.type !== "CHECK");
-                    setPayments([...otherPayments, ...modalChecks]);
-                    setShowCheckModal(false);
-                    showToast("Cheques vinculados al recibo", "success");
-                  }}
-                >
-                  <Check size={16} /> Vincular al Recibo
-                </button>
-              </div>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {showInvoiceModal && (
-        <Modal open={showInvoiceModal} onClose={() => setShowInvoiceModal(false)} title="Vincular Facturas" wide>
-          <div className={s.modalSection}>
-            <table className={t.table}>
-              <thead><tr><th style={{ width: 40 }}></th><th>Número</th><th>Fecha</th><th style={{ textAlign: "right" }}>Saldo</th></tr></thead>
-              <tbody>
-                {pendingInvoices.map((inv) => (
-                  <tr key={inv.id} onClick={() => toggleInvoiceApplication(inv)}>
-                    <td><input type="checkbox" checked={applications.some(a => a.to_document_id === inv.id)} readOnly /></td>
-                    <td>{inv.number}</td>
-                    <td>{new Date(inv.date).toLocaleDateString()}</td>
-                    <td style={{ textAlign: "right" }}>{fmt(inv.remaining)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Modal>
-      )}
-    </div>
+      }
+    />
   );
 }

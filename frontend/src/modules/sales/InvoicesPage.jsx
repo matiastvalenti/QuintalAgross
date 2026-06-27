@@ -24,11 +24,12 @@ import {
   LayoutGrid,
   PlusCircle,
   ArrowUpRight,
-  Layers
+  Layers,
+  DollarSign
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { navigateToError } from '../../utils/errorNavigation';
-import { openNuevaFactura, openEditFactura } from '../../utils/openStandaloneWindow';
+import { openNuevaFactura, openEditFactura, openNuevoReciboDesdeFactura } from '../../utils/openStandaloneWindow';
 import ContentHeader from "../../components/layout/ContentHeader";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
@@ -46,6 +47,24 @@ import ErrorState from "../../components/ui/ErrorState";
 import EmptyState from "../../components/ui/EmptyState";
 import InvoiceCreationModal from "./InvoiceCreationModal";
 import InvoiceQuickPreview from "./InvoiceQuickPreview";
+
+const getPaidPct = (inv) => {
+  if (inv.status === "CLOSED") return 100;
+  if (inv.status === "CANCELLED") return null;
+
+  if (inv.paid_pct != null) return Number(inv.paid_pct);
+
+  const total = Number(inv.total_amount || 0);
+  const applied = Number(inv.amount_applied || 0);
+
+  if (total > 0 && applied >= 0) {
+    return Math.min(100, Math.max(0, Math.round((applied / total) * 100)));
+  }
+
+  if (inv.status === "OPEN") return 0;
+
+  return null;
+};
 
 export default function InvoicesPage() {
   const [invoices, setInvoices] = useState([]);
@@ -150,10 +169,22 @@ export default function InvoicesPage() {
     const handleRefresh = () => fetchInvoices();
     window.addEventListener("invoice-changed", handleRefresh);
     window.addEventListener("cost-center-changed", handleRefresh);
+
+    // BroadcastChannel: recibir eventos de recibos guardados desde otras pestañas
+    let bc;
+    try {
+      bc = new BroadcastChannel("quintal_events");
+      bc.onmessage = (e) => {
+        if (e.data?.type === "QUINTAL_DOCUMENT_SAVED" && e.data?.documentType === "receipt") {
+          fetchInvoices();
+        }
+      };
+    } catch (_) {}
     
     return () => {
       window.removeEventListener("invoice-changed", handleRefresh);
       window.removeEventListener("cost-center-changed", handleRefresh);
+      try { bc?.close(); } catch (_) {}
     };
   }, []);
 
@@ -491,32 +522,29 @@ export default function InvoicesPage() {
   const table = {
     columns: (
       <>
-        <th className={s.th} style={{ width: 40, padding: '0 12px' }}>
+        <th className={s.th} style={{ width: 42, padding: '0 12px', textAlign: 'center' }}>
           <input 
               type="checkbox" 
               onChange={(e) => setSelectedInvoices(e.target.checked ? paginatedData.map(i => i.id) : [])}
               checked={selectedInvoices.length > 0 && selectedInvoices.length === paginatedData.length}
-              style={{ cursor: 'pointer', width: 18, height: 18, accentColor: 'var(--primary)' }}
+              style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--primary)' }}
           />
         </th>
-        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer', width: 120 }}>COMPROBANTE</th>
-        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer', width: 75 }}>FECHA</th>
-        <th className={s.th} onClick={() => toggleSort('entity_id')} style={{ cursor: 'pointer' }}>CLIENTE</th>
-        <th className={s.th} style={{ width: 140 }}>ORIGEN</th>
-        <th className={s.th} onClick={() => toggleSort('due_date')} style={{ cursor: 'pointer', width: 110 }}>VENCIMIENTO</th>
-        <th className={s.th} style={{ textAlign: 'right', width: 115 }} onClick={() => toggleSort('total_amount')}>TOTAL</th>
-        <th className={s.th} style={{ textAlign: 'right', width: 115 }}>SALDO</th>
-        <th className={s.th} style={{ textAlign: 'center', width: 110 }}>ESTADO</th>
+        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer', width: 135, textAlign: 'left' }}>COMPROBANTE</th>
+        <th className={s.th} onClick={() => toggleSort('entity_id')} style={{ cursor: 'pointer', textAlign: 'left' }}>CLIENTE</th>
+        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer', width: 130, textAlign: 'left' }}>FECHA / VTO</th>
+        <th className={s.th} onClick={() => toggleSort('total_amount')} style={{ cursor: 'pointer', textAlign: 'right', width: 150 }}>IMPORTE</th>
+        <th className={s.th} style={{ textAlign: 'center', width: 135 }}>ESTADO</th>
         <th className={s.th} style={{ textAlign: 'right', width: 100 }}>ACCIONES</th>
       </>
     ),
     body: loading ? (
         <TableRowSkeleton rows={10} cols={10} />
     ) : error ? (
-        <tr><td colSpan="10"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
+        <tr><td colSpan="7"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
     ) : sorted.length === 0 ? (
       <tr>
-        <td colSpan="10">
+        <td colSpan="7">
           <EmptyState 
               icon={Layers} 
               title="Sin facturas coincidentes"
@@ -580,84 +608,120 @@ export default function InvoicesPage() {
               const dateStr = dueDate.toLocaleDateString('es-AR');
               
               if (inv.status === 'CLOSED' || inv.status === 'CANCELLED') {
-                  vencimientoEl = <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>;
+                  vencimientoEl = `Vto: ${dateStr}`;
               } else if (dueDate < today) {
                   vencimientoEl = <span style={{ background: '#fef2f2', color: '#ef4444', padding: '2px 8px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>Vencida</span>;
               } else if (dueDate.getTime() === today.getTime()) {
                   vencimientoEl = <span style={{ background: '#fefce8', color: '#eab308', padding: '2px 8px', borderRadius: 12, fontWeight: 700, fontSize: 11 }}>Hoy</span>;
               } else {
-                  vencimientoEl = <span style={{ color: 'var(--text-secondary)' }}>{dateStr}</span>;
+                  vencimientoEl = `Vto: ${dateStr}`;
               }
           }
 
           return (
         <Fragment key={inv.id}>
-        <tr className={`${s.row} ${quickViewId === inv.id ? s.selectedRow : ""} ${selectedInvoices.includes(inv.id) ? s.rowSelected : ""}`} onClick={() => handleRowClick(inv.id)} onDoubleClick={() => handleOpenDetail(inv.id, inv.number)}>
-          <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 40, padding: '0 12px' }}>
+        <tr className={`${s.row} ${s.invoiceRow} ${quickViewId === inv.id ? s.selectedRow : ""} ${selectedInvoices.includes(inv.id) ? s.rowSelected : ""}`} onClick={() => handleRowClick(inv.id)} onDoubleClick={() => handleOpenDetail(inv.id, inv.number)}>
+          <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 42, padding: '0 12px', textAlign: 'center' }}>
             <input 
                 type="checkbox"
                 checked={selectedInvoices.includes(inv.id)}
                 onChange={(e) => {
                     setSelectedInvoices(prev => prev.includes(inv.id) ? prev.filter(x => x !== inv.id) : [...prev, inv.id]);
                 }}
-                style={{ cursor: 'pointer', width: 17, height: 17, accentColor: 'var(--primary)' }}
+                style={{ cursor: 'pointer', width: 16, height: 16, accentColor: 'var(--primary)' }}
             />
           </td>
-          <td className={`${s.td} ${s.numberCell}`} style={{ color: 'var(--primary)' }}>{inv.number}</td>
-          <td className={s.td} style={{ color: 'var(--text-secondary)', fontSize: 13, fontWeight: 600 }}>
-            {new Date(inv.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
-          </td>
-          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{inv.entity_name || entityName(inv.entity_id)}</td>
-          <td className={s.td} style={{ fontSize: 12, color: 'var(--primary)', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 140, width: 140 }} title={originTooltip || originText}>
-            {originText}
-          </td>
-          <td className={s.td} style={{ color: 'var(--text-secondary)', fontSize: 13 }}>
-            {vencimientoEl}
-          </td>
-          <td className={`${s.td} ${s.totalCell}`}>
-            <span className={s.currencyLabel}>{inv.currency}</span>
-            {Number(inv.total_amount)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-          </td>
-          <td className={s.td} style={{ textAlign: 'right', fontWeight: 600, color: 'var(--text-secondary)' }}>
-            {saldoStr !== '-' ? <><span className={s.currencyLabel}>{inv.currency}</span>{saldoStr}</> : saldoStr}
-          </td>
-          <td className={s.td} style={{ textAlign: 'center', width: 180 }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                <StatusBadge status={
-                    inv.status === "OPEN" ? "PENDIENTE" :
-                    inv.status === "PARTIAL" ? "EN PROCESO" :
-                    inv.status === "CLOSED" ? "COMPLETADO" :
-                    inv.status === "CANCELLED" ? "ANULADO" :
-                    inv.status
-                } />
+          <td className={s.td} style={{ width: 135, textAlign: 'left' }}>
+            <div className={s.invoiceCellStack}>
+              <div className={s.invoiceMain} style={{ color: 'var(--primary)' }}>
+                {inv.number ? inv.number.split('-')[0] + '-' : ''}
+              </div>
+              <div className={s.invoiceMain} style={{ color: 'var(--primary)' }}>
+                {inv.number ? inv.number.split('-')[1] : inv.number}
+              </div>
             </div>
           </td>
-          <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 100 }}>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <td className={s.td} style={{ textAlign: 'left' }}>
+            <div className={s.invoiceCellStack}>
+              <div className={s.invoiceMain}>
+                {inv.entity_name || entityName(inv.entity_id)}
+              </div>
+              <div className={s.invoiceSub} title={originTooltip || originText}>
+                {originText}
+              </div>
+            </div>
+          </td>
+          <td className={s.td} style={{ width: 130, textAlign: 'left' }}>
+            <div className={s.invoiceCellStack}>
+              <div className={s.invoiceMain}>
+                {new Date(inv.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+              </div>
+              <div className={s.invoiceSub} style={{ whiteSpace: 'nowrap' }}>
+                {vencimientoEl !== '-' ? vencimientoEl : '-'}
+              </div>
+            </div>
+          </td>
+          <td className={s.td} style={{ width: 150, textAlign: 'right' }}>
+            <div className={s.invoiceCellStack} style={{ alignItems: 'flex-end' }}>
+              <div className={s.invoiceMain}>
+                <span className={s.currencyLabel}>{inv.currency}</span>
+                {Number(inv.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+              </div>
+              <div className={s.invoiceSub}>
+                Saldo: <span className={s.currencyLabel}>{inv.currency}</span>{saldoStr !== '-' ? saldoStr : '0,00'}
+              </div>
+            </div>
+          </td>
+          <td className={s.td} style={{ width: 135, textAlign: 'center' }}>
+            <div className={s.invoiceStatusStack}>
+              <StatusBadge status={
+                  inv.status === "OPEN" ? "PENDIENTE" :
+                  inv.status === "PARTIAL" ? "EN PROCESO" :
+                  inv.status === "CLOSED" ? "COMPLETADO" :
+                  inv.status === "CANCELLED" ? "ANULADO" :
+                  inv.status
+              } />
+              {(() => {
+                if (inv.status === "CANCELLED") {
+                  return <div className={s.invoicePaymentSub}>Sin cobro</div>;
+                }
+                const pct = getPaidPct(inv);
+                if (pct === null) return null;
+                const statusClass = pct === 100 ? s.success : (pct > 0 ? s.warning : '');
+                return <div className={`${s.invoicePaymentSub} ${statusClass}`}>Cobro {pct}%</div>;
+              })()}
+            </div>
+          </td>
+          <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 100, textAlign: 'right' }}>
+            <div className={s.invoiceCellStack} style={{ alignItems: 'flex-end' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
               <button 
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleRowClick(inv.id); }} 
-                style={{ all: 'unset', cursor: 'pointer', color: 'var(--primary)', opacity: 0.8 }} 
+                style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, flexShrink: 0, color: 'var(--primary)', opacity: 0.8 }} 
                 title="Ver Detalle"
               >
                 <PlusCircle size={18} />
               </button>
-              {inv.attachment_url && (
-                <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(inv.attachment_url); }} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Imprimir / Ver PDF">
-                  <FileText size={18} />
-                </button>
-              )}
               <button 
+                type="button"
                 onClick={(e) => { e.stopPropagation(); handleOpenDetail(inv.id, inv.number); }} 
-                style={{ all: 'unset', cursor: 'pointer', color: 'var(--primary)' }} 
+                style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, flexShrink: 0, color: 'var(--primary)' }} 
                 title="Abrir Completo"
               >
                 <ArrowUpRight size={18} />
               </button>
               {inv.status !== 'CANCELLED' && inv.status !== 'CLOSED' && (
-                <button onClick={(e) => handleAnnul(e, inv.id, inv.number)} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Anular Factura">
+                <button 
+                  type="button"
+                  onClick={(e) => handleAnnul(e, inv.id, inv.number)} 
+                  style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, flexShrink: 0, color: '#ef4444', opacity: 0.7 }} 
+                  title="Anular Factura"
+                >
                   <Trash2 size={18} />
                 </button>
               )}
+              </div>
             </div>
           </td>
         </tr>
@@ -665,10 +729,16 @@ export default function InvoicesPage() {
         {/* Fila expandible */}
         {quickViewId === inv.id && (
           <tr className="animate-slide-down">
-            <td colSpan={10} style={{ padding: 0, borderBottom: '1px solid var(--border-color)' }}>
+            <td colSpan={7} style={{ padding: 0, borderBottom: '1px solid var(--border-color)' }}>
               <div style={{ padding: '16px 32px', background: '#f8fafc', borderTop: '1px dashed var(--border-color)', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)' }}>
                 {quickViewLoading ? <Skeleton width="100%" height={150} /> : quickViewError ? <ErrorState title="Error" message={quickViewError} /> : (
-                  <InvoiceQuickPreview detail={quickViewDetail} entities={entities} onOpenFull={handleOpenDetail} onPrint={(id) => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} />
+                  <InvoiceQuickPreview 
+                    detail={quickViewDetail} 
+                    entities={entities} 
+                    onOpenFull={handleOpenDetail} 
+                    onPrint={(id) => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} 
+                    onOpenCollectionModal={() => openNuevoReciboDesdeFactura(inv)}
+                  />
                 )}
               </div>
             </td>

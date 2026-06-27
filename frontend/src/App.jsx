@@ -82,6 +82,7 @@ import { WindowProvider, useWindow } from "./context/WindowContext";
 const OrdenVentaStandalonePage = lazy(() => import("./modules/sales/OrdenVentaStandalonePage"));
 const RemitoStandalonePage = lazy(() => import("./modules/sales/RemitoStandalonePage"));
 const FacturaStandalonePage = lazy(() => import("./modules/sales/FacturaStandalonePage"));
+const InvoiceCollectionWrapper = lazy(() => import("./modules/sales/InvoiceCollectionWrapper"));
 const NotaDebitoStandalonePage = lazy(() => import("./modules/sales/NotaDebitoStandalonePage"));
 const CreditNoteStandalonePage = lazy(() => import("./modules/sales/CreditNoteStandalonePage"));
 const PurchaseOrderStandalonePage = lazy(() => import("./modules/purchases/PurchaseOrderStandalonePage"));
@@ -151,6 +152,10 @@ export default function App() {
               {/* Facturas */}
               <Route path="/standalone/facturas/nueva" element={<FacturaStandalonePage />} />
               <Route path="/standalone/facturas/:id" element={<FacturaStandalonePage />} />
+              
+              {/* Cobros de Factura */}
+              <Route path="/standalone/cobros/factura/:id" element={<InvoiceCollectionWrapper />} />
+              <Route path="/standalone/cobros/recibo/:id" element={<InvoiceCollectionWrapper />} />
 
               {/* Notas de Débito */}
               <Route path="/standalone/notas-debito/nueva" element={<NotaDebitoStandalonePage />} />

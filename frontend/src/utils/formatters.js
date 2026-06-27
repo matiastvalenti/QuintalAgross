@@ -68,3 +68,26 @@ export const fmt = (val, type = 'ARS') => {
         return val;
     }
 };
+
+export const formatNumberAR = (value, decimals = 2) => {
+    const n = Number(value || 0);
+    return n.toLocaleString("es-AR", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+    });
+};
+
+export const formatMoneyAR = (value, currency = "ARS") => {
+    return `${currency} ${formatNumberAR(value, 2)}`;
+};
+
+export const formatDocumentType = (type) => {
+  const map = {
+    INVOICE: "Factura",
+    DEBIT_NOTE: "Nota de Débito",
+    CREDIT_NOTE: "Nota de Crédito",
+    RECEIPT: "Recibo",
+    PAYMENT_ORDER: "Orden de Pago",
+  };
+  return map[type] || type;
+};

@@ -1,8 +1,9 @@
 import React from 'react';
-import { FileText, Printer, ArrowUpRight } from 'lucide-react';
+import { FileText, Printer, ArrowUpRight, DollarSign } from 'lucide-react';
 import Button from '../../components/ui/Button';
 import StatusBadge from '../../components/ui/StatusBadge';
 import t from '../../components/ui/Table.module.css';
+import { openNuevoReciboDesdeFactura } from '../../utils/openStandaloneWindow';
 
 function getLineProductName(line) {
   return (
@@ -22,7 +23,7 @@ function formatQty(value) {
     : n.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
-export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPrint }) {
+export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPrint, onOpenCollectionModal }) {
   if (!detail) return null;
 
   const entity = entities?.find(e => String(e.id) === String(detail.entity_id));
@@ -112,6 +113,27 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
               <ArrowUpRight size={16} /> Abrir Completo
             </Button>
           )}
+          {(() => {
+            let saldoNum = null;
+            if (detail.pending_amount != null) saldoNum = Number(detail.pending_amount);
+            else if (detail.balance != null) saldoNum = Number(detail.balance);
+            else if (detail.open_balance != null) saldoNum = Number(detail.open_balance);
+            else if (detail.amount_due != null) saldoNum = Number(detail.amount_due);
+            else if (detail.amount_applied != null) saldoNum = Number(detail.total_amount || 0) - Number(detail.amount_applied);
+            
+            if ((detail.status === 'OPEN' || detail.status === 'PARTIAL') && (saldoNum === null || saldoNum > 0)) {
+              return (
+                <Button
+                  variant="success"
+                  onClick={() => onOpenCollectionModal ? onOpenCollectionModal() : openNuevoReciboDesdeFactura(detail)}
+                  style={{ background: '#16a34a', color: '#fff', fontWeight: 700 }}
+                >
+                  <DollarSign size={16} /> Cobrar
+                </Button>
+              );
+            }
+            return null;
+          })()}
         </div>
       </div>
 
@@ -220,6 +242,49 @@ export default function InvoiceQuickPreview({ detail, entities, onOpenFull, onPr
           })()}
         </div>
       </div>
+
+      {/* Sección COBRO */}
+      {(() => {
+        const receipts = detail.applied_by || [];
+        const totalAplied = receipts.reduce((s, r) => s + Number(r.amount_applied || 0), 0);
+        const pending = detail.pending_amount != null
+          ? Number(detail.pending_amount)
+          : Math.max(0, Number(detail.total_amount || 0) - totalAplied);
+        const paidPct = detail.total_amount > 0
+          ? Math.min(100, Math.round((totalAplied / detail.total_amount) * 100))
+          : (detail.status === 'CLOSED' ? 100 : 0);
+
+        return (
+          <div style={{ marginTop: 16, padding: '12px 16px', background: '#f8fafc', borderRadius: 8, border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--muted)' }}>
+                COBRO
+              </span>
+              <div style={{ display: 'flex', gap: 16, fontSize: 12, fontWeight: 600 }}>
+                <span>Aplicado: <strong style={{ color: '#16a34a' }}>{detail.currency} {totalAplied.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong></span>
+                <span>Saldo pendiente: <strong style={{ color: pending > 0 ? 'var(--primary)' : '#16a34a' }}>{detail.currency} {pending.toLocaleString('es-AR', { minimumFractionDigits: 2 })}</strong></span>
+                <span style={{ background: paidPct === 100 ? '#dcfce7' : '#e0f2fe', color: paidPct === 100 ? '#16a34a' : '#0369a1', padding: '1px 8px', borderRadius: 10, fontWeight: 700, fontSize: 11 }}>Cobro: {paidPct}%</span>
+              </div>
+            </div>
+            {receipts.length === 0 ? (
+              <p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>Sin cobros registrados</p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {receipts.map((r, i) => {
+                   const dateObj = new Date(r.created_at || r.from_document_date || Date.now());
+                   const isInvalid = isNaN(dateObj.getTime());
+                   const dateStr = isInvalid ? '-' : dateObj.toLocaleDateString('es-AR');
+                   return (
+                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-secondary)' }}>
+                       <span>Recibo {r.from_document_number || r.number || '-'} · {detail.currency} {Number(r.amount_applied || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })} · {dateStr}</span>
+                     </div>
+                   );
+                })}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }

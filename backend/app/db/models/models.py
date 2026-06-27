@@ -267,7 +267,7 @@ class Document(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     entity_id = Column(String, ForeignKey("entities.id"), index=True)
     doc_type = Column(Enum(DocumentType), index=True)
-    number = Column(String, index=True, unique=True, nullable=False)
+    number = Column(String, index=True, nullable=False)
     date = Column(DateTime, default=datetime.utcnow, index=True)
     due_date = Column(DateTime, nullable=True)
     
