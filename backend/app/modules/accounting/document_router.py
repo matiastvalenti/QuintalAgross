@@ -8,6 +8,7 @@ from app.db import models, grain_models
 from app.modules.accounting import document_schemas
 from app.modules.accounting.ledger_engine import create_journal_entry_for_document
 from app.modules.accounting.fx_service import generate_fx_adjustment
+from app.modules.accounting.document_status_service import recalc_document_status as _recalc_document_status, is_cancelled_status as _is_cancelled_status
 import uuid
 from app.db.models.commercial_models import (
     Account, generate_uuid, DeliveryNote, DeliveryNoteStatus, 
@@ -136,80 +137,6 @@ def _recalc_document_commission(doc: Document, db: Session):
         doc.commission_paid = False
     
     db.flush()
-
-
-def _recalc_document_status(doc: models.Document, db: Session):
-    """
-    Recalcula el estado de un documento basándose en sus aplicaciones (financieras)
-    y, si es un Pago/Recibo, también en sus pagos de comisiones asociados.
-    Asegura consistencia de monedas al comparar usage vs total_amount.
-    """
-    if not doc or doc.status == DocumentStatus.CANCELLED:
-        return
-
-    usage = 0.0
-    credit_types = [
-        DocumentType.RECEIPT, 
-        DocumentType.PAYMENT, 
-        DocumentType.CREDIT_NOTE, 
-        DocumentType.PURCHASE_CREDIT_NOTE
-    ]
-    
-    is_usd = str(doc.currency) in ("USD", "CurrencyType.USD")
-    
-    if doc.doc_type in credit_types:
-        # Documentos que "entregan" saldo (Recibo, Pago, NC)
-        # Queremos saber cuánto de este comprobante se usó, en su propia moneda.
-        if is_usd:
-            # Sumar aplicaciones convertidas a USD (amount_applied_ars / exchange_rate)
-            # Usamos el exchange_rate de cada aplicación para la reversión exacta.
-            total_applied_fin = db.query(func.sum(Application.amount_applied_ars / func.nullif(Application.exchange_rate, 0))).filter(
-                Application.from_document_id == doc.id
-            ).scalar() or 0.0
-            
-            # Sumar comisiones en USD
-            total_comm = db.query(func.sum(CommissionPayment.applied_amount)).filter(
-                CommissionPayment.source_document_id == doc.id
-            ).scalar() or 0.0
-            
-            usage = float(total_applied_fin) + float(total_comm)
-        else:
-            # Sumar aplicaciones en ARS (amount_applied_ars)
-            total_applied_fin = db.query(func.sum(Application.amount_applied_ars)).filter(
-                Application.from_document_id == doc.id
-            ).scalar() or 0.0
-            
-            # Sumar comisiones en ARS
-            total_comm = db.query(func.sum(CommissionPayment.amount)).filter(
-                CommissionPayment.source_document_id == doc.id
-            ).scalar() or 0.0
-            
-            usage = float(total_applied_fin) + float(total_comm)
-    else:
-        # Documentos que "reciben" saldo (Factura, ND, Factura Compra)
-        # amount_applied siempre se guarda en la moneda del to_document_id
-        # por lo que podemos sumarlo directamente.
-        total_received_fin = db.query(func.sum(Application.amount_applied)).filter(
-            Application.to_document_id == doc.id
-        ).scalar() or 0.0
-        usage = float(total_received_fin)
-    
-    total_amount = float(doc.total_amount or 0)
-    
-    # Tolerancia para redondeos
-    TOLERANCE = 0.015 if is_usd else 0.5 # 1.5 centavos USD o 50 centavos ARS
-    
-    if usage >= (total_amount - TOLERANCE):
-        doc.status = DocumentStatus.CLOSED
-    elif usage > TOLERANCE:
-        doc.status = DocumentStatus.PARTIAL
-    else:
-        doc.status = DocumentStatus.OPEN
-
-def _is_cancelled_status(status):
-    raw = getattr(status, "value", status)
-    raw = str(raw or "").upper()
-    return raw in {"CANCELLED", "CANCELED", "ANULLED", "VOID", "VOIDED", "ANULADO", "CANCELADO"}
 
 def _sanitize_document_for_response(doc, db: Session = None):
     """Asegura que campos requeridos no sean nulos para el schema de respuesta."""

@@ -91,8 +91,9 @@ const PurchaseInvoiceStandalonePage = lazy(() => import("./modules/purchases/Pur
 const PurchaseDebitNoteStandalonePage = lazy(() => import("./modules/purchases/PurchaseDebitNoteStandalonePage"));
 const PurchaseCreditNoteStandalonePage = lazy(() => import("./modules/purchases/PurchaseCreditNoteStandalonePage"));
 const ReceiptStandalonePage = lazy(() => import("./modules/finance/ReceiptStandalonePage"));
-const ExpenseClaimStandalonePage = lazy(() => import("./modules/finance/ExpenseClaimStandalonePage"));
+const ExpenseClaimStandalonePage = lazy(() => import('./modules/finance/ExpenseClaimStandalonePage'));
 const StatementStandalonePage = lazy(() => import("./modules/reports/StatementStandalonePage"));
+const SalesApplicationsPage = lazy(() => import('./modules/finance/SalesApplicationsPage'));
 const EntitiesManagerStandalonePage = lazy(() => import("./modules/entities/EntitiesManagerStandalonePage"));
 const EntityDashboardStandalonePage = lazy(() => import("./modules/entities/EntityDashboardStandalonePage"));
 const UsersManagerStandalonePage = lazy(() => import("./modules/auth/UsersManagerStandalonePage"));
@@ -201,6 +202,9 @@ export default function App() {
               {/* Resumen de Cuenta */}
               <Route path="/standalone/resumen-cuenta" element={<StatementStandalonePage />} />
               <Route path="/standalone/resumen-cuenta/:entityId" element={<StatementStandalonePage />} />
+
+              {/* Aplicaciones */}
+              <Route path="/standalone/aplicaciones-venta/nueva" element={<SalesApplicationsPage />} />
 
               {/* Entidades y CRM */}
               <Route path="/standalone/entidades" element={<EntitiesManagerStandalonePage />} />

@@ -17,6 +17,7 @@ from app.modules.search_router import router as search_router
 from app.modules.field import field_router
 from app.modules.inventory import grain_router
 from app.modules.accounting.application_router import router as application_router
+from app.modules.accounting.applications_router import router as sales_applications_router
 from app.modules.entities.accounts_router import accounts_router
 from app.api.ai_router import router as ai_router
 
@@ -25,6 +26,7 @@ api_router = APIRouter()
 api_router.include_router(entities.router)
 api_router.include_router(accounting.router)
 api_router.include_router(application_router)
+api_router.include_router(sales_applications_router)
 api_router.include_router(finance.router)
 api_router.include_router(inventory.router)
 api_router.include_router(sales.router)
