@@ -1,5 +1,5 @@
 import uuid
-from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, Integer, UniqueConstraint, Boolean, Text
+from sqlalchemy import Column, String, Float, DateTime, ForeignKey, Enum, Integer, UniqueConstraint, Boolean, Text, Index, func, column
 from sqlalchemy.orm import relationship
 import enum
 from datetime import datetime
@@ -263,6 +263,25 @@ class Vehicle(Base):
 # ──────────────────────────────────────────────
 class Document(Base):
     __tablename__ = "documents"
+    __table_args__ = (
+        # Uniqueness rule: doc_type + line (fiscal letter A/B/C) + number.
+        # 'number' already contains the sales point prefix (e.g. '0003-00000001'),
+        # so no separate sales_point column is needed in the constraint.
+        # Different doc types CAN share the same number: INVOICE-A 0003-00000001
+        # and DEBIT_NOTE-A 0003-00000001 are valid (independent sequences per type).
+        # Different letters of the same type also have independent sequences:
+        # INVOICE-A 0003-00000001 and INVOICE-B 0003-00000001 are valid.
+        # We use func.coalesce(line, "") so that documents without a fiscal letter,
+        # such as RECEIPT/PAYMENT, are also protected against duplicates, since in 
+        # SQLite NULL != NULL in unique indexes.
+        Index(
+            "uq_documents_type_line_number", 
+            "doc_type", 
+            func.coalesce(column("line"), ""), 
+            "number", 
+            unique=True
+        ),
+    )
 
     id = Column(String, primary_key=True, default=generate_uuid)
     entity_id = Column(String, ForeignKey("entities.id"), index=True)
