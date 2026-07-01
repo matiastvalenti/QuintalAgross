@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
     Search, Download, Activity, Printer, ChevronRight, Filter, 
-    CheckCircle2, Clock, AlertCircle, X, Receipt, Wallet
+    CheckCircle2, Clock, AlertCircle, X, Receipt, Wallet, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
 import { 
@@ -23,6 +23,18 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
 import s from './StatementPage.module.css';
+
+const getShortDescription = (row) => {
+    const text = row.description || row.notes || "";
+    if (text.includes("Ajuste automático por diferencia de cambio")) {
+        const match = text.match(/TC\s*([\d.,]+)\s*->\s*([\d.,]+)/);
+        return match ? `Diferencia de cambio\nTC ${match[1]} → ${match[2]}` : "Diferencia de cambio";
+    }
+    if (text.includes("Reversa automática")) {
+        return "Reversa por anulación";
+    }
+    return text;
+};
 
 export default function StatementPage({ entityId: propsEntityId, defaultFilters = {} }) {
     const { openWindow } = useWindow();
@@ -51,6 +63,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
     const [unbilledMovements, setUnbilledMovements] = useState([]);
     const [showUnbilled, setShowUnbilled] = useState(false);
     const [saleConditions, setSaleConditions] = useState([]);
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     
     const todayStr = new Date().toISOString().split('T')[0];
     const yearStartStr = `${new Date().getFullYear()}-01-01`;
@@ -455,22 +468,16 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             </div>
                         </div>
 
-                        {/* Premium Comprehensive Filter Bar */}
+                        {/* Premium Comprehensive Filter Bar - Compacted */}
                         <div className={s.filterBar}>
-                            <div className={s.filterGrid}>
+                            <div className={s.filterRowPrimary}>
                                 {/* Dates & Presets */}
-                                <div className={s.filterCol} style={{ gridColumn: 'span 2' }}>
-                                    <span className={s.filterLabel}>Rango de Fechas</span>
+                                <div className={s.filterColDate}>
+                                    <span className={s.filterLabel}>Fechas</span>
                                     <div className={s.dateRange}>
                                         <input type="date" className={s.dateInp} value={filters.from_date} onChange={e => setFilters({...filters, from_date: e.target.value})} />
                                         <ChevronRight size={14} style={{color: '#94a3b8'}} />
                                         <input type="date" className={s.dateInp} value={filters.to_date} onChange={e => setFilters({...filters, to_date: e.target.value})} />
-                                    </div>
-                                    <div className={s.presets}>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('today')}>Hoy</button>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('this_month')}>Mes Actual</button>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('last_month')}>Mes Anterior</button>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('this_year')}>Año</button>
                                     </div>
                                 </div>
 
@@ -482,7 +489,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         value={filters.doc_type}
                                         onChange={e => setFilters({...filters, doc_type: e.target.value})}
                                     >
-                                        <option value="">TODOS LOS TIPOS</option>
+                                        <option value="">TODOS</option>
                                         <option value="INVOICE">FACTURAS</option>
                                         <option value="RECEIPT">RECIBOS</option>
                                         <option value="CREDIT_NOTE">NOTAS CRÉDITO</option>
@@ -500,7 +507,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         value={filters.sale_condition}
                                         onChange={e => setFilters({...filters, sale_condition: e.target.value})}
                                     >
-                                        <option value="">TODAS LAS CONDICIONES</option>
+                                        <option value="">TODAS</option>
                                         {saleConditions.map(sc => (
                                             <option key={sc.id} value={sc.id}>{sc.description.toUpperCase()}</option>
                                         ))}
@@ -516,62 +523,73 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         <button className={`${s.tglBtn} ${filters.currency === 'USD' ? s.active : ''}`} onClick={() => setFilters({...filters, currency: 'USD'})}>USD</button>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className={s.filterGrid} style={{ paddingTop: 20, borderTop: '1px solid rgba(226, 232, 240, 0.5)' }}>
-                                {/* Payment Status */}
-                                <div className={s.filterCol}>
-                                    <span className={s.filterLabel}>Estado Pago</span>
-                                    <div className={s.toggleButtons}>
-                                        <button className={`${s.tglBtn} ${!filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: false})}>HISTÓRICO</button>
-                                        <button className={`${s.tglBtn} ${filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: true})} style={{ color: filters.only_unapplied ? '#d97706' : 'inherit' }}>SOLO PENDIENTES</button>
-                                    </div>
-                                </div>
-
-                                {/* Overdue */}
-                                <div className={s.filterCol}>
-                                    <span className={s.filterLabel}>Vencimientos</span>
-                                    <div className={s.toggleButtons}>
-                                        <button className={`${s.tglBtn} ${!filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: false})}>TODOS</button>
-                                        <button className={`${s.tglBtn} ${filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: true})} style={{ color: filters.only_overdue ? '#dc2626' : 'inherit' }}>SOLO VENCIDOS</button>
-                                    </div>
-                                </div>
-
-                                {/* Show Unbilled */}
-                                <div className={s.filterCol}>
-                                    <span className={s.filterLabel}>Remitos Pendientes</span>
-                                    <div className={s.toggleButtons}>
-                                        <button className={`${s.tglBtn} ${!showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(false)}>OCULTOS</button>
-                                        <button className={`${s.tglBtn} ${showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(true)} style={{ color: showUnbilled ? '#1e293b' : 'inherit' }}>MOSTRAR</button>
-                                    </div>
-                                </div>
-
-                                {/* Search & Clear */}
+                                {/* Search */}
                                 <div className={s.searchCol}>
-                                    <div className={s.filterCol} style={{ flex: 1 }}>
-                                        <span className={s.filterLabel}>Búsqueda Rápida</span>
-                                        <div className={s.searchContainer}>
-                                            <Search size={14} className={s.searchIcon} />
-                                            <input 
-                                                className={s.searchInp}
-                                                placeholder="Número, nota o tipo..." 
-                                                value={filters.search} 
-                                                onChange={e => setFilters({...filters, search: e.target.value})}
-                                            />
-                                        </div>
+                                    <div className={s.searchContainer}>
+                                        <Search size={14} className={s.searchIcon} />
+                                        <input 
+                                            className={s.searchInp}
+                                            placeholder="Buscar..." 
+                                            value={filters.search} 
+                                            onChange={e => setFilters({...filters, search: e.target.value})}
+                                        />
                                     </div>
+                                    <button className={s.advancedToggleBtn} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+                                        <Filter size={14} style={{ marginRight: 4 }} />
+                                        Filtros avanzados {showAdvancedFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    </button>
                                     <button className={s.clearBtn} onClick={resetFilters} title="Limpiar todos los filtros">
-                                        <X size={16} />
+                                        <X size={14} />
                                     </button>
                                 </div>
                             </div>
+
+                            {showAdvancedFilters && (
+                                <div className={s.filterRowAdvanced}>
+                                    {/* Presets Chips */}
+                                    <div className={s.presetsChips}>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('today')}>Hoy</button>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('this_month')}>Mes Actual</button>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('last_month')}>Mes Anterior</button>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('this_year')}>Año</button>
+                                    </div>
+
+                                    <div className={s.advancedDivider}></div>
+
+                                    {/* Payment Status */}
+                                    <div className={s.filterCol} style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                        <span className={s.filterLabel}>Estado:</span>
+                                        <div className={s.toggleButtons} style={{height: 26}}>
+                                            <button className={`${s.tglBtn} ${!filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: false})}>HIST</button>
+                                            <button className={`${s.tglBtn} ${filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: true})} style={{ color: filters.only_unapplied ? '#d97706' : 'inherit' }}>PENDIENTES</button>
+                                        </div>
+                                    </div>
+
+                                    {/* Overdue */}
+                                    <div className={s.filterCol} style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                        <span className={s.filterLabel}>Vencimientos:</span>
+                                        <div className={s.toggleButtons} style={{height: 26}}>
+                                            <button className={`${s.tglBtn} ${!filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: false})}>TODOS</button>
+                                            <button className={`${s.tglBtn} ${filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: true})} style={{ color: filters.only_overdue ? '#dc2626' : 'inherit' }}>VENCIDOS</button>
+                                        </div>
+                                    </div>
+
+                                    {/* Show Unbilled */}
+                                    <div className={s.filterCol} style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                        <span className={s.filterLabel}>Remitos:</span>
+                                        <div className={s.toggleButtons} style={{height: 26}}>
+                                            <button className={`${s.tglBtn} ${!showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(false)}>OCULTOS</button>
+                                            <button className={`${s.tglBtn} ${showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(true)} style={{ color: showUnbilled ? '#1e293b' : 'inherit' }}>MOSTRAR</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Professional Ledger Table — 3-part layout */}
-                        <div className={s.tableWrapper}>
-
-                            {/* 1. Fixed Header */}
-                            <div className={s.tableHead}>
+                        {/* Professional Ledger Table & Remitos — Scrollable Area */}
+                        <div className={s.statementBodyScroll}>
+                            <div className={s.tableWrapper}>
                                 <table className={s.ledgerTable}>
                                     <colgroup>
                                         <col style={{ width: '85px' }} />
@@ -600,8 +618,8 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                             <th className={s.th}>Fecha</th>
                                             <th className={s.th}>Circuito</th>
                                             <th className={s.th}>Comprobante</th>
-                                            <th className={s.th}>Número</th>
-                                            <th className={s.th}>Descripción</th>
+                                            <th className={`${s.th} ${s.numberCell}`}>Número</th>
+                                            <th className={`${s.th} ${s.descriptionCell}`}>Descripción</th>
                                             <th className={s.th}>Vencimiento</th>
                                             <th className={s.th}>Moneda</th>
                                             <th className={s.th}>TC</th>
@@ -614,29 +632,6 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                             <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
                                         </tr>
                                     </thead>
-                                </table>
-                            </div>
-
-                            {/* 2. Scrollable Body */}
-                            <div className={s.tableBody}>
-                                <table className={s.ledgerTable}>
-                                    <colgroup>
-                                        <col style={{ width: '85px' }} />
-                                        <col style={{ width: '80px' }} />
-                                        <col style={{ width: '110px' }} />
-                                        <col style={{ width: '125px' }} />
-                                        <col style={{ width: '100px' }} />
-                                        <col style={{ width: '85px' }} />
-                                        <col style={{ width: '55px' }} />
-                                        <col style={{ width: '65px' }} />
-                                        <col style={{ width: 'auto' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '100px' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '100px' }} />
-                                    </colgroup>
                                     <tbody>
                                         {filteredMovements.length > 0 ? filteredMovements.map((m, idx) => (
                                             <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
@@ -650,8 +645,12 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                                         <span className={s.docLabel}>{getComprobanteName(m.doc_type)}</span>
                                                     </div>
                                                 </td>
-                                                <td className={s.cell}>{m.number}</td>
-                                                <td className={s.cell} title={getDescripcionFallback(m.doc_type, m.description || m.notes)}>{getDescripcionFallback(m.doc_type, m.description || m.notes)}</td>
+                                                <td className={`${s.cell} ${s.numberCell}`}>{m.number}</td>
+                                                <td className={`${s.cell} ${s.descriptionCell}`}>
+                                                    <div className={s.descriptionText} title={getDescripcionFallback(m.doc_type, m.description || m.notes)}>
+                                                        {getShortDescription(m)}
+                                                    </div>
+                                                </td>
                                                 <td className={s.cell}>{m.due_date ? fmt(m.due_date, 'date') : '-'}</td>
                                                 <td className={s.cell}>{m.currency}</td>
                                                 <td className={s.cell}>{m.exchange_rate}</td>
@@ -673,131 +672,65 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                             </tr>
                                         )}
                                     </tbody>
-                                </table>
-                            </div>
-
-                            {/* 3. Fixed Footer — always anchored to bottom of tableWrapper */}
-                            <div className={s.tableFoot}>
-                                <table className={s.ledgerTable}>
-                                    <colgroup>
-                                        <col style={{ width: '85px' }} />
-                                        <col style={{ width: '80px' }} />
-                                        <col style={{ width: '110px' }} />
-                                        <col style={{ width: '125px' }} />
-                                        <col style={{ width: '100px' }} />
-                                        <col style={{ width: '85px' }} />
-                                        <col style={{ width: '55px' }} />
-                                        <col style={{ width: '65px' }} />
-                                        <col style={{ width: 'auto' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '100px' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '90px' }} />
-                                        <col style={{ width: '100px' }} />
-                                    </colgroup>
                                     <tfoot className={s.tfoot}>
                                         <tr>
-                                            <td colSpan={9} className={s.totalLabel}>TOTALES ACUMULADOS</td>
-                                            <td className={s.cellTotal}>{fmt(totals.d_ars, 'ARS')}</td>
-                                            <td className={s.cellTotal}>{fmt(totals.h_ars, 'ARS')}</td>
-                                            <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceArs}`}>{fmt(totals.b_ars, 'ARS')}</td>
-                                            <td className={s.cellTotal}>{fmt(totals.d_usd, 'USD')}</td>
-                                            <td className={s.cellTotal}>{fmt(totals.h_usd, 'USD')}</td>
-                                            <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceUsd}`}>{fmt(totals.b_usd, 'USD')}</td>
+                                            <td colSpan={9} className={s.totalLabelCell}>TOTALES ACUMULADOS</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.d_ars, 'ARS')}</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.h_ars, 'ARS')}</td>
+                                            <td className={`${s.totalAmountCell} ${s.finalBalance} ${s.balanceArs}`}>{fmt(totals.b_ars, 'ARS')}</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.d_usd, 'USD')}</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.h_usd, 'USD')}</td>
+                                            <td className={`${s.totalAmountCell} ${s.finalBalance} ${s.balanceUsd}`}>{fmt(totals.b_usd, 'USD')}</td>
                                         </tr>
                                     </tfoot>
                                 </table>
-                            </div>
+                            </div>  {/* end tableWrapper */}
 
-                        </div>  {/* end tableWrapper */}
-
-                        {/* Unbilled Delivery Notes Section */}
-                        {showUnbilled && (
-                            <div className={s.unbilledSection}>
-                                <div className={s.sectionHeader}>
-                                    <h3 className={s.sectionTitle}>Remitos Pendientes de Facturar</h3>
-                                    <div className={s.sectionLine}></div>
-                                </div>
-                                
-                                <div className={s.tableContainer} style={{marginTop: 16}}>
-                                    <table className={s.ledgerTable}>
-                                        <colgroup>
-                                            <col style={{ width: '85px' }} />
-                                            <col style={{ width: '80px' }} />
-                                            <col style={{ width: '110px' }} />
-                                            <col style={{ width: '125px' }} />
-                                            <col style={{ width: '100px' }} />
-                                            <col style={{ width: '85px' }} />
-                                            <col style={{ width: '55px' }} />
-                                            <col style={{ width: '65px' }} />
-                                            <col style={{ width: 'auto' }} />
-                                            {/* Monetary cols */}
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '100px' }} />
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '100px' }} />
-                                        </colgroup>
-                                        <thead className={s.thead}>
-                                            <tr className={s.groupHeader}>
-                                                <th colSpan={9}></th>
-                                                <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Estimado ARS</th>
-                                                <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Estimado USD</th>
-                                            </tr>
-                                            <tr>
-                                                <th className={s.th}>Fecha</th>
-                                                <th className={s.th}>Circuito</th>
-                                                <th className={s.th}>Tipo</th>
-                                                <th className={s.th}>Número</th>
-                                                <th className={s.th}>Descripción</th>
-                                                <th className={s.th}>Vencimiento</th>
-                                                <th className={s.th}>Moneda</th>
-                                                <th className={s.th}>TC</th>
-                                                <th className={s.th}>Condición</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Total</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredUnbilledMovements.length > 0 ? filteredUnbilledMovements.map((m, idx) => (
-                                                <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick({ ...m, doc_type: 'DELIVERY_NOTE' })}>
-                                                    <td className={s.cell}>{fmt(m.date, 'date')}</td>
-                                                    <td className={s.cell}>{getCircuitoFallback('DELIVERY_NOTE', m.circuit)}</td>
-                                                    <td className={s.cell}>
-                                                        <div className={s.statusBadge} style={{ textTransform: 'none' }}>
-                                                            <Clock size={12} style={{ color: '#d97706' }} />
-                                                            <span className={s.docLabel}>{getComprobanteName('DELIVERY_NOTE')}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className={s.cell}>{m.number}</td>
-                                                    <td className={s.cell} title={getDescripcionFallback('DELIVERY_NOTE', m.description || m.notes)}>{getDescripcionFallback('DELIVERY_NOTE', m.description || m.notes)}</td>
-                                                    <td className={s.cell}>-</td>
-                                                    <td className={s.cell}>{m.currency}</td>
-                                                    <td className={s.cell}>{m.exchange_rate}</td>
-                                                    <td className={s.cell} title={m.sale_condition}>{m.sale_condition || '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars > 0 ? fmt(m.amount_ars, 'ARS') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars < 0 ? fmt(Math.abs(m.amount_ars), 'ARS') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum} ${s.balanceArs}`}>{fmt(m.balance_ars, 'ARS')}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd > 0 ? fmt(m.amount_usd, 'USD') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd < 0 ? fmt(Math.abs(m.amount_usd), 'USD') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`}>{fmt(m.balance_usd, 'USD')}</td>
-                                                </tr>
-                                            )) : (
+                            {/* Unbilled Delivery Notes Section */}
+                            {showUnbilled && (
+                                <div className={s.remitosSection}>
+                                    <div className={s.remitosHeader}>Remitos pendientes de facturar</div>
+                                    {filteredUnbilledMovements.length > 0 ? (
+                                        <table className={s.remitosTable}>
+                                            <thead>
                                                 <tr>
-                                                    <td colSpan={15} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No hay remitos pendientes con los filtros aplicados.</td>
+                                                    <th>Fecha</th>
+                                                    <th>Número</th>
+                                                    <th>Estado</th>
+                                                    <th>Moneda</th>
+                                                    <th>Total Estimado</th>
+                                                    <th>Acción</th>
                                                 </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {filteredUnbilledMovements.map((m, idx) => (
+                                                    <tr key={m.id || idx}>
+                                                        <td>{fmt(m.date, 'date')}</td>
+                                                        <td className={s.numberCell}>{m.number}</td>
+                                                        <td>
+                                                            <div className={s.statusBadge} style={{ textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                                <Clock size={12} style={{ color: '#d97706' }} />
+                                                                <span className={s.docLabel}>Pendiente</span>
+                                                            </div>
+                                                        </td>
+                                                        <td>{m.currency}</td>
+                                                        <td className={s.cellNum}>{fmt(Math.abs(m.amount_ars), 'ARS')}</td>
+                                                        <td>
+                                                            <Button variant="secondary" size="sm" onClick={() => handleRowClick({ ...m, doc_type: 'DELIVERY_NOTE' })}>Ver</Button>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    ) : (
+                                        <div className={s.emptyRemitosBox}>
+                                            <strong>Sin remitos pendientes</strong>
+                                            <span>No hay remitos entregados sin facturar para este cliente.</span>
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 ) : (
                     <div className={s.emptyState}>

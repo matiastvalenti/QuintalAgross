@@ -12,8 +12,8 @@ export function openStandaloneWindow(path, name = '_blank', options = {}) {
   const width = options.width || 1280;
   const height = options.height || 820;
 
-  const left = window.screenX + Math.max(0, (window.outerWidth - width) / 2);
-  const top = window.screenY + Math.max(0, (window.outerHeight - height) / 2);
+  const left = options.left !== undefined ? options.left : window.screenX + Math.max(0, (window.outerWidth - width) / 2);
+  const top = options.top !== undefined ? options.top : window.screenY + Math.max(0, (window.outerHeight - height) / 2);
 
   const features = [
     `width=${width}`,
@@ -287,8 +287,46 @@ export function openEditRendicion(id, options = {}) {
 
 // === RESUMEN DE CUENTA ===
 export function openResumenCuenta(entityId = null, options = {}) {
-  const path = entityId ? `/standalone/resumen-cuenta/${entityId}` : "/standalone/resumen-cuenta";
-  return openStandaloneWindow(path, entityId ? `resumen-${entityId}` : "resumen-cuenta", options);
+  const path = entityId
+    ? `/standalone/resumen-cuenta/${entityId}`
+    : "/standalone/resumen-cuenta";
+
+  const screenWidth = window.screen?.availWidth || 1600;
+  const screenHeight = window.screen?.availHeight || 900;
+
+  const width = Math.max(1500, screenWidth - 16);
+  const height = Math.max(880, screenHeight - 48);
+
+  const left = 0;
+  const top = 0;
+
+  const finalOptions = {
+    width,
+    height,
+    left,
+    top,
+    resizable: "yes",
+    scrollbars: "yes",
+    ...options,
+  };
+
+  const win = openStandaloneWindow(
+    path,
+    entityId ? `resumen-${entityId}` : "resumen-cuenta",
+    finalOptions
+  );
+  
+  if (win) {
+    try {
+      win.moveTo(left, top);
+      win.resizeTo(width, height);
+      win.focus();
+    } catch (e) {
+      console.warn("No se pudo redimensionar la ventana de resumen de cuenta", e);
+    }
+  }
+
+  return win;
 }
 
 // === ENTIDADES Y CRM ===

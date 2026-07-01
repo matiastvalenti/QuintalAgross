@@ -49,23 +49,24 @@ export default function BalancesPage() {
                 cost_center: costCenter
               } 
             });
-            setBalances(data.data || []);
+            const rows = Array.isArray(data) ? data : (data.data || []);
+            setBalances(rows);
         } catch (err) {
-            console.error(err);
-            showToast("Error al cargar saldos", "error");
+            console.error("Error fetchBalances:", err);
+            showToast(err.message || "Error al cargar saldos", "error");
+            setBalances([]);
         } finally {
             setLoading(false);
         }
     };
 
     const groupedBalances = useMemo(() => {
-        // The new API endpoint /entities/reports/ageing returns data already grouped by entity
-        // and with total_balance and overdue_balance.
-        // So, we just need to filter and sort.
-        return balances.filter(b => 
-            b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-            (b.code && b.code.toLowerCase().includes(searchQuery.toLowerCase()))
-        ).sort((a,b) => a.name.localeCompare(b.name));
+        return balances.filter(b => {
+            const name = (b.name || "").toLowerCase();
+            const code = (b.code || "").toLowerCase();
+            const q = searchQuery.toLowerCase();
+            return name.includes(q) || code.includes(q);
+        }).sort((a,b) => (a.name || "").localeCompare(b.name || ""));
     }, [balances, searchQuery]);
 
     const handleExportExcel = () => {

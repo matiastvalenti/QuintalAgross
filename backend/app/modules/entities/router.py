@@ -547,12 +547,23 @@ def delete_entity(entity_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"ok": True}
 
+def safe_float(value, default=0.0):
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 @router.get("/reports/ageing", response_model=AgeingReportResponse)
 def get_ageing_report(
     type: Optional[str] = Query("client", description="client or provider"),
     cost_center: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         now = datetime.now()
         debit_types = [
@@ -561,41 +572,80 @@ def get_ageing_report(
             DocumentType.LPG_PRIMARY, DocumentType.LPG_SECONDARY
         ]
 
+        total_ars_expr = func.coalesce(
+            Document.total_amount_ars,
+            case(
+                (Document.currency == "USD", Document.total_amount * func.coalesce(Document.exchange_rate, 1.0)),
+                else_=func.coalesce(Document.total_amount, 0.0)
+            )
+        )
+
         balances_query = db.query(
             Document.entity_id,
             func.sum(case(
-                (Document.doc_type.in_(debit_types), func.coalesce(Document.total_amount_ars, 0.0)),
-                else_=-func.coalesce(Document.total_amount_ars, 0.0)
+                (Document.doc_type.in_(debit_types), total_ars_expr),
+                else_=-total_ars_expr
             )).label("balance")
         ).filter(Document.status != DocumentStatus.CANCELLED)
         
-        if cost_center:
+        if cost_center in [1, 2]:
             balances_query = balances_query.filter(Document.cost_center == cost_center)
             
         balances_results = balances_query.group_by(Document.entity_id).all()
         
-        balances_map = {b.entity_id: float(b.balance or 0.0) for b in balances_results if b.entity_id and abs(float(b.balance or 0.0)) > 0.01}
+        balances_map = {b.entity_id: safe_float(b.balance) for b in balances_results if b.entity_id and abs(safe_float(b.balance)) > 0.01}
 
         open_docs_query = db.query(Document).filter(
             Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL]),
             Document.entity_id.in_(balances_map.keys())
         )
-        if cost_center:
+        if cost_center in [1, 2]:
             open_docs_query = open_docs_query.filter(Document.cost_center == cost_center)
             
         open_docs = open_docs_query.all()
 
         doc_ids = [d.id for d in open_docs]
-        apps_query = db.query(
-            Application.to_document_id,
-            func.sum(Application.amount_applied_ars).label("total_applied_ars")
-        ).filter(Application.to_document_id.in_(doc_ids)).group_by(Application.to_document_id).all()
-        apps_map = {a.to_document_id: float(a.total_applied_ars) for a in apps_query}
+        
+        apps_map = {}
+        if doc_ids:
+            apps_query = db.query(Application).filter(Application.to_document_id.in_(doc_ids)).all()
+            for app in apps_query:
+                if app.amount_applied_ars is None:
+                    amount_applied = safe_float(app.amount_applied)
+                    app_tc = safe_float(app.exchange_rate, 1.0)
+                    if app_tc <= 0: app_tc = 1.0
+                    val_ars = amount_applied * app_tc
+                    logger.warning(f"Ageing report calculated fallback: application_id={app.id} field=amount_applied_ars calculated={val_ars}")
+                else:
+                    val_ars = safe_float(app.amount_applied_ars)
+                
+                apps_map[app.to_document_id] = apps_map.get(app.to_document_id, 0.0) + val_ars
 
         entity_buckets: Dict[str, Dict[str, Any]] = {}
         for doc in open_docs:
+            if not doc.id or not doc.entity_id:
+                logger.warning(f"Documento imposible saltado en ageing report (falta id o entity_id): {getattr(doc, 'id', None)}")
+                continue
+
+            if doc.total_amount_ars is None:
+                total_amount = safe_float(doc.total_amount)
+                doc_tc = safe_float(doc.exchange_rate, 1.0)
+                if doc_tc <= 0: doc_tc = 1.0
+                
+                doc_currency = doc.currency.value if hasattr(doc.currency, "value") else str(doc.currency or "ARS")
+                if doc_currency == "USD":
+                    doc_total_ars = total_amount * doc_tc
+                else:
+                    doc_total_ars = total_amount
+                logger.warning(f"Ageing report calculated fallback: document_id={doc.id} field=total_amount_ars calculated={doc_total_ars}")
+            else:
+                doc_total_ars = safe_float(doc.total_amount_ars)
+
+            if doc.due_date is None:
+                logger.warning(f"Ageing report fallback: document_id={doc.id} field=due_date value=None")
+
             applied_ars = apps_map.get(doc.id, 0.0)
-            pending_ars = float(doc.total_amount_ars or 0.0) - applied_ars
+            pending_ars = doc_total_ars - applied_ars
             if pending_ars <= 0.01: continue
             
             eid = str(doc.entity_id)
@@ -638,6 +688,7 @@ def get_ageing_report(
 
         if type == "client": entities_query = db.query(Entity).filter(Entity.type.in_([EntityType.CLIENT, EntityType.MIXED]))
         elif type == "provider": entities_query = db.query(Entity).filter(Entity.type.in_([EntityType.PROVIDER, EntityType.MIXED]))
+        elif type == "mixed": entities_query = db.query(Entity).filter(Entity.type == EntityType.MIXED)
         else: entities_query = db.query(Entity)
             
         all_entities = entities_query.filter(Entity.id.in_(balances_map.keys())).all()
@@ -646,6 +697,13 @@ def get_ageing_report(
         total_overdue_global = 0.0
 
         for ent in all_entities:
+            if not ent.id:
+                logger.warning("Entidad imposible saltada en ageing report (falta id)")
+                continue
+
+            if ent.credit_limit is None:
+                logger.warning(f"Ageing report fallback: entity_id={ent.id} field=credit_limit value=None")
+
             balance = balances_map.get(ent.id, 0.0)
             eb = entity_buckets.get(ent.id, {
                 "overdue": 0.0,
@@ -657,19 +715,19 @@ def get_ageing_report(
             for cid, cdata in eb["conditions"].items():
                 name = condition_names.get(cid, "Sin Condición Asignada") if cid != "NONE" else "Sin Condición Asignada"
                 cond_list.append({
-                    "name": name, "total_balance": float(cdata["total"]), "overdue_balance": float(cdata["overdue"]),
-                    "aging_buckets": [{"label": k, "amount": float(v)} for k, v in cdata["buckets"].items()]
+                    "name": name, "total_balance": safe_float(cdata["total"]), "overdue_balance": safe_float(cdata["overdue"]),
+                    "aging_buckets": [{"label": k, "amount": safe_float(v)} for k, v in cdata["buckets"].items()]
                 })
 
             report_data.append({
                 "id": ent.id, "name": ent.name, "code": ent.code, "total_balance": balance,
                 "overdue_balance": eb["overdue"],
                 "aging_buckets": [{"label": k, "amount": v} for k, v in eb["buckets"].items()],
-                "credit_limit": ent.credit_limit, "credit_status": ent.credit_status,
+                "credit_limit": safe_float(ent.credit_limit), "credit_status": str(ent.credit_status or ""),
                 "conditions": cond_list
             })
-            total_debt_global += float(balance)
-            total_overdue_global += float(eb["overdue"])
+            total_debt_global += balance
+            total_overdue_global += eb["overdue"]
 
         return {
             "report_date": now, "type": type or "all",
@@ -679,4 +737,9 @@ def get_ageing_report(
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Ageing Report Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Even if error occurs at top level, try to return empty valid format rather than 500
+        return {
+            "report_date": datetime.now(), "type": type or "all",
+            "summary": {"total_debt": 0.0, "total_overdue": 0.0},
+            "data": []
+        }
