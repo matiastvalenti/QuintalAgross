@@ -137,6 +137,8 @@ export default function InvoiceForm(props) {
   const [loading, setLoading] = useState(initialMode === "edit");
   const [saving, setSaving] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
+  const [activeContextTab, setActiveContextTab] = useState('comercial');
+  const [activeBottomTab, setActiveBottomTab] = useState('observaciones');
 
   
   // Header State
@@ -163,6 +165,32 @@ export default function InvoiceForm(props) {
   const [ovHasDeliveryNotes, setOvHasDeliveryNotes] = useState(false);
   const [fullInvoiceData, setFullInvoiceData] = useState(null);
   
+  const [sourceInvoiceId, setSourceInvoiceId] = useState(initialSourceType === 'invoice' ? initialSourceId : "");
+  const [sourceInvoices, setSourceInvoices] = useState([]);
+  
+  useEffect(() => {
+    if (reasonType === 'EXCHANGE_DIFFERENCE' && entity?.id) {
+        const fetchInvoices = async () => {
+            try {
+                const token = localStorage.getItem("token");
+                const res = await fetch(`${API_URL}/accounting/documents/?entity_id=${entity.id}`, { headers: { Authorization: `Bearer ${token}` }});
+                if (res.ok) {
+                    const data = await res.json();
+                    let items = data.items || data;
+                    // Filter invoices
+                    items = items.filter(i => i.doc_type === 'INVOICE' || i.doc_type === 'PURCHASE_INVOICE');
+                    setSourceInvoices(items);
+                }
+            } catch (e) {
+                console.error(e);
+            }
+        };
+        fetchInvoices();
+    } else {
+        setSourceInvoices([]);
+    }
+  }, [reasonType, entity?.id]);
+
   // Lines
   const [items, setItems] = useState([]);
   
@@ -274,7 +302,17 @@ export default function InvoiceForm(props) {
   const fetchNextNumber = async (currentPv) => {
       if (mode !== "new" || !currentPv) return;
       try {
-          const docTag = docType === 'PURCHASE_INVOICE' ? 'FC' : 'FA';
+          let docTag = 'FA';
+          if (docType === 'PURCHASE_INVOICE') {
+              docTag = 'FC';
+          } else if (docType === 'CREDIT_NOTE') {
+              docTag = `NC${letter}`;
+          } else if (docType === 'DEBIT_NOTE') {
+              docTag = `ND${letter}`;
+          } else if (docType === 'INVOICE') {
+              docTag = `F${letter}`;
+          }
+
           const token = localStorage.getItem("token");
           const res = await fetch(`${API_URL}/accounting/documents/next-number?pv=${currentPv}&doc_type=${docTag}`, { headers: { Authorization: `Bearer ${token}` }});
           if (res.ok) {
@@ -288,7 +326,7 @@ export default function InvoiceForm(props) {
 
   useEffect(() => {
       fetchNextNumber(pv);
-  }, [pv, docType]);
+  }, [pv, docType, letter]);
 
   const fetchInvoice = async (docId = id) => {
     if (!docId) return;
@@ -552,6 +590,9 @@ export default function InvoiceForm(props) {
     if (currency === "USD" && exchangeRate <= 1) {
         return showToast("Para moneda USD el Tipo de Cambio debe ser mayor a 1", "error");
     }
+    if (reasonType === 'EXCHANGE_DIFFERENCE' && !sourceInvoiceId) {
+        return showToast("Seleccioná una factura origen para generar una nota por diferencia de cambio.", "error");
+    }
     
     // Nota: NO validamos accounting_account_id aquí.
     // El backend intenta resolverlo automáticamente desde el producto.
@@ -579,7 +620,7 @@ export default function InvoiceForm(props) {
         total_amount: totals.total,
         reason_type: reasonType || null,
         return_stock: returnStock,
-        source_invoice_id: initialSourceType === 'invoice' ? initialSourceId : null,
+        source_invoice_id: sourceInvoiceId || null,
         lines: items.map(l => ({
             product_id: l.product_id,
             description: l.description,
@@ -758,10 +799,10 @@ export default function InvoiceForm(props) {
         )}
 
         {/* Body: 2 Column Layout */}
-        <div className={s.bodyTwoColumns}>
+        <div className={s.documentMainGrid}>
             
             {/* Columna Izquierda: Ítems y Productos */}
-            <div className={s.leftCol}>
+            <div className={s.leftDocumentArea}>
                 {!isReadOnly && (
                     <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
@@ -808,7 +849,7 @@ export default function InvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden' }}>
+                <div className={`${s.bentoContainer} ${s.itemsPanel}`} style={{ padding: 0, overflow: 'hidden' }}>
                     {items.length > 0 ? (
                         <>
                             {isReadOnly ? null : (
@@ -824,7 +865,7 @@ export default function InvoiceForm(props) {
                                     <div></div>
                                 </div>
                             )}
-                            <div className={s.itemsList}>
+                            <div className={`${s.itemsList} ${s.itemsTableScroll}`}>
                                 {items.map(item => {
                                     if (isReadOnly) {
                                         const qtyPackages = item.qty_packages;
@@ -947,231 +988,299 @@ export default function InvoiceForm(props) {
                         </div>
                     )}
                 </div>
+                {/* Flujo Documento */}
+                {(() => {
+                    const invoiceInfo = fullInvoiceData ? getInvoiceOriginInfo(fullInvoiceData, items) : { salesOrderId: sourceOrderId, salesOrderNumber: sourceNumber };
+                    const dnInfo = fullInvoiceData ? getInvoiceDeliveryNoteInfo(fullInvoiceData, items) : { deliveryNoteId: sourceDeliveryNoteId, deliveryNoteNumber: null };
+                    
+                    let originStatus = "Directo";
+                    let originDetail = "Sin origen";
+                    let originColor = '#eab308';
+                    
+                    if (invoiceInfo.salesOrderId || invoiceInfo.salesOrderNumber) {
+                        originStatus = "Vinculada";
+                        originDetail = `OV ${invoiceInfo.salesOrderNumber || String(invoiceInfo.salesOrderId).slice(-8)}`;
+                        originColor = '#10b981';
+                    }
+                    
+                    let remitoStatus = "Pendiente";
+                    let remitoDetail = "0 remitos";
+                    let remitoColor = '#eab308';
+                    
+                    if (dnInfo.deliveryNoteId || dnInfo.deliveryNoteNumber) {
+                        remitoStatus = "Vinculado";
+                        remitoDetail = `RE ${dnInfo.deliveryNoteNumber || String(dnInfo.deliveryNoteId).slice(-8)}`;
+                        remitoColor = '#10b981';
+                    }
+
+                    return (
+                        <div className={s.flowPanel}>
+                          <div className={s.relationsBar} style={{ minHeight: '100%', height: '100%', display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                              <div className={s.relationCard} style={{ opacity: (originStatus !== "Directo") ? 1 : 0.5 }}>
+                                  <div className={s.nodeTitle} style={{ color: originColor }}>ORIGEN</div>
+                                  <div className={s.nodeStatus} style={{ color: originColor }}>{originStatus}</div>
+                                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{originDetail}</div>
+                              </div>
+
+                          <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+
+                          {docType !== 'DEBIT_NOTE' && (
+                              <>
+                                  <div className={s.relationCard} style={{ opacity: (remitoStatus !== "Pendiente") ? 1 : 0.5 }}>
+                                      <div className={s.nodeTitle} style={{ color: remitoColor }}>REMITO</div>
+                                      <div className={s.nodeStatus} style={{ color: remitoColor }}>{remitoStatus}</div>
+                                      <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{remitoDetail}</div>
+                                  </div>
+                                  <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+                              </>
+                          )}
+
+                  <div className={s.relationCard} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe' }}>
+                      <div className={s.nodeTitle} style={{ color: '#1d4ed8' }}>{docType === 'CREDIT_NOTE' ? 'NOTA DE CRÉDITO' : docType === 'DEBIT_NOTE' ? 'NOTA DE DÉBITO' : 'FACTURA'}</div>
+                      <div className={s.nodeStatus} style={{ color: '#1d4ed8' }}>Activa</div>
+                      <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{fmt(totals.total)}</div>
+                  </div>
+
+                  <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+
+                  <div className={s.relationCard}>
+                      <div className={s.nodeTitle} style={{ color: '#0b132b' }}>COBRO</div>
+                      <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
+                      <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0%</div>
+                  </div>
+
+                  {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE') && (
+                      <>
+                          <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+                          <div className={s.relationCard}>
+                              <div className={s.nodeTitle} style={{ color: '#0b132b' }}>CTA. CORRIENTE</div>
+                              <div className={s.nodeStatus} style={{ color: '#eab308' }}>Actualizado</div>
+                              <div className={s.nodeMetric} style={{ color: '#0f172a' }}>-</div>
+                          </div>
+                      </>
+                  )}
+
+                  <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
+
+                      <div className={s.relationCard} style={{ maxWidth: '140px', background: 'transparent', border: 'none', paddingLeft: 8 }}>
+                          <div className={s.nodeTitle} style={{ color: '#64748b' }}>ESTADO</div>
+                          <div className={s.obsText} style={{ marginTop: 4, fontWeight: 800, color: '#1e293b' }}>{status}</div>
+                      </div>
+                    </div>
+                  </div>
+                    );
+                })()}
             </div>
 
             {/* Columna Derecha: Panel Lateral Administrativo */}
-            <div className={s.rightCol}>
+            <div className={s.rightDocumentArea}>
                 {/* Bloque Cliente */}
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><User size={12}/> CLIENTE</div>
-                    <div className={s.sideField}>
-                        <label>NOMBRE</label>
-                        {isReadOnly ? (
-                            <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text)', textAlign: 'right' }}>{entity?.name || '-'}</div>
-                        ) : (
-                            <div style={{ flex: 1 }}>
-                                <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
+                <div className={s.clientPanel}>
+                    <div className={s.panelTitle}><User size={12}/> CLIENTE</div>
+                    <div className={s.clientPanelBody}>
+                        <div className={s.clientField}>
+                            <label>NOMBRE</label>
+                            {isReadOnly ? (
+                                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text)', textAlign: 'left', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entity?.name || '-'}</div>
+                            ) : (
+                                <div className={s.clientNameControl}>
+                                    <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
+                                </div>
+                            )}
+                        </div>
+                        <div className={s.clientField}>
+                            <label>PTO. VENTA</label>
+                            {isReadOnly ? <div className={s.clientInput} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{pv}</div> : (
+                                <select className={s.clientSelect} value={pv} onChange={(e) => setPv(e.target.value)}>
+                                    {pointsOfSale.map(p => <option key={p.pv} value={p.pv}>{p.pv}</option>)}
+                                </select>
+                            )}
+                        </div>
+                        <div className={s.clientField}>
+                            <label>NÚMERO</label>
+                            <input 
+                                type="text" 
+                                className={s.clientInput} 
+                                value={number} 
+                                onChange={(e) => setNumber(e.target.value)}
+                                placeholder="Autogenerado"
+                                disabled={isReadOnly}
+                            />
+                        </div>
+                    </div>
+                </div>
+
+                {/* Bloque Medio: Comercial / Ajuste-Origen */}
+                <div className={`${s.sideBlock} ${s.middleRightPanel}`}>
+                    {docType !== 'INVOICE' ? (
+                        <div className={s.panelTabs}>
+                            <button className={`${s.panelTab} ${activeContextTab === 'comercial' ? s.panelTabActive : ''}`} onClick={() => setActiveContextTab('comercial')}>Comercial</button>
+                            <button className={`${s.panelTab} ${activeContextTab === 'ajuste' ? s.panelTabActive : ''}`} onClick={() => setActiveContextTab('ajuste')}>Ajuste / Origen</button>
+                        </div>
+                    ) : (
+                        <div className={s.panelTitle} style={{ marginBottom: '8px' }}><ShoppingBag size={12}/> COMERCIAL</div>
+                    )}
+                    <div className={s.tabContent}>
+                        {activeContextTab === 'comercial' && (
+                            <>
+                                <div className={s.commercialField}>
+                                    <label>CONDICIÓN</label>
+                                    <div className={s.commercialControl}>
+                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div> : (
+                                            <select className={s.commercialSelect} value={selectedConditionId ?? ''} onChange={e => setSelectedConditionId(e.target.value)}>
+                                                <option value="">Seleccione...</option>
+                                                {saleConditions.map(sc => <option key={sc.id} value={sc.id}>{sc.description}</option>)}
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className={s.commercialField}>
+                                    <label>VENDEDOR</label>
+                                    <div className={s.commercialControl}>
+                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{sellers.find(s => s.id === salespersonId)?.name || '-'}</div> : (
+                                            <select className={s.commercialSelect} value={salespersonId ?? ''} onChange={e => setSalespersonId(e.target.value)}>
+                                                <option value="">Ninguno</option>
+                                                {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className={s.commercialField}>
+                                    <label>MONEDA</label>
+                                    <div className={s.commercialControl}>
+                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{currency}</div> : (
+                                            <select className={s.commercialSelect} value={currency} onChange={e => setCurrency(e.target.value)}>
+                                                <option value="ARS">ARS</option>
+                                                <option value="USD">USD</option>
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className={s.commercialField}>
+                                    <label>T. CAMBIO</label>
+                                    <div className={s.commercialControl}>
+                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{exchangeRate}</div> : (
+                                            <input type="number" className={s.commercialInput} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {activeContextTab === 'ajuste' && docType !== 'INVOICE' && (
+                            <>
+                                <div className={s.commercialField}>
+                                    <label>MOTIVO</label>
+                                    <div className={s.commercialControl}>
+                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{reasonType || 'Otro'}</div> : (
+                                            <select className={s.commercialSelect} value={reasonType} onChange={e => {
+                                                setReasonType(e.target.value);
+                                                if (e.target.value === 'EXCHANGE_DIFFERENCE' && items.length === 0) {
+                                                    setItems([{ id: Math.random(), description: "Diferencia de cambio", qty: 1, unit_price: 0, discount_pct: 0, vat_rate: 0.21, accounting_account_id: "" }]);
+                                                }
+                                            }}>
+                                                <option value="">Seleccione Motivo...</option>
+                                                <option value="RETURN">Devolución</option>
+                                                <option value="DISCOUNT">Bonificación</option>
+                                                <option value="BILLING_ERROR">Error de facturación</option>
+                                                <option value="COMMERCIAL_ADJUSTMENT">Ajuste comercial</option>
+                                                <option value="INTEREST">Intereses</option>
+                                                <option value="EXCHANGE_DIFFERENCE">Diferencia de cambio</option>
+                                                <option value="SURCHARGE">Recargo financiero</option>
+                                                <option value="ADMIN_EXPENSE">Gastos administrativos</option>
+                                                <option value="OTHER">Otro</option>
+                                            </select>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {reasonType === 'RETURN' && docType === 'CREDIT_NOTE' && (
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 8px 0', fontSize: '12px', color: '#1e293b', fontWeight: 500 }}>
+                                        <input type="checkbox" checked={returnStock} onChange={(e) => setReturnStock(e.target.checked)} style={{ width: '14px', height: '14px', accentColor: '#10b981' }} />
+                                        Reingresa stock
+                                    </label>
+                                )}
+
+                                <div className={s.commercialField}>
+                                    <label>ORIGEN {reasonType === 'EXCHANGE_DIFFERENCE' ? '*' : ''}</label>
+                                    <div className={s.commercialControl}>
+                                        {isReadOnly ? (
+                                            <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{sourceInvoices.find(i => i.id === sourceInvoiceId)?.number || 'Seleccionado'}</div>
+                                        ) : (
+                                            <select className={s.commercialSelect} value={sourceInvoiceId || ''} onChange={e => setSourceInvoiceId(e.target.value)}>
+                                                <option value="">{reasonType === 'EXCHANGE_DIFFERENCE' ? 'Buscar factura...' : 'Opcional...'}</option>
+                                                {sourceInvoices.map(inv => (
+                                                    <option key={inv.id} value={inv.id}>{inv.doc_type.startsWith('INV') ? 'FA' : 'FC'} {inv.number}</option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
+                                    {sourceInvoiceId && sourceInvoices.find(i => i.id === sourceInvoiceId) && (() => {
+                                        const sel = sourceInvoices.find(i => i.id === sourceInvoiceId);
+                                        return <div className={s.originMeta}>{sel.number} · TC {sel.exchange_rate} · {sel.currency}</div>;
+                                    })()}
+                                </div>
+                            </>
+                        )}
+
+                    </div>
+                </div>
+
+                {/* Bloque Observaciones / ARCA */}
+                <div className={`${s.sideBlock} ${s.bottomRightPanel}`} style={{ paddingBottom: 0 }}>
+                    <div className={s.panelTabs}>
+                        <button className={`${s.panelTab} ${activeBottomTab === 'observaciones' ? s.panelTabActive : ''}`} onClick={() => setActiveBottomTab('observaciones')}>Observaciones</button>
+                        <button className={`${s.panelTab} ${activeBottomTab === 'arca' ? s.panelTabActive : ''}`} onClick={() => setActiveBottomTab('arca')}>ARCA</button>
+                    </div>
+                    <div className={s.tabContent} style={{ paddingTop: '4px', paddingBottom: '12px', display: 'flex', flexDirection: 'column' }}>
+                        {activeBottomTab === 'observaciones' && (
+                            <div className={s.observationsContent}>
+                                {isReadOnly ? (
+                                    <div style={{ fontSize: 11, color: '#475569', flex: 1, overflowY: 'auto' }}>{observations || 'Sin observaciones'}</div>
+                                ) : (
+                                    <textarea 
+                                        className={s.observationsTextarea} 
+                                        placeholder="Notas internas o comentarios..."
+                                        value={observations ?? ''}
+                                        onChange={e => setObservations(e.target.value)}
+                                    />
+                                )}
+                            </div>
+                        )}
+                        {activeBottomTab === 'arca' && (
+                            <div className={s.arcaContent}>
+                                <div className={s.arcaGrid}>
+                                    <div className={s.arcaItem}>
+                                        <span className={s.arcaLabel}>Estado</span>
+                                        <span className={s.arcaValue}>Pendiente</span>
+                                    </div>
+                                    <div className={s.arcaItem}>
+                                        <span className={s.arcaLabel}>CAE</span>
+                                        <span className={s.arcaValue}>-</span>
+                                    </div>
+                                    <div className={s.arcaItem}>
+                                        <span className={s.arcaLabel}>Vto CAE</span>
+                                        <span className={s.arcaValue}>-</span>
+                                    </div>
+                                    <div className={s.arcaItem}>
+                                        <span className={s.arcaLabel}>Resultado</span>
+                                        <span className={s.arcaValue}>-</span>
+                                    </div>
+                                </div>
+                                <button className={s.arcaButton} disabled>Confirmar en ARCA</button>
                             </div>
                         )}
                     </div>
-                    <div className={s.sideField}>
-                        <label>PTO. VENTA</label>
-                        {isReadOnly ? <div className={s.sideInput}>{pv}</div> : (
-                            <select className={s.sideSelect} value={pv} onChange={(e) => setPv(e.target.value)}>
-                                {pointsOfSale.map(p => <option key={p.pv} value={p.pv}>{p.pv}</option>)}
-                            </select>
-                        )}
-                    </div>
-                    <div className={s.sideField}>
-                        <label>NÚMERO</label>
-                        <input 
-                            type="text" 
-                            className={s.sideInput} 
-                            value={number} 
-                            onChange={(e) => setNumber(e.target.value)}
-                            placeholder="Autogenerado"
-                            disabled={isReadOnly}
-                            style={{ textAlign: 'right', fontWeight: 600, width: '100px' }}
-                        />
-                    </div>
                 </div>
 
-                {/* Bloque Comercial */}
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><ShoppingBag size={12}/> COMERCIAL</div>
-
-                    {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE') && (
-                        <div className={s.sideField}>
-                            <label>MOTIVO</label>
-                            {isReadOnly ? <div className={s.sideInput}>{reasonType || 'Otro'}</div> : (
-                                <select className={s.sideSelect} value={reasonType} onChange={e => {
-                                    setReasonType(e.target.value);
-                                    if (e.target.value === 'EXCHANGE_DIFFERENCE' && items.length === 0) {
-                                        setItems([{
-                                            id: Math.random(),
-                                            description: "Diferencia de cambio",
-                                            qty: 1,
-                                            unit_price: 0,
-                                            discount_pct: 0,
-                                            vat_rate: 0.21,
-                                            accounting_account_id: ""
-                                        }]);
-                                    }
-                                }}>
-                                    <option value="">Seleccione Motivo...</option>
-                                    <option value="RETURN">Devolución</option>
-                                    <option value="DISCOUNT">Bonificación</option>
-                                    <option value="BILLING_ERROR">Error de facturación</option>
-                                    <option value="COMMERCIAL_ADJUSTMENT">Ajuste comercial</option>
-                                    <option value="INTEREST">Intereses</option>
-                                    <option value="EXCHANGE_DIFFERENCE">Diferencia de cambio</option>
-                                    <option value="SURCHARGE">Recargo financiero</option>
-                                    <option value="ADMIN_EXPENSE">Gastos administrativos</option>
-                                    <option value="OTHER">Otro</option>
-                                </select>
-                            )}
-                            {reasonType === 'RETURN' && docType === 'CREDIT_NOTE' && (
-                                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '10px', fontSize: '13px', color: '#1e293b', fontWeight: 500 }}>
-                                    <input 
-                                        type="checkbox" 
-                                        checked={returnStock} 
-                                        onChange={(e) => setReturnStock(e.target.checked)} 
-                                        style={{ width: '16px', height: '16px', accentColor: '#10b981' }}
-                                    />
-                                    Reingresa stock
-                                </label>
-                            )}
-                        </div>
-                    )}
-                    
-                    <div className={s.sideField}>
-                        <label>CONDICIÓN</label>
-                        {isReadOnly ? <div className={s.sideInput}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div> : (
-                            <select className={s.sideSelect} value={selectedConditionId ?? ''} onChange={e => setSelectedConditionId(e.target.value)}>
-                                <option value="">Seleccione...</option>
-                                {saleConditions.map(sc => <option key={sc.id} value={sc.id}>{sc.description}</option>)}
-                            </select>
-                        )}
-                    </div>
-                    
-                    <div className={s.sideField}>
-                        <label>VENDEDOR</label>
-                        {isReadOnly ? <div className={s.sideInput}>{sellers.find(s => s.id === salespersonId)?.name || '-'}</div> : (
-                            <select className={s.sideSelect} value={salespersonId ?? ''} onChange={e => setSalespersonId(e.target.value)}>
-                                <option value="">Ninguno</option>
-                                {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                            </select>
-                        )}
-                    </div>
-
-                    <div className={s.sideField}>
-                        <label>MONEDA</label>
-                        {isReadOnly ? <div className={s.sideInput}>{currency}</div> : (
-                            <select className={s.sideSelect} value={currency} onChange={e => setCurrency(e.target.value)}>
-                                <option value="ARS">ARS</option>
-                                <option value="USD">USD</option>
-                            </select>
-                        )}
-                    </div>
-
-                    <div className={s.sideField}>
-                        <label>T. CAMBIO</label>
-                        {isReadOnly ? <div className={s.sideInput}>{exchangeRate}</div> : (
-                            <input type="number" className={s.sideInput} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
-                        )}
-                    </div>
-                </div>
-
-                {/* Bloque Observaciones */}
-                <div className={s.sideBlock} style={{ flexShrink: 0, paddingBottom: 16 }}>
-                    <div className={s.sideBlockTitle}><FileText size={12}/> OBSERVACIONES</div>
-                    {isReadOnly ? (
-                        <div style={{ fontSize: 11, color: '#475569', minHeight: 40 }}>{observations || 'Sin observaciones'}</div>
-                    ) : (
-                        <textarea 
-                            className={s.sideTextarea} 
-                            placeholder="Notas internas o comentarios..."
-                            value={observations ?? ''}
-                            onChange={e => setObservations(e.target.value)}
-                            style={{ minHeight: 60 }}
-                        />
-                    )}
-                </div>
             </div>
-            {/* Flujo Inferior */}
-            {(() => {
-                const invoiceInfo = fullInvoiceData ? getInvoiceOriginInfo(fullInvoiceData, items) : { salesOrderId: sourceOrderId, salesOrderNumber: sourceNumber };
-                const dnInfo = fullInvoiceData ? getInvoiceDeliveryNoteInfo(fullInvoiceData, items) : { deliveryNoteId: sourceDeliveryNoteId, deliveryNoteNumber: null };
-                
-                let originStatus = "Directo";
-                let originDetail = "Sin origen";
-                let originColor = '#eab308';
-                
-                if (invoiceInfo.salesOrderId || invoiceInfo.salesOrderNumber) {
-                    originStatus = "Vinculada";
-                    originDetail = `OV ${invoiceInfo.salesOrderNumber || String(invoiceInfo.salesOrderId).slice(-8)}`;
-                    originColor = '#10b981';
-                }
-                
-                let remitoStatus = "Pendiente";
-                let remitoDetail = "0 remitos";
-                let remitoColor = '#eab308';
-                
-                if (dnInfo.deliveryNoteId || dnInfo.deliveryNoteNumber) {
-                    remitoStatus = "Vinculado";
-                    remitoDetail = `RE ${dnInfo.deliveryNoteNumber || String(dnInfo.deliveryNoteId).slice(-8)}`;
-                    remitoColor = '#10b981';
-                }
-
-                return (
-                  <div className={s.relationsBar}>
-                      <div className={s.relationCard} style={{ opacity: (originStatus !== "Directo") ? 1 : 0.5 }}>
-                          <div className={s.nodeTitle} style={{ color: originColor }}>ORIGEN</div>
-                          <div className={s.nodeStatus} style={{ color: originColor }}>{originStatus}</div>
-                          <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{originDetail}</div>
-                      </div>
-
-                      <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-
-                      {docType !== 'DEBIT_NOTE' && (
-                          <>
-                              <div className={s.relationCard} style={{ opacity: (remitoStatus !== "Pendiente") ? 1 : 0.5 }}>
-                                  <div className={s.nodeTitle} style={{ color: remitoColor }}>REMITO</div>
-                                  <div className={s.nodeStatus} style={{ color: remitoColor }}>{remitoStatus}</div>
-                                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{remitoDetail}</div>
-                              </div>
-                              <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-                          </>
-                      )}
-
-              <div className={s.relationCard} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe' }}>
-                  <div className={s.nodeTitle} style={{ color: '#1d4ed8' }}>{docType === 'CREDIT_NOTE' ? 'NOTA DE CRÉDITO' : docType === 'DEBIT_NOTE' ? 'NOTA DE DÉBITO' : 'FACTURA'}</div>
-                  <div className={s.nodeStatus} style={{ color: '#1d4ed8' }}>Activa</div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{fmt(totals.total)}</div>
-              </div>
-
-              <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-
-              <div className={s.relationCard}>
-                  <div className={s.nodeTitle} style={{ color: '#0b132b' }}>COBRO</div>
-                  <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0%</div>
-              </div>
-
-              {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE') && (
-                  <>
-                      <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-                      <div className={s.relationCard}>
-                          <div className={s.nodeTitle} style={{ color: '#0b132b' }}>CTA. CORRIENTE</div>
-                          <div className={s.nodeStatus} style={{ color: '#eab308' }}>Actualizado</div>
-                          <div className={s.nodeMetric} style={{ color: '#0f172a' }}>-</div>
-                      </div>
-                  </>
-              )}
-
-              <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
-
-              <div className={s.relationCard} style={{ maxWidth: '140px', background: 'transparent', border: 'none', paddingLeft: 8 }}>
-                  <div className={s.nodeTitle} style={{ color: '#64748b' }}>ESTADO</div>
-                  <div className={s.obsText} style={{ marginTop: 4, fontWeight: 800, color: '#1e293b' }}>{status}</div>
-              </div>
-          </div>
-                );
-            })()}
         </div>
 
+
+
         {/* Operational Summary */}
-        <div className={s.summaryPanel}>
+        <div className={s.balancePanel}>
+            <div className={s.summaryPanel}>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>CLIENTE</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
@@ -1196,6 +1305,10 @@ export default function InvoiceForm(props) {
                 <div className={s.summaryLabel}>MODIFICACIÓN</div>
                 <div className={s.summaryValue}>{new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</div>
             </div>
+            <div className={s.summaryItem}>
+                <div className={s.summaryLabel}>CAE / COE</div>
+                <div className={s.summaryValue}>Pendiente</div>
+            </div>
         </div>
 
         {/* Footer with Totals */}
@@ -1212,6 +1325,7 @@ export default function InvoiceForm(props) {
                 <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>TOTAL FACTURA</span>
                 <span className={s.footerCompactTotal}>{fmt(totals.total)}</span>
             </div>
+        </div>
         </div>
         
     </div>

@@ -31,19 +31,113 @@ def void_sales_application(db: Session, application_id: str, reason: str = None)
     
     fx_reversal = None
     
-    # 2. Check for FX link (Future-proofing Phase 2)
-    # Si esta aplicación generó un comprobante por diferencia de cambio,
-    # habría que anular/revertir también ese comprobante.
+    # 2. Check for FX link
     fx_link = db.query(FxAdjustmentLink).filter(FxAdjustmentLink.source_application_id == application_id).first()
     if fx_link:
-        # Aquí iría la lógica de generar la NC/ND reversa, aplicarla automáticamente, etc.
-        # Por ahora solo lo detectamos.
-        pass
+        original_fx_doc = db.query(Document).filter(Document.id == fx_link.generated_document_id).first()
+        if original_fx_doc:
+            from app.db.models.models import DocumentType, DocumentStatus, DocumentReasonType, CurrencyType, DocumentLine
+            from app.modules.sales import numbering_service
+            from datetime import datetime
+            
+            # Create reverse doc
+            is_nd = original_fx_doc.doc_type == DocumentType.DEBIT_NOTE
+            rev_doc_type = DocumentType.CREDIT_NOTE if is_nd else DocumentType.DEBIT_NOTE
+            
+            import re
+            pv = "0001"
+            if original_fx_doc.number:
+                parts = original_fx_doc.number.split("-")
+                pv_part = parts[-2] if len(parts) >= 2 else parts[0]
+                pv_match = re.search(r'\d+', pv_part)
+                if pv_match:
+                    candidate = pv_match.group().zfill(4)
+                    if len(candidate) == 4 and candidate != "0000":
+                        pv = candidate
+                
+            letter = original_fx_doc.line or "A"
+            doc_tag = f"NC{letter}" if is_nd else f"ND{letter}"
+            doc_number = numbering_service.get_next_number(db, pv, doc_tag)
+            numbering_service.increment_last_number(db, pv, doc_tag)
+            
+            notes = f"Reversa automática por anulación de aplicación. Cancela {original_fx_doc.doc_type.value} {original_fx_doc.number} [ID:{original_fx_doc.id}]"
+            
+            rev_doc = Document(
+                entity_id=original_fx_doc.entity_id,
+                doc_type=rev_doc_type,
+                number=doc_number,
+                date=datetime.utcnow(),
+                currency=CurrencyType.ARS,
+                exchange_rate=1.0,
+                total_amount=original_fx_doc.total_amount,
+                total_amount_ars=original_fx_doc.total_amount_ars,
+                status=DocumentStatus.OPEN,
+                line=letter,
+                notes=notes,
+                salesperson_id=original_fx_doc.salesperson_id,
+                vendedor=original_fx_doc.vendedor,
+                cost_center=original_fx_doc.cost_center,
+                source_invoice_id=original_fx_doc.id,
+                reason_type=DocumentReasonType.EXCHANGE_DIFFERENCE,
+                is_exchange_difference=True,
+            )
+            db.add(rev_doc)
+            db.flush()
+            
+            original_lines = db.query(DocumentLine).filter(DocumentLine.document_id == original_fx_doc.id).all()
+            for l in original_lines:
+                rev_line = DocumentLine(
+                    document_id=rev_doc.id,
+                    description=l.description,
+                    qty=l.qty,
+                    unit_price=l.unit_price,
+                    discount_pct=l.discount_pct,
+                    net_amount=l.net_amount,
+                    vat_rate=l.vat_rate,
+                    vat_amount=l.vat_amount,
+                    total_amount=l.total_amount,
+                    line_order=l.line_order,
+                )
+                db.add(rev_line)
+                
+            db.flush()
+            
+            # Auto-apply them
+            comp_app = Application(
+                from_document_id=rev_doc.id if is_nd else original_fx_doc.id,
+                to_document_id=original_fx_doc.id if is_nd else rev_doc.id,
+                cost_center=1,
+                amount_applied=original_fx_doc.total_amount,
+                amount_applied_ars=original_fx_doc.total_amount_ars,
+                exchange_rate=1.0,
+                created_at=datetime.utcnow()
+            )
+            db.add(comp_app)
+            db.flush()
+            
+            # Find and delete the original auto-application from credit_doc to original_fx_doc
+            original_auto_app = db.query(Application).filter(
+                Application.from_document_id == credit_doc_id,
+                Application.to_document_id == original_fx_doc.id
+            ).first()
+            if original_auto_app:
+                db.delete(original_auto_app)
+                db.flush()
+            
+            recalc_document_status(original_fx_doc, db)
+            recalc_document_status(rev_doc, db)
+            
+            fx_reversal = {
+                "original_fx_note_id": original_fx_doc.id,
+                "reverse_fx_note_id": rev_doc.id,
+                "reverse_type": rev_doc.doc_type.value,
+                "number": rev_doc.number,
+                "auto_application_created": True
+            }
 
-    # 3. Hard delete the application (since there's no soft-delete in the model for Phase 1)
+    # 3. Hard delete the application
     # Fase 1: hard delete solo para aplicaciones manuales.
     # Las aplicaciones automáticas del sistema no se eliminan desde esta pantalla.
-    # A futuro migrar a soft void si Application incorpora status/voided_at.
     db.delete(app)
     db.commit()
 

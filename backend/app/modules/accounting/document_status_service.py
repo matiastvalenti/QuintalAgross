@@ -1,4 +1,4 @@
-﻿from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.db.models.models import Document, DocumentStatus, DocumentType, Application, CommissionPayment
 
@@ -93,7 +93,7 @@ def recalc_document_status(doc: Document, db: Session):
     total_amount = float(doc.total_amount or 0)
     
     is_usd = str(doc.currency) in ("USD", "CurrencyType.USD")
-    TOLERANCE = 0.015 if is_usd else 0.5 # 1.5 centavos USD o 50 centavos ARS
+    TOLERANCE = 0.015 if is_usd else 2.00 # 1.5 centavos USD o 2 pesos ARS
     
     if usage >= (total_amount - TOLERANCE):
         doc.status = DocumentStatus.CLOSED

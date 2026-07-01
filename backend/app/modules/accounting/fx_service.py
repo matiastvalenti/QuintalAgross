@@ -78,7 +78,10 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
             parts = to_doc.number.split("-")
             pv_part = parts[-2] if len(parts) >= 2 else parts[0]
             pv_match = re.search(r'\d+', pv_part)
-            if pv_match: pv = pv_match.group().zfill(4)
+            if pv_match:
+                candidate = pv_match.group().zfill(4)
+                if len(candidate) == 4 and candidate != "0000":
+                    pv = candidate
         
 
         # Determinar doc_tag correcto (NDA, NDB, etc)
