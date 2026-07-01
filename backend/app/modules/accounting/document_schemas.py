@@ -58,6 +58,7 @@ class DocumentLineResponse(DocumentLineBase):
 
 class DocumentLineCreate(DocumentLineBase):
     product_id: Optional[str] = None
+    id: Optional[str] = None
 
 class DocumentVehicleExpenseBase(BaseModel):
     vehicle_id: str
@@ -242,6 +243,12 @@ class DocumentResponse(DocumentBase):
     salesperson_id: Optional[str] = None
     commission_amount: float = 0.0
     is_initial_load: bool = False
+    source_invoice_number: Optional[str] = None
+    source_invoice_currency: Optional[str] = None
+    source_invoice_exchange_rate: Optional[float] = None
+    reverses_document_id: Optional[str] = None
+    reverses_document_type: Optional[str] = None
+    reverses_document_number: Optional[str] = None
     # Applications made BY this document (e.g. receipt applying to invoices)
     applied_to: List[ApplicationResponse] = []
     # Applications made TO this document (e.g. invoices being paid)

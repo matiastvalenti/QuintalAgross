@@ -165,6 +165,9 @@ export default function InvoiceForm(props) {
   const [ovHasDeliveryNotes, setOvHasDeliveryNotes] = useState(false);
   const [fullInvoiceData, setFullInvoiceData] = useState(null);
   
+  const [hasApplications, setHasApplications] = useState(false);
+  const [isCAEConfirmed, setIsCAEConfirmed] = useState(false);
+  
   const [sourceInvoiceId, setSourceInvoiceId] = useState(initialSourceType === 'invoice' ? initialSourceId : "");
   const [sourceInvoices, setSourceInvoices] = useState([]);
   
@@ -353,6 +356,24 @@ export default function InvoiceForm(props) {
         setDocType(data.doc_type || "INVOICE");
         setLetter(data.line || "A");
         setReasonType(data.reason_type || "");
+        
+        setHasApplications((data.applied_to && data.applied_to.length > 0) || (data.applied_by && data.applied_by.length > 0));
+        setIsCAEConfirmed(!!data.cae);
+        
+        if (data.source_invoice_id) {
+            setSourceInvoiceId(data.source_invoice_id);
+            if (data.source_invoice_number) {
+                setSourceInvoices(prev => {
+                    if (prev.some(i => i.id === data.source_invoice_id)) return prev;
+                    return [...prev, {
+                        id: data.source_invoice_id,
+                        number: data.source_invoice_number,
+                        currency: data.source_invoice_currency || "ARS",
+                        exchange_rate: data.source_invoice_exchange_rate || 1
+                    }];
+                });
+            }
+        }
         
         // Para cada línea con producto, recuperar el contenido por envase
         // Funciona incluso para facturas viejas sin package_size guardado
@@ -590,7 +611,8 @@ export default function InvoiceForm(props) {
     if (currency === "USD" && exchangeRate <= 1) {
         return showToast("Para moneda USD el Tipo de Cambio debe ser mayor a 1", "error");
     }
-    if (reasonType === 'EXCHANGE_DIFFERENCE' && !sourceInvoiceId) {
+    const hasOriginInvoice = sourceInvoiceId || fullInvoiceData?.source_invoice_id;
+    if (reasonType === 'EXCHANGE_DIFFERENCE' && !hasOriginInvoice) {
         return showToast("Seleccioná una factura origen para generar una nota por diferencia de cambio.", "error");
     }
     
@@ -601,7 +623,15 @@ export default function InvoiceForm(props) {
     setSaving(true);
     const token = localStorage.getItem("token");
     const finalNumber = joinFullNumber(pv, number);
-    const payload = {
+    const payload = mode === "edit" && hasApplications ? {
+        salesperson_id: salespersonId || null,
+        sale_condition_id: selectedConditionId,
+        notes: observations,
+        lines: items.map(l => ({
+            id: l.id,
+            accounting_account_id: l.accounting_account_id
+        }))
+    } : {
         doc_type: docType,
         line: letter,
         number: finalNumber || "0001-00000000",
@@ -622,6 +652,7 @@ export default function InvoiceForm(props) {
         return_stock: returnStock,
         source_invoice_id: sourceInvoiceId || null,
         lines: items.map(l => ({
+            id: l.id,
             product_id: l.product_id,
             description: l.description,
             qty_packages: l.qty_packages !== undefined ? l.qty_packages : null,
@@ -737,6 +768,45 @@ export default function InvoiceForm(props) {
 
   if (loading) return <LoadingScreen message="Cargando Factura..." />;
 
+  const formatDocumentType = (type) => {
+    const map = {
+      INVOICE: "Factura",
+      DEBIT_NOTE: "ND-FX",
+      CREDIT_NOTE: "NC-FX",
+      RECEIPT: "Recibo",
+    };
+    return map[type] || type || "-";
+  };
+
+  const translateReason = (reason) => {
+    const map = {
+      EXCHANGE_DIFFERENCE: "Diferencia de cambio",
+      BONUS: "Bonificación",
+      RETURN: "Devolución",
+      DISCOUNT: "Descuento",
+      OTHER: "Otro",
+      BILLING_ERROR: "Error de facturación",
+      COMMERCIAL_ADJUSTMENT: "Ajuste comercial",
+      INTEREST: "Intereses",
+      SURCHARGE: "Recargo financiero",
+      ADMIN_EXPENSE: "Gastos administrativos",
+    };
+    return map[reason] || reason || "-";
+  };
+
+  const ReadonlyField = ({ label, value, title }) => (
+    <div className={s.readonlyField}>
+      <label>{label}</label>
+      <div className={s.readonlyControl} title={title || value}>
+        {value || "-"}
+      </div>
+    </div>
+  );
+
+  const isMonetaryLocked = isReadOnly || hasApplications || isCAEConfirmed;
+  const isArcaLocked = isReadOnly || isCAEConfirmed;
+  const isAdminLocked = isReadOnly;
+
   return (
     <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`}>
         
@@ -768,6 +838,16 @@ export default function InvoiceForm(props) {
                         <span>&middot;</span>
                         <span>TC {exchangeRate}</span>
                         <TraceabilityStatusBadge status={status} />
+                        {hasApplications && (
+                            <span className={s.appliedWarningWrap}>
+                                <span className={s.appliedWarningIcon}>
+                                    ⚠
+                                </span>
+                                <span className={s.appliedWarningTooltip}>
+                                    Documento con aplicaciones: solo se pueden editar datos administrativos.
+                                </span>
+                            </span>
+                        )}
                     </div>
                 </div>
             </div>
@@ -803,7 +883,7 @@ export default function InvoiceForm(props) {
             
             {/* Columna Izquierda: Ítems y Productos */}
             <div className={s.leftDocumentArea}>
-                {!isReadOnly && (
+                {!isMonetaryLocked ? (
                     <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <Autocomplete 
@@ -847,12 +927,28 @@ export default function InvoiceForm(props) {
                             <Plus size={20} strokeWidth={3} />
                         </Button>
                     </div>
+                ) : (
+                    <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
+                        <div style={{ flex: 1 }}>
+                            <div className={s.readonlyControl} style={{ height: '36px', justifyContent: 'flex-start', color: '#94a3b8' }}>
+                                <Search size={16} style={{ marginRight: 8 }} />
+                                Productos / conceptos del comprobante
+                            </div>
+                        </div>
+                        <Button 
+                            variant="primary" 
+                            size="small" 
+                            disabled
+                            style={{ padding: '0 12px', opacity: 0.5 }}
+                        >
+                            <Plus size={20} strokeWidth={3} />
+                        </Button>
+                    </div>
                 )}
 
                 <div className={`${s.bentoContainer} ${s.itemsPanel}`} style={{ padding: 0, overflow: 'hidden' }}>
                     {items.length > 0 ? (
                         <>
-                            {isReadOnly ? null : (
                                 <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px' }}>
                                     <div className={s.th}>PRODUCTO / CONCEPTO</div>
                                     <div className={s.th}>ENVASES</div>
@@ -864,43 +960,13 @@ export default function InvoiceForm(props) {
                                     <div className={s.th} style={{ textAlign: 'right' }}>SUBTOTAL</div>
                                     <div></div>
                                 </div>
-                            )}
                             <div className={`${s.itemsList} ${s.itemsTableScroll}`}>
                                 {items.map(item => {
-                                    if (isReadOnly) {
-                                        const qtyPackages = item.qty_packages;
-                                        const qty = item.qty || 0;
-                                        const hasPackages = qtyPackages !== undefined && qtyPackages !== null;
-                                        const subtotal = qty * (item.unit_price || 0) * (1 - (item.discount_pct || 0) / 100);
-                                        const vatAmount = subtotal * (item.vat_rate || 0.21);
-                                        const totalAmount = subtotal + vatAmount;
-                                        
-                                        return (
-                                            <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
-                                                <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.description}</div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569' }}>
-                                                    {hasPackages ? (
-                                                        <>
-                                                            <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qtyPackages} envases</div>
-                                                            <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {qtyPackages} envases = {qty.toFixed(2)} {item._unit_label || 'u'}</div>
-                                                        </>
-                                                    ) : (
-                                                        <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qty.toFixed(2)} {item._unit_label || 'u'}</div>
-                                                    )}
-                                                    <div><span style={{ fontWeight: 800 }}>Precio:</span> {fmtValue(item.unit_price)} / {item._unit_label || 'u'}</div>
-                                                    <div><span style={{ fontWeight: 800 }}>Subtotal:</span> {fmtValue(subtotal)}</div>
-                                                    <div><span style={{ fontWeight: 800 }}>IVA:</span> {fmtValue(vatAmount)}</div>
-                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Total:</span> {fmtValue(totalAmount)}</div>
-                                                </div>
-                                            </div>
-                                        );
-                                    }
-                                    
-                                    const isLocked = isSourceLockedLine(item);
+                                    const isLocked = isMonetaryLocked || isSourceLockedLine(item);
                                     
                                     return (
                                     <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px', background: isLocked ? '#f8fafc' : 'transparent', cursor: isLocked ? 'not-allowed' : 'default' }}>
-                                        <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                                        <div style={{ padding: '4px 0', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 2 }}>
                                             <input 
                                                 type="text" 
                                                 className={s.tableInput} 
@@ -908,8 +974,8 @@ export default function InvoiceForm(props) {
                                                 onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)} 
                                                 placeholder="Ingrese concepto..."
                                                 readOnly={isLocked}
-                                                style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: isLocked ? 'transparent' : 'transparent', color: isLocked ? '#334155' : 'inherit', cursor: isLocked ? 'not-allowed' : 'text', opacity: isLocked ? 0.9 : 1, textOverflow: 'ellipsis' }}
-                                                title={isLocked ? 'Esta línea viene de una OV/Remito y no puede modificarse' : (item.description || '')}
+                                                style={{ fontWeight: 900, width: '100%', minWidth: 0, textAlign: 'left', background: 'transparent', color: isLocked ? '#334155' : 'inherit', cursor: isLocked ? 'not-allowed' : 'text', opacity: isLocked ? 0.9 : 1, textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}
+                                                title={item.product_name || item.description || ''}
                                             />
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap' }}>
                                                 {item._unit_content && (
@@ -1078,35 +1144,41 @@ export default function InvoiceForm(props) {
                 <div className={s.clientPanel}>
                     <div className={s.panelTitle}><User size={12}/> CLIENTE</div>
                     <div className={s.clientPanelBody}>
-                        <div className={s.clientField}>
-                            <label>NOMBRE</label>
-                            {isReadOnly ? (
-                                <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text)', textAlign: 'left', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{entity?.name || '-'}</div>
-                            ) : (
+                        {isMonetaryLocked ? (
+                            <ReadonlyField label="NOMBRE" value={entity?.name || '-'} />
+                        ) : (
+                            <div className={s.clientField}>
+                                <label>NOMBRE</label>
                                 <div className={s.clientNameControl}>
                                     <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
                                 </div>
-                            )}
-                        </div>
-                        <div className={s.clientField}>
-                            <label>PTO. VENTA</label>
-                            {isReadOnly ? <div className={s.clientInput} style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>{pv}</div> : (
+                            </div>
+                        )}
+                        {isMonetaryLocked ? (
+                            <ReadonlyField label="PTO. VENTA" value={pv} />
+                        ) : (
+                            <div className={s.clientField}>
+                                <label>PTO. VENTA</label>
                                 <select className={s.clientSelect} value={pv} onChange={(e) => setPv(e.target.value)}>
                                     {pointsOfSale.map(p => <option key={p.pv} value={p.pv}>{p.pv}</option>)}
                                 </select>
-                            )}
-                        </div>
-                        <div className={s.clientField}>
-                            <label>NÚMERO</label>
-                            <input 
-                                type="text" 
-                                className={s.clientInput} 
-                                value={number} 
-                                onChange={(e) => setNumber(e.target.value)}
-                                placeholder="Autogenerado"
-                                disabled={isReadOnly}
-                            />
-                        </div>
+                            </div>
+                        )}
+                        {isMonetaryLocked ? (
+                            <ReadonlyField label="NÚMERO" value={number || "Autogenerado"} />
+                        ) : (
+                            <div className={s.clientField}>
+                                <label>NÚMERO</label>
+                                <input 
+                                    type="text" 
+                                    className={s.clientInput} 
+                                    value={number} 
+                                    onChange={(e) => setNumber(e.target.value)}
+                                    placeholder="Autogenerado"
+                                    disabled={isReadOnly}
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
 
@@ -1123,56 +1195,66 @@ export default function InvoiceForm(props) {
                     <div className={s.tabContent}>
                         {activeContextTab === 'comercial' && (
                             <>
-                                <div className={s.commercialField}>
-                                    <label>CONDICIÓN</label>
-                                    <div className={s.commercialControl}>
-                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div> : (
+                                {isAdminLocked ? (
+                                    <ReadonlyField label="CONDICIÓN" value={saleConditions.find(c => c.id === selectedConditionId)?.description || '-'} />
+                                ) : (
+                                    <div className={s.commercialField}>
+                                        <label>CONDICIÓN</label>
+                                        <div className={s.commercialControl}>
                                             <select className={s.commercialSelect} value={selectedConditionId ?? ''} onChange={e => setSelectedConditionId(e.target.value)}>
                                                 <option value="">Seleccione...</option>
                                                 {saleConditions.map(sc => <option key={sc.id} value={sc.id}>{sc.description}</option>)}
                                             </select>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className={s.commercialField}>
-                                    <label>VENDEDOR</label>
-                                    <div className={s.commercialControl}>
-                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{sellers.find(s => s.id === salespersonId)?.name || '-'}</div> : (
+                                )}
+                                {isAdminLocked ? (
+                                    <ReadonlyField label="VENDEDOR" value={sellers.find(s => s.id === salespersonId)?.name || '-'} />
+                                ) : (
+                                    <div className={s.commercialField}>
+                                        <label>VENDEDOR</label>
+                                        <div className={s.commercialControl}>
                                             <select className={s.commercialSelect} value={salespersonId ?? ''} onChange={e => setSalespersonId(e.target.value)}>
                                                 <option value="">Ninguno</option>
                                                 {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                             </select>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className={s.commercialField}>
-                                    <label>MONEDA</label>
-                                    <div className={s.commercialControl}>
-                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{currency}</div> : (
+                                )}
+                                {isMonetaryLocked ? (
+                                    <ReadonlyField label="MONEDA" value={currency} />
+                                ) : (
+                                    <div className={s.commercialField}>
+                                        <label>MONEDA</label>
+                                        <div className={s.commercialControl}>
                                             <select className={s.commercialSelect} value={currency} onChange={e => setCurrency(e.target.value)}>
                                                 <option value="ARS">ARS</option>
                                                 <option value="USD">USD</option>
                                             </select>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
-                                <div className={s.commercialField}>
-                                    <label>T. CAMBIO</label>
-                                    <div className={s.commercialControl}>
-                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{exchangeRate}</div> : (
+                                )}
+                                {isMonetaryLocked ? (
+                                    <ReadonlyField label="T. CAMBIO" value={exchangeRate} />
+                                ) : (
+                                    <div className={s.commercialField}>
+                                        <label>T. CAMBIO</label>
+                                        <div className={s.commercialControl}>
                                             <input type="number" className={s.commercialInput} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
                             </>
                         )}
 
                         {activeContextTab === 'ajuste' && docType !== 'INVOICE' && (
                             <>
-                                <div className={s.commercialField}>
-                                    <label>MOTIVO</label>
-                                    <div className={s.commercialControl}>
-                                        {isReadOnly ? <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{reasonType || 'Otro'}</div> : (
+                                {isMonetaryLocked ? (
+                                    <ReadonlyField label="MOTIVO" value={translateReason(reasonType)} />
+                                ) : (
+                                    <div className={s.commercialField}>
+                                        <label>MOTIVO</label>
+                                        <div className={s.commercialControl}>
                                             <select className={s.commercialSelect} value={reasonType} onChange={e => {
                                                 setReasonType(e.target.value);
                                                 if (e.target.value === 'EXCHANGE_DIFFERENCE' && items.length === 0) {
@@ -1190,36 +1272,66 @@ export default function InvoiceForm(props) {
                                                 <option value="ADMIN_EXPENSE">Gastos administrativos</option>
                                                 <option value="OTHER">Otro</option>
                                             </select>
-                                        )}
+                                        </div>
                                     </div>
-                                </div>
+                                )}
 
                                 {reasonType === 'RETURN' && docType === 'CREDIT_NOTE' && (
                                     <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 8px 0', fontSize: '12px', color: '#1e293b', fontWeight: 500 }}>
-                                        <input type="checkbox" checked={returnStock} onChange={(e) => setReturnStock(e.target.checked)} style={{ width: '14px', height: '14px', accentColor: '#10b981' }} />
+                                        <input type="checkbox" checked={returnStock} onChange={(e) => setReturnStock(e.target.checked)} style={{ width: '14px', height: '14px', accentColor: '#10b981' }} disabled={isReadOnly} />
                                         Reingresa stock
                                     </label>
                                 )}
 
-                                <div className={s.commercialField}>
-                                    <label>ORIGEN {reasonType === 'EXCHANGE_DIFFERENCE' ? '*' : ''}</label>
-                                    <div className={s.commercialControl}>
-                                        {isReadOnly ? (
-                                            <div className={s.commercialInput} style={{ display: 'flex', alignItems: 'center' }}>{sourceInvoices.find(i => i.id === sourceInvoiceId)?.number || 'Seleccionado'}</div>
-                                        ) : (
-                                            <select className={s.commercialSelect} value={sourceInvoiceId || ''} onChange={e => setSourceInvoiceId(e.target.value)}>
-                                                <option value="">{reasonType === 'EXCHANGE_DIFFERENCE' ? 'Buscar factura...' : 'Opcional...'}</option>
-                                                {sourceInvoices.map(inv => (
-                                                    <option key={inv.id} value={inv.id}>{inv.doc_type.startsWith('INV') ? 'FA' : 'FC'} {inv.number}</option>
-                                                ))}
-                                            </select>
+                                {isMonetaryLocked ? (
+                                    (() => {
+                                        let originLabel = '-';
+                                        if (sourceInvoiceId && sourceInvoices.find(i => i.id === sourceInvoiceId)) {
+                                            const sel = sourceInvoices.find(i => i.id === sourceInvoiceId);
+                                            originLabel = `Factura ${sel.number} · ${sel.currency || ''} · TC ${sel.exchange_rate || '-'}`;
+                                        }
+                                        const reverseDocLabel = fullInvoiceData?.reverses_document_number 
+                                            ? `${formatDocumentType(fullInvoiceData.reverses_document_type)} ${fullInvoiceData.reverses_document_number}` 
+                                            : '-';
+                                        
+                                        return (
+                                            <>
+                                                <ReadonlyField label="FACTURA BASE" value={originLabel} />
+                                                <ReadonlyField label="CANCELA" value={reverseDocLabel} />
+                                            </>
+                                        );
+                                    })()
+                                ) : (
+                                    <>
+                                        <div className={s.commercialField}>
+                                            <label>FACTURA BASE {reasonType === 'EXCHANGE_DIFFERENCE' ? '*' : ''}</label>
+                                            <div className={s.commercialControl}>
+                                                <select className={s.commercialSelect} value={sourceInvoiceId || ''} onChange={e => setSourceInvoiceId(e.target.value)}>
+                                                    <option value="">{reasonType === 'EXCHANGE_DIFFERENCE' ? 'Buscar factura...' : 'Opcional...'}</option>
+                                                    {sourceInvoices.map(inv => (
+                                                        <option key={inv.id} value={inv.id}>{inv.doc_type?.startsWith('INV') ? 'FA' : 'FC'} {inv.number}</option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                            {sourceInvoiceId && sourceInvoices.find(i => i.id === sourceInvoiceId) && (() => {
+                                                const sel = sourceInvoices.find(i => i.id === sourceInvoiceId);
+                                                return <div className={s.originMeta}>{sel.number} · TC {sel.exchange_rate} · {sel.currency}</div>;
+                                            })()}
+                                        </div>
+                                        {reasonType === 'EXCHANGE_DIFFERENCE' && (
+                                            <div className={s.commercialField} style={{ marginTop: 8 }}>
+                                                <label>CANCELA</label>
+                                                <div className={s.commercialControl}>
+                                                    <div className={s.readonlyControl} style={{ color: '#94a3b8' }}>
+                                                        {fullInvoiceData?.reverses_document_number 
+                                                            ? `${formatDocumentType(fullInvoiceData.reverses_document_type)} ${fullInvoiceData.reverses_document_number}` 
+                                                            : '-'}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         )}
-                                    </div>
-                                    {sourceInvoiceId && sourceInvoices.find(i => i.id === sourceInvoiceId) && (() => {
-                                        const sel = sourceInvoices.find(i => i.id === sourceInvoiceId);
-                                        return <div className={s.originMeta}>{sel.number} · TC {sel.exchange_rate} · {sel.currency}</div>;
-                                    })()}
-                                </div>
+                                    </>
+                                )}
                             </>
                         )}
 
@@ -1235,8 +1347,12 @@ export default function InvoiceForm(props) {
                     <div className={s.tabContent} style={{ paddingTop: '4px', paddingBottom: '12px', display: 'flex', flexDirection: 'column' }}>
                         {activeBottomTab === 'observaciones' && (
                             <div className={s.observationsContent}>
-                                {isReadOnly ? (
-                                    <div style={{ fontSize: 11, color: '#475569', flex: 1, overflowY: 'auto' }}>{observations || 'Sin observaciones'}</div>
+                                {isAdminLocked ? (
+                                    <textarea 
+                                        className={s.observationsTextarea} 
+                                        value={observations || 'Sin observaciones'} 
+                                        readOnly={true} 
+                                    />
                                 ) : (
                                     <textarea 
                                         className={s.observationsTextarea} 

@@ -77,7 +77,7 @@ def void_sales_application(db: Session, application_id: str, reason: str = None)
                 salesperson_id=original_fx_doc.salesperson_id,
                 vendedor=original_fx_doc.vendedor,
                 cost_center=original_fx_doc.cost_center,
-                source_invoice_id=original_fx_doc.id,
+                source_invoice_id=original_fx_doc.source_invoice_id or app.to_document_id,
                 reason_type=DocumentReasonType.EXCHANGE_DIFFERENCE,
                 is_exchange_difference=True,
             )

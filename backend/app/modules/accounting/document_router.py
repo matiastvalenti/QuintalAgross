@@ -165,6 +165,26 @@ def _sanitize_document_for_response(doc, db: Session = None):
         doc.entity_tax_id = doc.entity.tax_id
         doc.entity_code = doc.entity.code
 
+    # Inyectar info de la factura origen si existe
+    if getattr(doc, "source_invoice_id", None):
+        from sqlalchemy.orm import object_session
+        use_db = db or object_session(doc)
+        if use_db:
+            source_doc = use_db.query(models.Document).filter(models.Document.id == doc.source_invoice_id).first()
+            if source_doc:
+                doc.source_invoice_number = source_doc.number
+                doc.source_invoice_currency = getattr(source_doc.currency, 'value', source_doc.currency) if source_doc.currency else None
+                doc.source_invoice_exchange_rate = source_doc.exchange_rate
+
+    # Reversa FX: extraer info de comprobante cancelado desde observations/notes
+    if getattr(doc, "notes", None) and "[ID:" in doc.notes:
+        import re
+        match = re.search(r"Cancela (.*?) (.*?) \[ID:(.*?)\]", doc.notes)
+        if match:
+            doc.reverses_document_type = match.group(1)
+            doc.reverses_document_number = match.group(2)
+            doc.reverses_document_id = match.group(3)
+
     # Traceabilidad para aplicaciones (especialmente para recibos)
     from sqlalchemy.orm import object_session
     for app in getattr(doc, "applied_to", []):
@@ -2039,17 +2059,74 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
         if not doc:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         
-        # Solo permitir editar si no tiene aplicaciones (pagos/cobros) vinculadas
+        update_data = data.model_dump(exclude_unset=True)
+
+        # Solo permitir editar si no tiene aplicaciones (pagos/cobros) vinculadas o si solo se editan campos permitidos
         has_apps = db.query(models.Application).filter(
             (models.Application.from_document_id == id) | (models.Application.to_document_id == id)
         ).first()
+
+        def _check_forbidden_changes(forbidden_fields, error_msg, err_code=400):
+            def _is_changed(nv, ov):
+                if nv is None and ov is None: return False
+                if nv is not None and ov is None: return str(nv).strip() != ""
+                if hasattr(ov, "value"): ov = ov.value
+                if hasattr(nv, "value"): nv = nv.value
+                try:
+                    return float(nv) != float(ov)
+                except (ValueError, TypeError):
+                    return str(nv).strip() != str(ov).strip()
+
+            for field in forbidden_fields:
+                if field in update_data:
+                    new_val = update_data[field]
+                    old_val = getattr(doc, field, None)
+                    if _is_changed(new_val, old_val):
+                        raise HTTPException(status_code=err_code, detail=f"{error_msg} (Campo bloqueado: {field})")
+            
+            lines_data = update_data.get("lines")
+            if lines_data is not None:
+                if len(lines_data) != len(doc.lines):
+                    raise HTTPException(status_code=err_code, detail=f"{error_msg} (Diferente cantidad de ítems)")
+                for i, new_line in enumerate(lines_data):
+                    old_line = doc.lines[i]
+                    for key in ["product_id", "qty", "unit_price", "discount_pct", "vat_rate"]:
+                        new_val = new_line.get(key) if isinstance(new_line, dict) else getattr(new_line, key, None)
+                        old_val = getattr(old_line, key, None)
+                        if new_val is not None and _is_changed(new_val, old_val):
+                            raise HTTPException(status_code=err_code, detail=f"{error_msg} (Campo bloqueado en línea: {key})")
+
         if has_apps:
-            raise HTTPException(status_code=409, detail="No se puede editar un documento con pagos aplicados")
+            forbidden_fields = ["entity_id", "doc_type", "line", "number", "currency", "exchange_rate", "source_invoice_id", "reason_type"]
+            _check_forbidden_changes(forbidden_fields, "Este documento tiene aplicaciones. Solo podés modificar condición, vendedor, CTA, observaciones y datos ARCA no confirmados.")
+
+            if doc.cae:
+                forbidden_arca_fields = ["cae", "cae_due_date", "afip_status", "afip_xml_request", "afip_xml_response", "entity_id", "doc_type", "line", "number", "source_invoice_id", "reason_type"]
+                _check_forbidden_changes(forbidden_arca_fields, "No se puede editar un documento autorizado en ARCA (posee CAE)", 403)
+
+            for field in ["sale_condition_id", "salesperson_id", "notes"]:
+                if field in update_data:
+                    setattr(doc, field, update_data[field])
+
+            lines_data = update_data.get("lines")
+            if lines_data is not None:
+                for line_data in lines_data:
+                    line_id = line_data.get("id") if isinstance(line_data, dict) else getattr(line_data, "id", None)
+                    if line_id:
+                        for line in doc.lines:
+                            if str(line.id) == str(line_id):
+                                acc_id = line_data.get("accounting_account_id") if isinstance(line_data, dict) else getattr(line_data, "accounting_account_id", None)
+                                if acc_id is not None:
+                                    line.accounting_account_id = acc_id
+                                break
+            
+            db.commit()
+            db.refresh(doc)
+            return doc
 
         if doc.cae:
-            raise HTTPException(status_code=403, detail="No se puede editar un documento autorizado en ARCA (posee CAE)")
-
-        update_data = data.model_dump(exclude_unset=True)
+            forbidden_arca_fields = ["cae", "cae_due_date", "afip_status", "afip_xml_request", "afip_xml_response", "entity_id", "doc_type", "line", "number", "source_invoice_id", "reason_type"]
+            _check_forbidden_changes(forbidden_arca_fields, "No se puede editar un documento autorizado en ARCA (posee CAE)", 403)
 
         if data.number and data.number != doc.number:
             # Lógica de numeración automática en UPDATE si se solicita "AUTO" o viene vacío

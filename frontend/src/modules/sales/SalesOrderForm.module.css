@@ -1208,3 +1208,39 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.readonlyField {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  min-height: 30px;
+}
+
+.readonlyField label {
+  font-size: 10.5px;
+  line-height: 1;
+  font-weight: 800;
+  color: #64748b;
+  text-transform: uppercase;
+}
+
+.readonlyControl {
+  width: 100%;
+  height: 30px;
+  min-height: 30px;
+  max-height: 30px;
+  border-radius: 8px;
+  background: #f1f5f9;
+  color: #0f172a;
+  font-size: 12.5px;
+  font-weight: 800;
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
