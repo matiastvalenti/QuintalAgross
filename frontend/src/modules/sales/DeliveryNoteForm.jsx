@@ -805,13 +805,22 @@ export default function DeliveryNoteForm(props) {
                 entityId: entity.id,
                 timestamp: Date.now()
             };
+            const balanceEvent = {
+                type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                entityId: entity.id,
+                documentId: savedId,
+                docType: "delivery-note",
+                timestamp: Date.now()
+            };
             
             if (window.opener) {
                 window.opener.postMessage(eventPayload, "*");
+                window.opener.postMessage(balanceEvent, "*");
             }
             try {
                 const bc = new BroadcastChannel("quintal-documents");
                 bc.postMessage(eventPayload);
+                bc.postMessage(balanceEvent);
                 bc.close();
             } catch (err) {
                 console.error("BroadcastChannel error:", err);
@@ -1006,12 +1015,21 @@ export default function DeliveryNoteForm(props) {
                                       entityId: entity?.id,
                                       timestamp: Date.now()
                                   };
+                                  const balanceEvent = {
+                                      type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                                      entityId: entity?.id,
+                                      documentId: id,
+                                      docType: "delivery-note",
+                                      timestamp: Date.now()
+                                  };
                                   if (window.opener) {
                                       window.opener.postMessage(eventPayload, "*");
+                                      window.opener.postMessage(balanceEvent, "*");
                                   }
                                   try {
                                       const bc = new BroadcastChannel("quintal-documents");
                                       bc.postMessage(eventPayload);
+                                      bc.postMessage(balanceEvent);
                                       bc.close();
                                   } catch (err) {
                                       console.error("BroadcastChannel error:", err);

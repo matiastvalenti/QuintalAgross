@@ -83,6 +83,7 @@ export default function FacturaStandalonePage() {
           id={id || null}
           initialSourceType={initialSourceType}
           initialSourceId={initialSourceId}
+          initialEntityId={entityId}
           draftId={draftId}
           preselectedLines={preselectedLines}
           isStandalone={true}

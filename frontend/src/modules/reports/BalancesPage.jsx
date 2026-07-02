@@ -35,8 +35,52 @@ export default function BalancesPage() {
     const { costCenter } = useCostCenter();
 
 
+    const refreshTimeoutRef = React.useRef(null);
+
     useEffect(() => {
         fetchBalances();
+    }, [activeTab, costCenter]);
+
+    useEffect(() => {
+        const shouldRefresh = (eventData) => {
+            if (!eventData?.type) return false;
+        
+            return [
+              "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+              "QUINTAL_DOCUMENT_CREATED",
+              "QUINTAL_DOCUMENT_UPDATED",
+              "QUINTAL_DOCUMENT_CANCELLED",
+              "QUINTAL_INVOICE_CREATED",
+              "QUINTAL_INVOICE_UPDATED",
+              "QUINTAL_RECEIPT_CREATED",
+              "QUINTAL_RECEIPT_UPDATED",
+              "QUINTAL_APPLICATION_CREATED",
+              "QUINTAL_APPLICATION_REVERTED",
+              "QUINTAL_DELIVERY_NOTE_UPDATED",
+              "QUINTAL_DELIVERY_NOTE_INVOICED",
+              "QUINTAL_DOCUMENT_SAVED"
+            ].includes(eventData.type);
+        };
+        
+        const handleRefreshEvent = (event) => {
+            const eventData = event?.data;
+            if (!shouldRefresh(eventData)) return;
+        
+            clearTimeout(refreshTimeoutRef.current);
+            refreshTimeoutRef.current = setTimeout(() => {
+                fetchBalances();
+            }, 300);
+        };
+        
+        window.addEventListener("message", handleRefreshEvent);
+        const bc = new BroadcastChannel("quintal-documents");
+        bc.onmessage = handleRefreshEvent;
+        
+        return () => {
+            window.removeEventListener("message", handleRefreshEvent);
+            bc.close();
+            clearTimeout(refreshTimeoutRef.current);
+        };
     }, [activeTab, costCenter]);
 
 

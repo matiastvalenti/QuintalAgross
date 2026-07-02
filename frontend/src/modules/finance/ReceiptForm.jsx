@@ -548,10 +548,26 @@ export default function ReceiptForm({
         entityId: entity?.id,
         timestamp: Date.now(),
       };
+      const balanceEvent = {
+        type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+        entityId: entity?.id,
+        documentId: savedDoc.id,
+        docType: "receipt",
+        timestamp: Date.now()
+      };
+      if (window.opener) {
+          window.opener.postMessage(bcPayload, "*");
+          window.opener.postMessage(balanceEvent, "*");
+      }
       try {
         const bc = new BroadcastChannel("quintal_events");
         bc.postMessage(bcPayload);
         bc.close();
+        
+        const bc2 = new BroadcastChannel("quintal-documents");
+        bc2.postMessage(bcPayload);
+        bc2.postMessage(balanceEvent);
+        bc2.close();
       } catch (_) {}
       window.dispatchEvent(new CustomEvent("receipt-changed", { detail: bcPayload }));
       window.dispatchEvent(new CustomEvent("invoice-changed", { detail: bcPayload }));
@@ -574,6 +590,35 @@ export default function ReceiptForm({
       await api.delete(`/accounting/documents/${id}`);
       showToast("Recibo eliminado correctamente", "success");
       // Notificar cambios
+      const bcPayload = {
+        type: "QUINTAL_DOCUMENT_CANCELLED",
+        documentType: "receipt",
+        receiptId: id,
+        entityId: entity?.id,
+        timestamp: Date.now(),
+      };
+      const balanceEvent = {
+        type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+        entityId: entity?.id,
+        documentId: id,
+        docType: "receipt",
+        timestamp: Date.now()
+      };
+      if (window.opener) {
+          window.opener.postMessage(bcPayload, "*");
+          window.opener.postMessage(balanceEvent, "*");
+      }
+      try {
+        const bc = new BroadcastChannel("quintal_events");
+        bc.postMessage(bcPayload);
+        bc.close();
+        
+        const bc2 = new BroadcastChannel("quintal-documents");
+        bc2.postMessage(bcPayload);
+        bc2.postMessage(balanceEvent);
+        bc2.close();
+      } catch (_) {}
+      
       window.dispatchEvent(new CustomEvent("receipt-changed"));
       window.dispatchEvent(new CustomEvent("account-changed"));
       closeWindow(windowId);

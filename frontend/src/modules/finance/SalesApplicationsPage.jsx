@@ -351,11 +351,18 @@ const SalesApplicationsPage = ({ mode = "internal", embeddedEntityId = null }) =
         entityId: entityId,
         timestamp: Date.now()
       };
+      const balanceEvent = {
+        type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+        entityId: entityId,
+        timestamp: Date.now()
+      };
       if (window.opener) {
         window.opener.postMessage(eventData, "*");
+        window.opener.postMessage(balanceEvent, "*");
       }
       const bc = new BroadcastChannel("quintal-documents");
       bc.postMessage(eventData);
+      bc.postMessage(balanceEvent);
       bc.close();
       
     } catch (err) {
@@ -423,6 +430,29 @@ const SalesApplicationsPage = ({ mode = "internal", embeddedEntityId = null }) =
     try {
       await voidSalesApplication(voidModalData);
       notify('Aplicación revertida con éxito.', 'success');
+      const eventData = {
+        type: "QUINTAL_APPLICATION_REVERTED",
+        entityId: entityId,
+        applicationId: voidModalData,
+        timestamp: Date.now()
+      };
+      const balanceEvent = {
+        type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+        entityId: entityId,
+        timestamp: Date.now()
+      };
+      if (window.opener) {
+        window.opener.postMessage(eventData, "*");
+        window.opener.postMessage(balanceEvent, "*");
+      }
+      try {
+        const bc = new BroadcastChannel("quintal-documents");
+        bc.postMessage(eventData);
+        bc.postMessage(balanceEvent);
+        bc.close();
+      } catch (err) {
+        console.error(err);
+      }
       await loadCandidates(entityId);
       await loadHistory(entityId);
     } catch (err) {

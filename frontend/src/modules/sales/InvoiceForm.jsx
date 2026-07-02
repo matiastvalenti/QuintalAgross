@@ -121,6 +121,7 @@ export default function InvoiceForm(props) {
     windowId,
     initialSourceType = null,
     initialSourceId = null,
+    initialEntityId = null,
     preselectedLines = null,
     draftId = null,
     isStandalone = false,
@@ -427,7 +428,19 @@ export default function InvoiceForm(props) {
           const res = await fetch(`${API_URL}/accounting/documents/${initialSourceId}`, { headers: { Authorization: `Bearer ${token}` } });
           if (res.ok) {
               const data = await res.json();
-              if (data.entity_id) setEntity({ id: data.entity_id, name: data.entity_name || "Cliente Origen" });
+              if (data.entity_id) {
+                  try {
+                      const entRes = await fetch(`${API_URL}/entities/${data.entity_id}`, { headers: { Authorization: `Bearer ${token}` } });
+                      if (entRes.ok) {
+                          const entData = await entRes.json();
+                          setEntity(entData);
+                      } else {
+                          setEntity({ id: data.entity_id, name: data.entity_name || "Entidad Desconocida" });
+                      }
+                  } catch (e) {
+                      setEntity({ id: data.entity_id, name: data.entity_name || "Entidad Desconocida" });
+                  }
+              }
               setSourceNumber(data.number);
               setCurrency(data.currency || "ARS");
               setExchangeRate(data.exchange_rate || 1);
@@ -461,8 +474,20 @@ export default function InvoiceForm(props) {
       const res = await fetch(endpoint, { headers: { Authorization: `Bearer ${token}` } });
       if (res.ok) {
           const data = await res.json();
-          if (data.entity_id) setEntity({ id: data.entity_id, name: draft?.customerName || data.entity_name || "Cliente Origen" });
-          
+          const targetEntityId = data.entity_id || initialEntityId;
+          if (targetEntityId) {
+              try {
+                  const entRes = await fetch(`${API_URL}/entities/${targetEntityId}`, { headers: { Authorization: `Bearer ${token}` } });
+                  if (entRes.ok) {
+                      const entData = await entRes.json();
+                      setEntity(entData);
+                  } else {
+                      setEntity({ id: targetEntityId, name: draft?.customerName || data.entity_name || "Entidad Desconocida" });
+                  }
+              } catch (e) {
+                  setEntity({ id: targetEntityId, name: draft?.customerName || data.entity_name || "Entidad Desconocida" });
+              }
+          }
           if (initialSourceType === 'sales-order') {
               setSourceOrderId(data.id);
               // Check if order has delivery notes based on status or relations
@@ -482,8 +507,24 @@ export default function InvoiceForm(props) {
           if (draft) {
               setSourceNumber(draft.salesOrderNumber || draft.deliveryNoteNumber || data.number);
               setPv(draft.pointOfSale || "0001");
-              setCurrency(draft.currency || data.currency || "ARS");
-              setExchangeRate(draft.exchangeRate || data.exchange_rate || 1);
+              const draftCurrency = draft.currency || data.currency || "ARS";
+              setCurrency(draftCurrency);
+              
+              if (draftCurrency === "USD" && (!draft.exchangeRate || draft.exchangeRate <= 1)) {
+                  try {
+                      const fxRes = await fetch(`${API_URL}/accounting/fx/usd`, { headers: { Authorization: `Bearer ${token}` } });
+                      if (fxRes.ok) {
+                          const fxData = await fxRes.json();
+                          setExchangeRate(fxData.rate || 1);
+                      } else {
+                          setExchangeRate(1);
+                      }
+                  } catch (e) {
+                      setExchangeRate(1);
+                  }
+              } else {
+                  setExchangeRate(draft.exchangeRate || (draftCurrency === 'ARS' ? 1 : (data.exchange_rate > 1 ? data.exchange_rate : 1)));
+              }
               setSelectedConditionId(draft.paymentCondition || data.sale_condition_id || "");
               setSalespersonId(draft.sellerId || data.salesperson_id || "");
               setCtroCosto(draft.costCenter || data.cost_center || "1");
@@ -517,7 +558,24 @@ export default function InvoiceForm(props) {
               }));
           } else {
               setSourceNumber(data.number);
-              setCurrency(data.currency || "ARS");
+              const sourceCurrency = data.currency || "ARS";
+              setCurrency(sourceCurrency);
+              
+              if (sourceCurrency === "USD") {
+                  try {
+                      const fxRes = await fetch(`${API_URL}/accounting/fx/usd`, { headers: { Authorization: `Bearer ${token}` } });
+                      if (fxRes.ok) {
+                          const fxData = await fxRes.json();
+                          setExchangeRate(fxData.rate || 1);
+                      } else {
+                          setExchangeRate(1); // fallback
+                      }
+                  } catch (e) {
+                      setExchangeRate(1);
+                  }
+              } else {
+                  setExchangeRate(1);
+              }
 
               // preselectedLines puede ser:
               // a) array de objetos completos (viene del modal OV con qty_packages, _unit_content, etc.)
@@ -653,7 +711,7 @@ export default function InvoiceForm(props) {
         return_stock: returnStock,
         source_invoice_id: sourceInvoiceId || null,
         lines: items.map(l => ({
-            id: l.id,
+            id: typeof l.id === 'number' ? null : l.id,
             product_id: l.product_id,
             description: l.description,
             qty_packages: l.qty_packages !== undefined ? l.qty_packages : null,
@@ -693,13 +751,22 @@ export default function InvoiceForm(props) {
                 deliveryNoteId: sourceDeliveryNoteId,
                 timestamp: Date.now()
             };
+            const balanceEvent = {
+                type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                entityId: entity.id,
+                documentId: docData.id,
+                docType: "invoice",
+                timestamp: Date.now()
+            };
             
             if (window.opener) {
                 window.opener.postMessage(eventPayload, "*");
+                window.opener.postMessage(balanceEvent, "*");
             }
             try {
                 const bc = new BroadcastChannel("quintal-documents");
                 bc.postMessage(eventPayload);
+                bc.postMessage(balanceEvent);
                 bc.close();
             } catch (err) {
                 console.error("BroadcastChannel error:", err);
