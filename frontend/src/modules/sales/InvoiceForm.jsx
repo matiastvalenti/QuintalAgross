@@ -762,11 +762,29 @@ export default function InvoiceForm(props) {
             if (window.opener) {
                 window.opener.postMessage(eventPayload, "*");
                 window.opener.postMessage(balanceEvent, "*");
+                if (sourceDeliveryNoteId) {
+                    window.opener.postMessage({
+                        type: "QUINTAL_DELIVERY_NOTE_INVOICED",
+                        entityId: entity.id,
+                        documentId: sourceDeliveryNoteId,
+                        invoiceId: docData.id,
+                        timestamp: Date.now()
+                    }, "*");
+                }
             }
             try {
                 const bc = new BroadcastChannel("quintal-documents");
                 bc.postMessage(eventPayload);
                 bc.postMessage(balanceEvent);
+                if (sourceDeliveryNoteId) {
+                    bc.postMessage({
+                        type: "QUINTAL_DELIVERY_NOTE_INVOICED",
+                        entityId: entity.id,
+                        documentId: sourceDeliveryNoteId,
+                        invoiceId: docData.id,
+                        timestamp: Date.now()
+                    });
+                }
                 bc.close();
             } catch (err) {
                 console.error("BroadcastChannel error:", err);
