@@ -802,6 +802,7 @@ export default function DeliveryNoteForm(props) {
                 documentType: "delivery-note",
                 deliveryNoteId: savedId,
                 salesOrderId: sourceOrderId,
+                entityId: entity.id,
                 timestamp: Date.now()
             };
             
@@ -983,6 +984,25 @@ export default function DeliveryNoteForm(props) {
                               });
                               if (res.ok) {
                                   window.dispatchEvent(new CustomEvent("delivery-note-changed"));
+                                  
+                                  const eventPayload = {
+                                      type: "QUINTAL_DOCUMENT_SAVED",
+                                      documentType: "delivery-note",
+                                      deliveryNoteId: id,
+                                      entityId: entity?.id,
+                                      timestamp: Date.now()
+                                  };
+                                  if (window.opener) {
+                                      window.opener.postMessage(eventPayload, "*");
+                                  }
+                                  try {
+                                      const bc = new BroadcastChannel("quintal-documents");
+                                      bc.postMessage(eventPayload);
+                                      bc.close();
+                                  } catch (err) {
+                                      console.error("BroadcastChannel error:", err);
+                                  }
+                                  
                                   closeWindow(windowId);
                               }
                           } catch (e) {

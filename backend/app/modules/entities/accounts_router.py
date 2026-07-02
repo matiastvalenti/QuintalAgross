@@ -110,83 +110,125 @@ def get_entity_unbilled_delivery_notes(
     if cost_center is not None:
         query = query.filter(DeliveryNote.cost_center == cost_center)
         
-    notes = query.order_by(DeliveryNote.date.asc()).all()
+    notes = query.order_by(DeliveryNote.date.desc()).all()
+
+    def safe_float(v):
+        try:
+            return float(v) if v is not None else 0.0
+        except (TypeError, ValueError):
+            return 0.0
+
+    def normalize_currency(raw):
+        """Normaliza el enum/string de moneda a 'USD' o 'ARS'."""
+        s = str(raw).upper()
+        if "USD" in s:
+            return "USD"
+        return "ARS"
+
+    def get_line_total(line):
+        """Calcula el total bruto (con IVA) de una línea."""
+        # Primero intentar total_amount guardado
+        if line.total_amount is not None:
+            t = safe_float(line.total_amount)
+            if t > 0.0:
+                return t
+        # Luego net + vat
+        if line.net_amount is not None or line.vat_amount is not None:
+            t = safe_float(line.net_amount) + safe_float(line.vat_amount)
+            if t > 0.0:
+                return t
+        # Fallback: qty * precio con descuento e IVA
+        qty = safe_float(line.qty)
+        price = safe_float(line.unit_price)
+        disc = safe_float(line.discount_pct) / 100.0
+        vat = safe_float(line.vat_rate) if line.vat_rate is not None else 0.21
+        net = qty * price * (1.0 - disc)
+        return net * (1.0 + vat)
 
     results = []
     
-    total_balance_ars = 0.0
-    total_balance_usd = 0.0
     for note in notes:
-        # 1. Filtro de Vínculo: 
-        # Si el remito está marcado como INVOICED, ya fue filtrado arriba (line 266).
-        # Si está como PARTIAL o DISPATCHED, entramos aquí. 
-        # No debemos hacer continue si solo tiene vínculos parciales,
-        # pues el cálculo por renglón (abajo) resolverá qué falta cobrar.
-        
-        unbilled_ars = 0.0
-        unbilled_usd = 0.0
-        
-        is_usd = str(note.currency) in ("USD", "CurrencyType.USD")
+        currency = normalize_currency(note.currency)
         is_credit = note.note_type == OrderType.PURCHASE
-        sign = -1 if is_credit else 1
 
+        # 1. Total bruto del remito (con IVA) sumando líneas
+        total_amount = 0.0
         for line in note.lines:
-            # First check remito's own invoiced line
-            qty_rem = float(line.qty or 0) - float(line.qty_invoiced or 0)
-            
-            # If the remito is tied to a sales order line, we MUST NOT exceed the unbilled quantity of that order line.
-            # Otherwise we'd recommend billing a remito when the original order was already billed directly.
-            if line.source_sales_line_id:
+            total_amount += get_line_total(line)
+        # Nota: DeliveryNote no tiene total_amount en cabecera; solo total_cost (costo).
+        # El total bruto se calcula siempre desde las líneas.
+
+        # 2. Pendiente de facturar: calculado desde qty_rem por línea con IVA
+        pending_amount = 0.0
+        for line in note.lines:
+            qty_rem = safe_float(line.qty) - safe_float(line.qty_invoiced)
+
+            # Limitar por la orden de venta si corresponde
+            if qty_rem > 0 and line.source_sales_line_id:
                 from app.db.models.commercial_models import SalesOrderLine
                 sl = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
                 if sl:
-                    order_qty_rem = max(0.0, float(sl.qty or 0) - float(sl.qty_invoiced or 0))
+                    order_qty_rem = max(0.0, safe_float(sl.qty) - safe_float(sl.qty_invoiced))
                     qty_rem = min(qty_rem, order_qty_rem)
-            elif line.source_purchase_line_id:
+            elif qty_rem > 0 and line.source_purchase_line_id:
                 from app.db.models.commercial_models import PurchaseOrderLine
                 pl = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == line.source_purchase_line_id).first()
                 if pl:
-                    order_qty_rem = max(0.0, float(pl.qty or 0) - float(pl.qty_invoiced or 0))
+                    order_qty_rem = max(0.0, safe_float(pl.qty) - safe_float(pl.qty_invoiced))
                     qty_rem = min(qty_rem, order_qty_rem)
 
-            if qty_rem > 0.01:
-                price = float(line.unit_price or 0.0)
-                disc = float(line.discount_pct or 0.0) / 100.0
-                vat = float(line.vat_rate or 0.21)
-                
-                net_price = price * (1.0 - disc)
-                gross_price = net_price * (1.0 + vat)
-                
-                line_unbilled_amt = gross_price * qty_rem
-                if is_usd: unbilled_usd += line_unbilled_amt
-                else: unbilled_ars += line_unbilled_amt
+            if qty_rem > 0.001:
+                price = safe_float(line.unit_price)
+                disc = safe_float(line.discount_pct) / 100.0
+                vat = safe_float(line.vat_rate) if line.vat_rate is not None else 0.21
+                net = qty_rem * price * (1.0 - disc)
+                pending_amount += net * (1.0 + vat)
 
-        movement_ars = unbilled_ars * sign
-        movement_usd = unbilled_usd * sign
+        invoiced_amount = max(0.0, total_amount - pending_amount)
 
-        if abs(movement_ars) < 0.01 and abs(movement_usd) < 0.01:
-            continue
-
-        total_balance_usd += movement_usd
-        total_balance_ars += movement_ars
+        # 3. Estado técnico
+        note_status_raw = note.status.value if hasattr(note.status, "value") else str(note.status)
+        note_status_str = note_status_raw.upper()
+        
+        # 4. Estado administrativo
+        is_cancelled = "CANCELLED" in note_status_str or "ANULADO" in note_status_str
+        if is_cancelled:
+            computed_status = "ANULADO"
+            status_kind = "cancelled"
+            pending_amount = 0.0
+            invoiced_amount = 0.0
+        elif total_amount > 0.001 and pending_amount <= 0.001:
+            computed_status = "FACTURADO"
+            status_kind = "invoiced"
+        elif invoiced_amount > 0.001 and pending_amount > 0.001:
+            computed_status = "PARCIAL"
+            status_kind = "partial"
+        else:
+            computed_status = "PENDIENTE"
+            status_kind = "pending"
             
-        tc = float(note.exchange_rate or 1.0)
-        results.append({
-            "id": note.id,
-            "date": note.date.isoformat() if note.date else None,
-            "number": note.number,
-            "doc_type": "DELIVERY_NOTE",
-            "type_label": "Remito de Compra" if is_credit else "Remito de Venta",
-            "currency": note.currency,
-            "exchange_rate": tc,
-            "unbilled_amount": unbilled_usd if is_usd else unbilled_ars,
-            "amount_ars": movement_ars,
-            "amount_usd": movement_usd,
-            "balance_ars": total_balance_ars,
-            "balance_usd": total_balance_usd,
-            "status": note.status.value if hasattr(note.status, "value") else str(note.status),
-            "sale_condition": (note.sale_condition.description if note.sale_condition else sc_map.get(str(note.sale_condition_id).lower().strip())) if (note.sale_condition_id and str(note.sale_condition_id).strip()) else None,
-            "notes": note.notes
-        })
+        tc = safe_float(note.exchange_rate) or 1.0
+        
+        if computed_status in ("PENDIENTE", "PARCIAL"):
+            results.append({
+                "id": note.id,
+                "date": note.date.isoformat() if note.date else None,
+                "number": note.number,
+                "doc_type": "DELIVERY_NOTE",
+                "type_label": "Remito de Compra" if is_credit else "Remito de Venta",
+                "technical_status": note_status_raw,
+                "status": computed_status,
+                "status_label": computed_status,
+                "status_kind": status_kind,
+                "currency": currency,
+                "exchange_rate": tc,
+                "total_amount": round(total_amount, 2),
+                "invoiced_amount": round(invoiced_amount, 2),
+                "pending_amount": round(pending_amount, 2),
+                "sale_condition": (note.sale_condition.description if note.sale_condition else sc_map.get(str(note.sale_condition_id).lower().strip())) if (note.sale_condition_id and str(note.sale_condition_id).strip()) else None,
+                "notes": note.notes,
+                "related_invoices": []
+            })
 
     return results
+

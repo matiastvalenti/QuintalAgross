@@ -652,13 +652,15 @@
 
 /* Remitos Section */
 .remitosSection {
-  margin-top: 10px;
+  margin-top: 14px;
   margin-bottom: 18px;
-  border: 1px solid #e2e8f0;
+  border: 1px solid #dbe4ef;
   border-radius: 12px;
   background: #ffffff;
   overflow: hidden;
-  flex-shrink: 0;
+  flex: 0 0 auto;
+  height: auto;
+  min-height: unset;
 }
 
 .remitosHeader {
@@ -681,6 +683,11 @@
 .emptyRemitosBox strong {
   color: #0f172a;
   font-size: 14px;
+}
+
+.remitosTableWrapper {
+  overflow-x: auto;
+  width: 100%;
 }
 
 .remitosTable {

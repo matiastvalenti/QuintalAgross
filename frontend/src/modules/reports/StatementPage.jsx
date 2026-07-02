@@ -220,6 +220,9 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                 api.get(`/entities/${selectedEntity.id}/dashboard`, { params: { cost_center: costCenter } })
             ]);
             
+            // DEBUG: verificar qué devuelve el endpoint de remitos
+            console.log('[Remitos] RAW response:', JSON.stringify(unbilledRes, null, 2));
+            
             setMovements(ledgerRes || []);
             setUnbilledMovements(unbilledRes || []);
             setSaleConditions(scRes || []);
@@ -241,14 +244,31 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         window.addEventListener('invoice-changed', handleRefresh);
         window.addEventListener('receipt-changed', handleRefresh);
         window.addEventListener('cost-center-changed', handleRefresh);
+        window.addEventListener('delivery-note-changed', handleRefresh);
+
+        const handleMessage = (event) => {
+            const data = event.data || {};
+            if (data && typeof data.type === 'string' && data.type.startsWith('QUINTAL_')) {
+                if (data.entityId === selectedEntity?.id) {
+                    handleRefresh();
+                }
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        const bc = new BroadcastChannel("quintal-documents");
+        bc.onmessage = handleMessage;
         
         return () => {
             window.removeEventListener('account-changed', handleRefresh);
             window.removeEventListener('invoice-changed', handleRefresh);
             window.removeEventListener('receipt-changed', handleRefresh);
             window.removeEventListener('cost-center-changed', handleRefresh);
+            window.removeEventListener('delivery-note-changed', handleRefresh);
+            window.removeEventListener('message', handleMessage);
+            bc.close();
         }
-    }, [fetchLedger]);
+    }, [fetchLedger, selectedEntity]);
 
     // Search Entities
     const searchEntities = async (query) => {
@@ -286,8 +306,16 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                 m.notes?.toLowerCase().includes(q)
             );
         }
+        console.log('[Remitos] filteredUnbilledMovements:', list.map(m => ({ number: m.number, status: m.status, technical_status: m.technical_status, currency: m.currency, total_amount: m.total_amount, invoiced_amount: m.invoiced_amount, pending_amount: m.pending_amount })));
         return list;
     }, [unbilledMovements, filters.search, filters.doc_type]);
+
+    // Helper para formatear importes de remitos sin guiones falsos
+    const fmtRemitoAmount = (value, currency) => {
+        if (value === null || value === undefined || value === '') return '-';
+        const cur = String(currency || '').toUpperCase().includes('USD') ? 'USD' : 'ARS';
+        return fmt(Number(value), cur);
+    };
 
     const totals = useMemo(() => {
         const t = { d_ars: 0, h_ars: 0, d_usd: 0, h_usd: 0, b_ars: 0, b_usd: 0 };
@@ -302,6 +330,17 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         }
         return t;
     }, [filteredMovements]);
+
+    const unbilledTotals = useMemo(() => {
+        const t = { ars: { total: 0, invoiced: 0, pending: 0 }, usd: { total: 0, invoiced: 0, pending: 0 } };
+        filteredUnbilledMovements.forEach(m => {
+            const cur = String(m.currency || '').toUpperCase().includes('USD') ? 'usd' : 'ars';
+            if (m.total_amount) t[cur].total += m.total_amount;
+            if (m.invoiced_amount) t[cur].invoiced += m.invoiced_amount;
+            if (m.pending_amount) t[cur].pending += m.pending_amount;
+        });
+        return t;
+    }, [filteredUnbilledMovements]);
 
     // Helpers for display
     const getCircuitoFallback = (docType, circuit) => {
@@ -880,48 +919,83 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         </tr>
                                     </tfoot>
                                 </table>
-                            </div>  {/* end tableWrapper */}
-
+                            </div>
                             {/* Unbilled Delivery Notes Section */}
                             {showUnbilled && (
                                 <div className={s.remitosSection}>
                                     <div className={s.remitosHeader}>Remitos pendientes de facturar</div>
                                     {filteredUnbilledMovements.length > 0 ? (
-                                        <table className={s.remitosTable}>
-                                            <thead>
-                                                <tr>
-                                                    <th>Fecha</th>
-                                                    <th>Número</th>
-                                                    <th>Estado</th>
-                                                    <th>Moneda</th>
-                                                    <th>Total Estimado</th>
-                                                    <th>Acción</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {filteredUnbilledMovements.map((m, idx) => (
-                                                    <tr key={m.id || idx}>
-                                                        <td>{fmt(m.date, 'date')}</td>
-                                                        <td className={s.numberCell}>{m.number}</td>
-                                                        <td>
-                                                            <div className={s.statusBadge} style={{ textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                                                                <Clock size={12} style={{ color: '#d97706' }} />
-                                                                <span className={s.docLabel}>Pendiente</span>
-                                                            </div>
-                                                        </td>
-                                                        <td>{m.currency}</td>
-                                                        <td className={s.cellNum}>{fmt(Math.abs(m.amount_ars), 'ARS')}</td>
-                                                        <td>
-                                                            <Button variant="secondary" size="sm" onClick={() => handleRowClick({ ...m, doc_type: 'DELIVERY_NOTE' })}>Ver</Button>
-                                                        </td>
+                                        <div className={s.remitosTableWrapper}>
+                                            <table className={s.remitosTable}>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Fecha</th>
+                                                        <th>Estado</th>
+                                                        <th>Número</th>
+                                                        <th>Moneda</th>
+                                                        <th style={{ textAlign: 'right' }}>Total remito</th>
+                                                        <th style={{ textAlign: 'right' }}>Facturado</th>
+                                                        <th style={{ textAlign: 'right' }}>Pendiente de facturar</th>
+                                                        <th>Factura/s relacionada/s</th>
                                                     </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredUnbilledMovements.map((m, idx) => (
+                                                        <tr key={m.id || idx}>
+                                                            <td className={s.cell}>{fmt(m.date, 'date')}</td>
+                                                            <td className={s.cell}>
+                                                                <div className={s.statusBadge} style={{ textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                                    {m.status === 'FACTURADO' ? <CheckCircle2 size={12} style={{ color: '#34d399' }} /> :
+                                                                     m.status === 'ANULADO' ? <AlertCircle size={12} style={{ color: '#f87171' }} /> :
+                                                                     <Clock size={12} style={{ color: '#d97706' }} />}
+                                                                    <span className={s.docLabel} style={{
+                                                                        color: m.status === 'FACTURADO' ? '#34d399' :
+                                                                               m.status === 'ANULADO' ? '#f87171' : '#d97706'
+                                                                    }}>{m.status_label || m.status || 'PENDIENTE'}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className={s.cell}>
+                                                                <span 
+                                                                    className={s.numberLink} 
+                                                                    onClick={() => handleRowClick({ ...m, doc_type: 'DELIVERY_NOTE' })}
+                                                                >
+                                                                    {m.number}
+                                                                </span>
+                                                            </td>
+                                                            <td className={s.cell}>{String(m.currency || '').toUpperCase().includes('USD') ? 'USD' : (m.currency || '-')}</td>
+                                                            <td className={`${s.cell} ${s.cellNum}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(m.total_amount, m.currency)}</td>
+                                                            <td className={`${s.cell} ${s.cellNum}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(m.invoiced_amount, m.currency)}</td>
+                                                            <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(m.pending_amount, m.currency)}</td>
+                                                            <td className={s.cell}>{m.related_invoices && m.related_invoices.length > 0 ? m.related_invoices.join(', ') : '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                                <tfoot className={s.tfoot}>
+                                                    {unbilledTotals.ars.total > 0 && (
+                                                        <tr>
+                                                            <td colSpan={4} className={s.totalLabelCell}>TOTALES REMITOS PENDIENTES (ARS)</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.ars.total, 'ARS')}</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.ars.invoiced, 'ARS')}</td>
+                                                            <td className={`${s.totalAmountCell} ${s.balanceUsd}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.ars.pending, 'ARS')}</td>
+                                                            <td></td>
+                                                        </tr>
+                                                    )}
+                                                    {(unbilledTotals.usd.total > 0 || unbilledTotals.ars.total === 0) && (
+                                                        <tr>
+                                                            <td colSpan={4} className={s.totalLabelCell}>TOTALES REMITOS PENDIENTES (USD)</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.usd.total, 'USD')}</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.usd.invoiced, 'USD')}</td>
+                                                            <td className={`${s.totalAmountCell} ${s.balanceUsd}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.usd.pending, 'USD')}</td>
+                                                            <td></td>
+                                                        </tr>
+                                                    )}
+                                                </tfoot>
+                                            </table>
+                                        </div>
                                     ) : (
                                         <div className={s.emptyRemitosBox}>
                                             <strong>Sin remitos pendientes</strong>
-                                            <span>No hay remitos entregados sin facturar para este cliente.</span>
+                                            <span>No hay remitos pendientes de facturar para este cliente.</span>
                                         </div>
                                     )}
                                 </div>
