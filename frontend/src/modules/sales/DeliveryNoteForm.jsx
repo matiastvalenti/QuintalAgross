@@ -991,7 +991,7 @@ export default function DeliveryNoteForm(props) {
                           <button 
                               className={s.saveBtn} 
                               style={{ background: '#7c3aed', color: 'white', border: 'none', marginLeft: 8, height: 36, padding: '0 16px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 800, fontSize: 13 }} 
-                              onClick={() => openNuevaFactura({ source_delivery_note_id: id, entity_id: entity?.id })}
+                              onClick={handleOpenInvoiceModal}
                               title="Generar factura"
                           >
                               <Receipt size={16} />
@@ -1009,7 +1009,7 @@ export default function DeliveryNoteForm(props) {
                                   window.dispatchEvent(new CustomEvent("delivery-note-changed"));
                                   
                                   const eventPayload = {
-                                      type: "QUINTAL_DOCUMENT_SAVED",
+                                      type: "QUINTAL_DOCUMENT_CANCELLED",
                                       documentType: "delivery-note",
                                       deliveryNoteId: id,
                                       entityId: entity?.id,

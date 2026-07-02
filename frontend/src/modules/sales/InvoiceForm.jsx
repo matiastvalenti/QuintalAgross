@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
-
+import Modal from "../../components/ui/Modal";
+import api from '../../services/api';
 function getInvoiceLineName(line) {
   return (
     line.product_name ||
@@ -140,6 +141,7 @@ export default function InvoiceForm(props) {
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
   const [activeContextTab, setActiveContextTab] = useState('comercial');
   const [activeBottomTab, setActiveBottomTab] = useState('observaciones');
+  const [showAnnulModal, setShowAnnulModal] = useState(false);
 
   
   // Header State
@@ -598,6 +600,7 @@ export default function InvoiceForm(props) {
                           product_id: l.product_id,
                           description: getInvoiceLineName(l),
                           qty: qty,
+                          _max_qty: qty,
                           qty_packages: qtyPackages,
                           _unit_content: factor > 1 ? factor : undefined,
                           _unit_label: l._unit_label || l.package_unit || 'u',
@@ -605,7 +608,8 @@ export default function InvoiceForm(props) {
                           unit_price: parseFloat(l.unit_price || 0),
                           discount_pct: parseFloat(l.discount_pct || 0),
                           vat_rate: parseFloat(l.vat_rate || 0.21),
-                          source_sales_line_id: l.source_sales_line_id || l.id,
+                          source_sales_line_id: l.source_sales_line_id || (initialSourceType === 'sales-order' ? l.id : null),
+                          source_dn_line_id: l.source_dn_line_id || (initialSourceType === 'delivery-note' ? l.id : null),
                           accounting_account_id: resolvedAccount,
                           accountLocked: Boolean(resolvedAccount && l.product_id),
                           _account_code: l._account_code || l.sales_account_code || null,
@@ -629,6 +633,7 @@ export default function InvoiceForm(props) {
                           product_id: l.product_id,
                           description: getInvoiceLineName(l),
                           qty: qty,
+                          _max_qty: qty,
                           qty_packages: qtyPackages,
                           _unit_content: factor > 1 ? factor : undefined,
                           _unit_label: l.product?.container?.unit?.short_name || l.package_unit || 'u',
@@ -678,6 +683,15 @@ export default function InvoiceForm(props) {
     // Nota: NO validamos accounting_account_id aquí.
     // El backend intenta resolverlo automáticamente desde el producto.
     // Si no puede resolverlo, el backend rechaza con mensaje específico.
+
+    for (const l of items) {
+        if (l.source_dn_line_id && l._max_qty !== undefined && parseFloat(l.qty) > parseFloat(l._max_qty)) {
+            return showToast(`La cantidad a facturar de '${l.description}' supera lo pendiente del remito (${l._max_qty}).`, "error");
+        }
+        if (l.source_sales_line_id && !l.source_dn_line_id && l._max_qty !== undefined && parseFloat(l.qty) > parseFloat(l._max_qty)) {
+            return showToast(`La cantidad a facturar de '${l.description}' supera lo pendiente de la orden (${l._max_qty}).`, "error");
+        }
+    }
 
     setSaving(true);
     const token = localStorage.getItem("token");
@@ -808,6 +822,64 @@ export default function InvoiceForm(props) {
     }
   };
 
+  const handleAnnul = async () => {
+    setSaving(true);
+    setShowAnnulModal(false);
+    try {
+        const res = await api.post(`/accounting/documents/${id}/annul`);
+        // if using api (axios instance), an error would throw to catch, but let's assume it returns data or status
+        if (res.status === 200 || res.status === 201 || res.data) {
+            showToast("Factura anulada correctamente", "success");
+            setStatus("ANNULLED");
+            setIsReadOnly(true);
+
+            const eventData = {
+              type: "QUINTAL_DOCUMENT_CANCELLED",
+              entityId: entity?.id,
+              documentId: id,
+              docType: "INVOICE",
+              timestamp: Date.now()
+            };
+
+            if (window.opener) {
+                window.opener.postMessage(eventData, "*");
+            }
+
+            try {
+                const bc = new BroadcastChannel("quintal-documents");
+                bc.postMessage(eventData);
+
+                bc.postMessage({
+                  type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                  entityId: entity?.id,
+                  documentId: id,
+                  docType: "INVOICE",
+                  timestamp: Date.now()
+                });
+
+                if (sourceDeliveryNoteId) {
+                    bc.postMessage({
+                      type: "QUINTAL_DELIVERY_NOTE_UPDATED",
+                      entityId: entity?.id,
+                      documentId: sourceDeliveryNoteId,
+                      docType: "DELIVERY_NOTE",
+                      timestamp: Date.now()
+                    });
+                }
+                bc.close();
+            } catch (err) {
+                console.error("BroadcastChannel error:", err);
+            }
+        }
+    } catch (e) {
+        console.error("NETWORK/API ERROR:", e);
+        const errMsg = e.response?.data?.detail || e.message || "Error al anular la factura";
+        showToast(errMsg, "error");
+    } finally {
+        setSaving(false);
+    }
+  };
+
   const searchEntities = async (q) => {
     const res = await fetch(`${API_URL}/entities/?q=${q}&type=client`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
     return res.json();
@@ -821,7 +893,7 @@ export default function InvoiceForm(props) {
   const handleUpdateItem = (itemId, field, value) => {
     setItems(items.map(i => {
       if (i.id === itemId) {
-        if (isSourceLockedLine(i) && ["product", "product_id", "description", "concept", "qty", "quantity", "qty_packages", "unit"].includes(field)) {
+        if (isSourceLockedLine(i) && ["product", "product_id", "description", "concept", "unit"].includes(field)) {
           return i;
         }
         
@@ -950,6 +1022,11 @@ export default function InvoiceForm(props) {
                   </button>
                 )}
                 <div className={s.actionGroup}>
+                    {id && mode !== 'new' && status !== 'CANCELLED' && status !== 'ANNULLED' && (
+                        <button className={s.actionBtn} onClick={() => setShowAnnulModal(true)} title="Anular Factura" style={{ color: '#ef4444' }} disabled={saving}>
+                            <Trash2 size={18} />
+                        </button>
+                    )}
                     <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title="Imprimir Factura">
                         <Printer size={18} />
                     </button>
@@ -1096,9 +1173,9 @@ export default function InvoiceForm(props) {
                                             className={s.tableInput} 
                                             value={item.qty_packages !== undefined ? item.qty_packages : (item.qty || 0)} 
                                             onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)}
-                                            readOnly={isLocked}
-                                            style={{ background: isLocked ? '#e2e8f0' : (item._unit_content ? '#eff6ff' : '#fff'), border: item._unit_content ? '1.5px solid #93c5fd' : undefined, cursor: isLocked ? 'not-allowed' : 'text' }}
-                                            title={isLocked ? 'Bloqueado por origen' : (item._unit_content ? `Cantidad de envases (cada uno contiene ${item._unit_content} ${item._unit_label || 'u'})` : 'Cantidad')}
+                                            readOnly={isMonetaryLocked}
+                                            style={{ background: isMonetaryLocked ? '#e2e8f0' : (item._unit_content ? '#eff6ff' : '#fff'), border: item._unit_content ? '1.5px solid #93c5fd' : undefined, cursor: isMonetaryLocked ? 'not-allowed' : 'text' }}
+                                            title={isMonetaryLocked ? 'Bloqueado financieramente' : (item._unit_content ? `Cantidad de envases (cada uno contiene ${item._unit_content} ${item._unit_label || 'u'})` : 'Cantidad')}
                                         />
                                         {/* UNIDADES EQUIVALENTES: calculado automáticamente */}
                                         <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -1107,9 +1184,9 @@ export default function InvoiceForm(props) {
                                                 className={s.tableInput} 
                                                 value={item.qty || 0} 
                                                 onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)} 
-                                                readOnly={isLocked || !!item._unit_content}
-                                                style={{ background: (isLocked || !!item._unit_content) ? '#f1f5f9' : '#fff', color: (isLocked || !!item._unit_content) ? '#64748b' : 'inherit', cursor: (isLocked || !!item._unit_content) ? 'not-allowed' : 'text' }}
-                                                title={isLocked ? 'Bloqueado por origen' : (item._unit_content ? 'Calculado automáticamente (envases × contenido)' : 'Cantidad')}
+                                                readOnly={isMonetaryLocked || !!item._unit_content}
+                                                style={{ background: (isMonetaryLocked || !!item._unit_content) ? '#f1f5f9' : '#fff', color: (isMonetaryLocked || !!item._unit_content) ? '#64748b' : 'inherit', cursor: (isMonetaryLocked || !!item._unit_content) ? 'not-allowed' : 'text' }}
+                                                title={isMonetaryLocked ? 'Bloqueado financieramente' : (item._unit_content ? 'Calculado automáticamente (envases × contenido)' : 'Cantidad')}
                                             />
                                         </div>
                                         <div style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#64748b' }}>{item._unit_label || 'u'}</div>
@@ -1531,6 +1608,34 @@ export default function InvoiceForm(props) {
         </div>
         </div>
         
+        <Modal open={showAnnulModal} onClose={() => setShowAnnulModal(false)} title="Anular Factura">
+          <div style={{ padding: '0 24px 24px', color: '#1e293b' }}>
+            <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, marginBottom: 16 }}>
+              ¿Anular esta factura?
+            </p>
+            <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.5, marginBottom: 24 }}>
+              Esta acción revertirá la factura y, si fue generada desde un remito, devolverá el remito a pendiente/parcial según corresponda.
+              <br/><br/>
+              <strong>No se eliminará el comprobante.</strong>
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              <button
+                onClick={() => setShowAnnulModal(false)}
+                style={{ padding: '10px 20px', borderRadius: 8, border: '1px solid #e2e8f0', background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAnnul}
+                disabled={saving}
+                style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#ef4444', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                {saving ? 'Anulando...' : 'Anular factura'}
+              </button>
+            </div>
+          </div>
+        </Modal>
+
     </div>
   );
 }

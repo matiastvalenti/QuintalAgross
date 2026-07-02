@@ -1080,8 +1080,11 @@ def create_document(
                     dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == source_dn_line_id).first()
                     if dn_line:
                         from decimal import Decimal
+                        pending_dn = Decimal(str(dn_line.qty)) - Decimal(str(dn_line.qty_invoiced or 0))
+                        if Decimal(str(line.qty)) > (pending_dn + Decimal('0.001')):
+                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en el remito ({pending_dn}).")
+                            
                         dn_line.qty_invoiced = Decimal(str(dn_line.qty_invoiced or 0)) + Decimal(str(line.qty))
-                        
                         # Also update the origin Order Line (OV or OC)
                         if dn_line.source_sales_line_id:
                             from app.db.models.commercial_models import SalesOrderLine
@@ -1089,6 +1092,8 @@ def create_document(
                             if ovl:
                                 # Data Integrity: Check for over-invoicing
                                 pending_ov = Decimal(str(ovl.qty)) - Decimal(str(ovl.qty_invoiced or 0))
+                                if Decimal(str(line.qty)) > (pending_ov + Decimal('0.001')):
+                                    raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en la Orden de Venta ({pending_ov}).")
                                 ovl.qty_invoiced = Decimal(str(ovl.qty_invoiced or 0)) + Decimal(str(line.qty))
                                 db.flush()
                                 recalc_sales_order_status(db, ovl.order_id)
@@ -1113,6 +1118,10 @@ def create_document(
                     from decimal import Decimal
                     ovl = db.query(SalesOrderLine).filter(SalesOrderLine.id == source_sales_line_id).first()
                     if ovl:
+                        pending_ov = Decimal(str(ovl.qty)) - Decimal(str(ovl.qty_invoiced or 0))
+                        if Decimal(str(line.qty)) > (pending_ov + Decimal('0.001')):
+                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en la Orden de Venta ({pending_ov}).")
+                        
                         ovl.qty_invoiced = Decimal(str(ovl.qty_invoiced or 0)) + Decimal(str(line.qty))
                         
                         # --- PRICE SYNC LOGIC ---
@@ -1162,6 +1171,9 @@ def create_document(
                     from decimal import Decimal
                     ocl = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == source_purchase_line_id).first()
                     if ocl:
+                        pending_oc = Decimal(str(ocl.qty)) - Decimal(str(ocl.qty_invoiced or 0))
+                        if Decimal(str(line.qty)) > (pending_oc + Decimal('0.001')):
+                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en la Orden de Compra ({pending_oc}).")
                         ocl.qty_invoiced = Decimal(str(ocl.qty_invoiced or 0)) + Decimal(str(line.qty))
                         db.flush()
                         recalc_purchase_order_status(db, ocl.order_id)
