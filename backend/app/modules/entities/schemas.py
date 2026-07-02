@@ -165,6 +165,11 @@ class EntityAgeing(BaseModel):
     code: Optional[str] = None
     total_balance: float
     overdue_balance: float
+    balance_ars: float = 0.0
+    balance_usd: float = 0.0
+    overdue_ars: float = 0.0
+    overdue_usd: float = 0.0
+    total_converted_ars: float = 0.0
     aging_buckets: List[dict] # [{label: 'A vencer', amount: X}, ...]
     credit_limit: float
     credit_status: str

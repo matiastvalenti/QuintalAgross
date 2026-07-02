@@ -64,13 +64,17 @@ export function openNuevoRemito(ovId, options = {}) {
 }
 
 export function openNuevaFactura(params = {}, options = {}) {
-  const { ov_id, lines, draft_id } = params;
+  const { ov_id, lines, draft_id, source_delivery_note_id, entity_id } = params;
   let path = "/standalone/facturas/nueva";
   let windowName = "factura-nueva";
   
   if (draft_id) {
     path += `?draft_id=${draft_id}`;
     windowName = `factura-draft-${draft_id}`;
+  } else if (source_delivery_note_id) {
+    path += `?source_delivery_note_id=${source_delivery_note_id}`;
+    if (entity_id) path += `&entity_id=${entity_id}`;
+    windowName = `factura-remito-${source_delivery_note_id}`;
   } else if (ov_id) {
     path += `?ov_id=${ov_id}`;
     if (lines) path += `&lines=${lines}`;
@@ -286,10 +290,14 @@ export function openEditRendicion(id, options = {}) {
 }
 
 // === RESUMEN DE CUENTA ===
-export function openResumenCuenta(entityId = null, options = {}) {
-  const path = entityId
+export function openResumenCuenta(entityId = null, options = {}, viewParam = null) {
+  let path = entityId
     ? `/standalone/resumen-cuenta/${entityId}`
     : "/standalone/resumen-cuenta";
+  
+  if (viewParam) {
+    path += `?view=${viewParam}`;
+  }
 
   const screenWidth = window.screen?.availWidth || 1600;
   const screenHeight = window.screen?.availHeight || 900;

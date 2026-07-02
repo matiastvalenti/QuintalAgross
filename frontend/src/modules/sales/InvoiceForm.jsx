@@ -207,7 +207,7 @@ export default function InvoiceForm(props) {
     fetchInitialData();
     fetchProductsCatalog();
     if (mode === "edit" && id) fetchInvoice();
-    else if (mode === "new" && initialSourceType === "sales-order" && initialSourceId) {
+    else if (mode === "new" && (initialSourceType === "sales-order" || initialSourceType === "delivery-note") && initialSourceId) {
         fetchFromSource();
     }
   }, []);
@@ -578,7 +578,8 @@ export default function InvoiceForm(props) {
                           unit_price: l.unit_price,
                           discount_pct: l.discount_pct || 0,
                           vat_rate: l.vat_rate || 0.21,
-                          source_sales_line_id: l.id,
+                          source_sales_line_id: initialSourceType === 'sales-order' ? l.id : (l.source_sales_line_id || null),
+                          source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: resolvedAccount,
                           accountLocked: Boolean(resolvedAccount && l.product_id),
                           _account_code: l.product?.sales_account_code || null,
@@ -687,6 +688,7 @@ export default function InvoiceForm(props) {
                 type: "QUINTAL_DOCUMENT_SAVED",
                 documentType: "invoice",
                 invoiceId: docData.id,
+                entityId: entity.id,
                 salesOrderId: sourceOrderId,
                 deliveryNoteId: sourceDeliveryNoteId,
                 timestamp: Date.now()

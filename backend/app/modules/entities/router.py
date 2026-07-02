@@ -572,20 +572,30 @@ def get_ageing_report(
             DocumentType.LPG_PRIMARY, DocumentType.LPG_SECONDARY
         ]
 
-        total_ars_expr = func.coalesce(
+        total_ars_expr = case(
+            (Document.currency.notin_(["USD", "CurrencyType.USD"]), func.coalesce(Document.total_amount, 0.0)),
+            else_=0.0
+        )
+        total_usd_expr = case(
+            (Document.currency.in_(["USD", "CurrencyType.USD"]), func.coalesce(Document.total_amount, 0.0)),
+            else_=0.0
+        )
+        total_converted_expr = func.coalesce(
             Document.total_amount_ars,
             case(
-                (Document.currency == "USD", Document.total_amount * func.coalesce(Document.exchange_rate, 1.0)),
+                (Document.currency.in_(["USD", "CurrencyType.USD"]), Document.total_amount * func.coalesce(Document.exchange_rate, 1.0)),
                 else_=func.coalesce(Document.total_amount, 0.0)
             )
         )
 
+        def get_balance_expr(expr):
+            return func.sum(case((Document.doc_type.in_(debit_types), expr), else_=-expr))
+
         balances_query = db.query(
             Document.entity_id,
-            func.sum(case(
-                (Document.doc_type.in_(debit_types), total_ars_expr),
-                else_=-total_ars_expr
-            )).label("balance")
+            get_balance_expr(total_converted_expr).label("balance_converted"),
+            get_balance_expr(total_ars_expr).label("balance_ars"),
+            get_balance_expr(total_usd_expr).label("balance_usd")
         ).filter(Document.status != DocumentStatus.CANCELLED)
         
         if cost_center in [1, 2]:
@@ -593,7 +603,15 @@ def get_ageing_report(
             
         balances_results = balances_query.group_by(Document.entity_id).all()
         
-        balances_map = {b.entity_id: safe_float(b.balance) for b in balances_results if b.entity_id and abs(safe_float(b.balance)) > 0.01}
+        # balances_map stores dict with all balances
+        balances_map = {}
+        for b in balances_results:
+            if b.entity_id and (abs(safe_float(b.balance_converted)) > 0.01 or abs(safe_float(b.balance_ars)) > 0.01 or abs(safe_float(b.balance_usd)) > 0.01):
+                balances_map[b.entity_id] = {
+                    "balance_converted": safe_float(b.balance_converted),
+                    "balance_ars": safe_float(b.balance_ars),
+                    "balance_usd": safe_float(b.balance_usd)
+                }
 
         open_docs_query = db.query(Document).filter(
             Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL]),
@@ -606,20 +624,23 @@ def get_ageing_report(
 
         doc_ids = [d.id for d in open_docs]
         
-        apps_map = {}
+        apps_map_ars = {}
+        apps_map_usd = {}
         if doc_ids:
             apps_query = db.query(Application).filter(Application.to_document_id.in_(doc_ids)).all()
             for app in apps_query:
+                # amount_applied is in the to_document's currency
+                amount_applied = safe_float(app.amount_applied)
+                apps_map_usd[app.to_document_id] = apps_map_usd.get(app.to_document_id, 0.0) + amount_applied
+                
                 if app.amount_applied_ars is None:
-                    amount_applied = safe_float(app.amount_applied)
                     app_tc = safe_float(app.exchange_rate, 1.0)
                     if app_tc <= 0: app_tc = 1.0
                     val_ars = amount_applied * app_tc
-                    logger.warning(f"Ageing report calculated fallback: application_id={app.id} field=amount_applied_ars calculated={val_ars}")
                 else:
                     val_ars = safe_float(app.amount_applied_ars)
                 
-                apps_map[app.to_document_id] = apps_map.get(app.to_document_id, 0.0) + val_ars
+                apps_map_ars[app.to_document_id] = apps_map_ars.get(app.to_document_id, 0.0) + val_ars
 
         entity_buckets: Dict[str, Dict[str, Any]] = {}
         for doc in open_docs:
@@ -627,26 +648,33 @@ def get_ageing_report(
                 logger.warning(f"Documento imposible saltado en ageing report (falta id o entity_id): {getattr(doc, 'id', None)}")
                 continue
 
+            doc_currency = doc.currency.value if hasattr(doc.currency, "value") else str(doc.currency or "ARS")
+            total_amount = safe_float(doc.total_amount)
+            doc_tc = safe_float(doc.exchange_rate, 1.0)
+            if doc_tc <= 0: doc_tc = 1.0
+
             if doc.total_amount_ars is None:
-                total_amount = safe_float(doc.total_amount)
-                doc_tc = safe_float(doc.exchange_rate, 1.0)
-                if doc_tc <= 0: doc_tc = 1.0
-                
-                doc_currency = doc.currency.value if hasattr(doc.currency, "value") else str(doc.currency or "ARS")
                 if doc_currency == "USD":
                     doc_total_ars = total_amount * doc_tc
                 else:
                     doc_total_ars = total_amount
-                logger.warning(f"Ageing report calculated fallback: document_id={doc.id} field=total_amount_ars calculated={doc_total_ars}")
             else:
                 doc_total_ars = safe_float(doc.total_amount_ars)
 
-            if doc.due_date is None:
-                logger.warning(f"Ageing report fallback: document_id={doc.id} field=due_date value=None")
-
-            applied_ars = apps_map.get(doc.id, 0.0)
+            applied_ars = apps_map_ars.get(doc.id, 0.0)
             pending_ars = doc_total_ars - applied_ars
-            if pending_ars <= 0.01: continue
+            
+            applied_usd = apps_map_usd.get(doc.id, 0.0)
+            
+            pending_real_ars = 0.0
+            pending_real_usd = 0.0
+            
+            if doc_currency == "USD":
+                pending_real_usd = total_amount - applied_usd
+            else:
+                pending_real_ars = total_amount - applied_usd # For ARS docs, amount_applied is in ARS
+
+            if pending_ars <= 0.01 and pending_real_usd <= 0.01 and pending_real_ars <= 0.01: continue
             
             eid = str(doc.entity_id)
             cond_id = str(doc.sale_condition_id or "NONE")
@@ -654,6 +682,8 @@ def get_ageing_report(
             if eid not in entity_buckets:
                 entity_buckets[eid] = {
                     "overdue": 0.0,
+                    "overdue_ars": 0.0,
+                    "overdue_usd": 0.0,
                     "buckets": {"A vencer": 0.0, "0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "90+ días": 0.0},
                     "conditions": {}
                 }
@@ -662,6 +692,7 @@ def get_ageing_report(
             if cond_id not in ent_data["conditions"]:
                 ent_data["conditions"][cond_id] = {
                     "total": 0.0, "overdue": 0.0,
+                    "overdue_ars": 0.0, "overdue_usd": 0.0,
                     "buckets": {"A vencer": 0.0, "0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "90+ días": 0.0}
                 }
             
@@ -682,7 +713,11 @@ def get_ageing_report(
             cond_data["buckets"][bucket_key] += pending_ars
             if is_overdue:
                 ent_data["overdue"] += pending_ars
+                ent_data["overdue_ars"] += pending_real_ars
+                ent_data["overdue_usd"] += pending_real_usd
                 cond_data["overdue"] += pending_ars
+                cond_data["overdue_ars"] += pending_real_ars
+                cond_data["overdue_usd"] += pending_real_usd
 
         condition_names = {c.id: c.description for c in db.query(SaleCondition).all()}
 
@@ -695,6 +730,12 @@ def get_ageing_report(
         report_data = []
         total_debt_global = 0.0
         total_overdue_global = 0.0
+        total_ars_global = 0.0
+        total_usd_global = 0.0
+        overdue_ars_global = 0.0
+        overdue_usd_global = 0.0
+
+        from app.modules.entities.account_statement_service import build_entity_ledger
 
         for ent in all_entities:
             if not ent.id:
@@ -704,9 +745,26 @@ def get_ageing_report(
             if ent.credit_limit is None:
                 logger.warning(f"Ageing report fallback: entity_id={ent.id} field=credit_limit value=None")
 
-            balance = balances_map.get(ent.id, 0.0)
+            balance_data = balances_map.get(ent.id, {"balance_converted": 0.0, "balance_ars": 0.0, "balance_usd": 0.0})
+            
+            # Fetch true ledger balances to guarantee consistency with Resumen de Cuenta
+            ledger_view = "customer"
+            if type == "provider": ledger_view = "supplier"
+            elif type == "mixed": ledger_view = "consolidated"
+            
+            try:
+                ledger = build_entity_ledger(db=db, entity_id=ent.id, view=ledger_view, cost_center=cost_center)
+                if ledger and len(ledger) > 0:
+                    last_row = ledger[-1]
+                    balance_data["balance_ars"] = last_row.get("balance_ars", 0.0)
+                    balance_data["balance_usd"] = last_row.get("balance_usd", 0.0)
+            except Exception as e:
+                logger.error(f"Error building ledger for entity {ent.id}: {e}")
+
             eb = entity_buckets.get(ent.id, {
                 "overdue": 0.0,
+                "overdue_ars": 0.0,
+                "overdue_usd": 0.0,
                 "buckets": {"A vencer": 0.0, "0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "90+ días": 0.0},
                 "conditions": {}
             })
@@ -720,18 +778,35 @@ def get_ageing_report(
                 })
 
             report_data.append({
-                "id": ent.id, "name": ent.name, "code": ent.code, "total_balance": balance,
-                "overdue_balance": eb["overdue"],
+                "id": ent.id, "name": ent.name, "code": ent.code, 
+                "total_balance": balance_data["balance_ars"],
+                "overdue_balance": eb["overdue_ars"],
+                "balance_ars": balance_data["balance_ars"],
+                "balance_usd": balance_data["balance_usd"],
+                "overdue_ars": eb["overdue_ars"],
+                "overdue_usd": eb["overdue_usd"],
+                "total_converted_ars": balance_data["balance_converted"],
                 "aging_buckets": [{"label": k, "amount": v} for k, v in eb["buckets"].items()],
                 "credit_limit": safe_float(ent.credit_limit), "credit_status": str(ent.credit_status or ""),
                 "conditions": cond_list
             })
-            total_debt_global += balance
+            total_debt_global += balance_data["balance_converted"]
             total_overdue_global += eb["overdue"]
+            total_ars_global += balance_data["balance_ars"]
+            total_usd_global += balance_data["balance_usd"]
+            overdue_ars_global += eb["overdue_ars"]
+            overdue_usd_global += eb["overdue_usd"]
 
         return {
             "report_date": now, "type": type or "all",
-            "summary": {"total_debt": total_debt_global, "total_overdue": total_overdue_global},
+            "summary": {
+                "total_debt": total_debt_global, 
+                "total_overdue": total_overdue_global,
+                "total_ars": total_ars_global,
+                "total_usd": total_usd_global,
+                "overdue_ars": overdue_ars_global,
+                "overdue_usd": overdue_usd_global
+            },
             "data": sorted(report_data, key=lambda x: x["overdue_balance"], reverse=True)
         }
     except Exception as e:

@@ -975,6 +975,20 @@ export default function DeliveryNoteForm(props) {
                     </button>
                   )}
                   <div className={s.actionGroup}>
+                      {mode === "edit" && 
+                       (initialData?.note_type === "SALE" || !initialData?.note_type) && 
+                       status !== "CANCELLED" && 
+                       items.some(i => (parseFloat(i.qty || 0) - parseFloat(i.qty_invoiced || 0)) > 0) && (
+                          <button 
+                              className={s.saveBtn} 
+                              style={{ background: '#7c3aed', color: 'white', border: 'none', marginLeft: 8, height: 36, padding: '0 16px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 800, fontSize: 13 }} 
+                              onClick={() => openNuevaFactura({ source_delivery_note_id: id, entity_id: entity?.id })}
+                              title="Generar factura"
+                          >
+                              <Receipt size={16} />
+                              Generar factura
+                          </button>
+                      )}
                       <button className={s.actionBtn} disabled={!id || isLocked} onClick={async () => {
                           if (!window.confirm("¿Estás seguro de anular este remito? Esta acción no se puede deshacer.")) return;
                           try {

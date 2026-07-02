@@ -102,7 +102,6 @@ const NAV_GROUPS = [
         label: 'Contabilidad', icon: BarChart3, perm: 'accounting_reports',
         children: [
           { label: 'Resumen de Saldos', to: '/contabilidad/saldos', perm: 'accounting_reports' },
-          { label: 'Resumen de Cuenta', to: '/contabilidad/cuenta-corriente', perm: 'accounting_reports' },
           { label: 'Libro Diario', to: '/contabilidad/libro-diario', perm: 'journal' },
           { label: 'Libro IVA Ventas/Compras', to: '/contabilidad/iva', perm: 'accounting_reports' },
           { label: 'Percepciones y Retenciones', to: '/contabilidad/impuestos', perm: 'accounting_reports' },
