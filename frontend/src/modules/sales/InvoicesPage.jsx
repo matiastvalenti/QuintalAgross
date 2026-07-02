@@ -368,7 +368,7 @@ export default function InvoicesPage() {
     setShowCreationModal(true);
   };
 
-  const handleAnnul = async (e, id, number) => {
+  const handleAnnul = async (e, id, number, entityId) => {
     if (e) e.stopPropagation();
     const reason = window.prompt(`¿Por qué deseas anular el comprobante ${number}? (Opcional)`);
     if (reason === null) return; // Cancelled prompt
@@ -380,6 +380,34 @@ export default function InvoicesPage() {
         showToast(`Documento ${number} anulado correctamente`, "success");
         fetchInvoices();
         window.dispatchEvent(new Event('document-changed'));
+        window.dispatchEvent(new Event('account-changed'));
+        
+        if (entityId) {
+            const bcPayload = {
+                type: "QUINTAL_DOCUMENT_CANCELLED",
+                documentType: "invoice",
+                invoiceId: id,
+                entityId: entityId,
+                timestamp: Date.now(),
+            };
+            const balanceEvent = {
+                type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                entityId: entityId,
+                documentId: id,
+                docType: "invoice",
+                timestamp: Date.now()
+            };
+            try {
+                const bc = new BroadcastChannel("quintal_events");
+                bc.postMessage(bcPayload);
+                bc.close();
+                
+                const bc2 = new BroadcastChannel("quintal-documents");
+                bc2.postMessage(bcPayload);
+                bc2.postMessage(balanceEvent);
+                bc2.close();
+            } catch (_) {}
+        }
       } else {
         showToast(resp.detail || "Error al anular", "error");
       }
@@ -714,7 +742,7 @@ export default function InvoicesPage() {
               {inv.status !== 'CANCELLED' && inv.status !== 'CLOSED' && (
                 <button 
                   type="button"
-                  onClick={(e) => handleAnnul(e, inv.id, inv.number)} 
+                  onClick={(e) => handleAnnul(e, inv.id, inv.number, inv.entity_id)} 
                   style={{ width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'transparent', cursor: 'pointer', padding: 0, flexShrink: 0, color: '#ef4444', opacity: 0.7 }} 
                   title="Anular Factura"
                 >

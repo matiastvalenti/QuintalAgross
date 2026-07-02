@@ -1664,6 +1664,22 @@ def delete_document(id: str, db: Session = Depends(get_db), current_user: models
                 diff = Decimal(str(line.qty))
                 dn_line.qty_invoiced = max(Decimal(0), Decimal(str(dn_line.qty_invoiced or 0)) - diff)
                 dns_to_recalc.add(dn_line.delivery_note_id)
+        else:
+            # Revertir stock (solo si no viene de remito y tiene movimiento)
+            if getattr(line, "stock_movement_id", None):
+                from app.db.models.commercial_models import StockMovement, StockItem, StockMovementType
+                from decimal import Decimal
+                sm = db.query(StockMovement).filter(StockMovement.id == line.stock_movement_id).first()
+                if sm:
+                    item = db.query(StockItem).filter(StockItem.id == sm.stock_item_id).first()
+                    if item:
+                        # Revertir qty_on_hand
+                        qty = Decimal(str(sm.qty))
+                        if sm.movement_type == StockMovementType.IN:
+                            item.qty_on_hand -= qty
+                        elif sm.movement_type == StockMovementType.OUT:
+                            item.qty_on_hand += qty
+                    db.delete(sm)
         
         if line.source_sales_line_id:
             ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
@@ -2452,6 +2468,22 @@ def annul_document(id: str, db: Session = Depends(get_db), current_user: models.
                 diff_qty = Decimal(str(line.qty))
                 dn_line.qty_invoiced = max(Decimal(0), Decimal(str(dn_line.qty_invoiced or 0)) - diff_qty)
                 dns_to_recalc.add(dn_line.delivery_note_id)
+        else:
+            # Revertir stock (solo si no viene de remito y tiene movimiento)
+            if getattr(line, "stock_movement_id", None):
+                from app.db.models.commercial_models import StockMovement, StockItem, StockMovementType
+                from decimal import Decimal
+                sm = db.query(StockMovement).filter(StockMovement.id == line.stock_movement_id).first()
+                if sm:
+                    item = db.query(StockItem).filter(StockItem.id == sm.stock_item_id).first()
+                    if item:
+                        # Revertir qty_on_hand
+                        qty = Decimal(str(sm.qty))
+                        if sm.movement_type == StockMovementType.IN:
+                            item.qty_on_hand -= qty
+                        elif sm.movement_type == StockMovementType.OUT:
+                            item.qty_on_hand += qty
+                    db.delete(sm)
         
         if line.source_sales_line_id:
             ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
