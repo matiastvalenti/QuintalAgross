@@ -25,16 +25,49 @@ import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
 import s from './StatementPage.module.css';
 
-const getShortDescription = (row) => {
-    const text = row.description || row.notes || "";
-    if (text.includes("Ajuste automático por diferencia de cambio")) {
-        const match = text.match(/TC\s*([\d.,]+)\s*->\s*([\d.,]+)/);
-        return match ? `Diferencia de cambio\nTC ${match[1]} → ${match[2]}` : "Diferencia de cambio";
+const isFxMovement = (m) => {
+  const text = `${m.description || ""} ${m.notes || ""} ${m.reason_type || ""}`.toUpperCase();
+  return (
+    text.includes("DIFERENCIA DE CAMBIO") ||
+    text.includes("EXCHANGE_DIFFERENCE") ||
+    text.includes("ND-FX") ||
+    text.includes("NC-FX") ||
+    m.is_exchange_difference === true ||
+    m.reason_type === "EXCHANGE_DIFFERENCE"
+  );
+};
+
+const getShortDescription = (m) => {
+  const text = m.description || m.notes || "";
+  if (isFxMovement(m)) {
+    const tcMatch = text.match(/TC\s*([\d.,]+)\s*(?:->|→)\s*([\d.,]+)/i);
+    if (text.toLowerCase().includes("reversa") || text.toLowerCase().includes("cancel")) {
+      return "Reversa por anulación";
     }
-    if (text.includes("Reversa automática")) {
-        return "Reversa por anulación";
+    if (tcMatch) {
+      return `Diferencia de cambio\nTC ${tcMatch[1]} → ${tcMatch[2]}`;
     }
-    return text;
+    return "Diferencia de cambio";
+  }
+  return text || "-";
+};
+
+const getFxTitle = (m) => {
+  if (m.fx_kind === "CREDIT_FX_REVERSAL") {
+      return `NC-FX ${m.number}`;
+  }
+  return `ND-FX ${m.number}`;
+};
+
+const hasFxOriginData = (m) => {
+  const isValid = (val) => val && val !== "-";
+  return Boolean(
+    isValid(m.source_invoice_number) ||
+    isValid(m.source_receipt_number) ||
+    isValid(m.reverses_document_number) ||
+    isValid(m.invoice_exchange_rate) ||
+    isValid(m.application_exchange_rate)
+  );
 };
 
 const getDocumentStandalonePath = (movement) => {
@@ -664,7 +697,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         </tr>
                                         <tr>
                                             <th className={s.th}>Fecha</th>
-                                            <th className={s.th}>Circuito</th>
+                                            <th className={s.th}>Estado</th>
                                             <th className={s.th}>Comprobante</th>
                                             <th className={`${s.th} ${s.numberCell}`}>Número</th>
                                             <th className={`${s.th} ${s.descriptionCell}`}>Descripción</th>
@@ -684,7 +717,18 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         {filteredMovements.length > 0 ? filteredMovements.map((m, idx) => (
                                             <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
                                                 <td className={s.cell}>{fmt(m.date, 'date')}</td>
-                                                <td className={s.cell}>{getCircuitoFallback(m.doc_type, m.circuit)}</td>
+                                                <td className={s.cell}>
+                                                    {m.document_status_label ? (
+                                                        <span className={`${s.docStateBadge} ${
+                                                            m.document_status_kind === 'paid' || m.document_status_kind === 'applied' ? s.statusPaid :
+                                                            m.document_status_kind === 'partial' || m.document_status_kind === 'partial_credit' ? s.statusPartial :
+                                                            m.document_status_kind === 'unpaid' ? s.statusUnpaid :
+                                                            m.document_status_kind === 'available' ? s.statusAvailable : ''
+                                                        }`}>
+                                                            {m.document_status_label}
+                                                        </span>
+                                                    ) : getCircuitoFallback(m.doc_type, m.circuit)}
+                                                </td>
                                                 <td className={s.cell}>
                                                     <div className={s.statusBadge} style={{ textTransform: 'none' }}>
                                                         {m.payment_status === 'PAID' ? <CheckCircle2 size={12} className={s.iconPaid} /> : 
@@ -711,8 +755,96 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                                     </button>
                                                 </td>
                                                 <td className={`${s.cell} ${s.descriptionCell}`}>
-                                                    <div className={s.descriptionText} title={getDescripcionFallback(m.doc_type, m.description || m.notes)}>
-                                                        {getShortDescription(m)}
+                                                    <div className={s.fxTooltipWrap}>
+                                                        <div className={s.descriptionText} title={!m.document_status_label && !isFxMovement(m) ? getDescripcionFallback(m.doc_type, m.description || m.notes) : undefined}>
+                                                            {getShortDescription(m)}
+                                                            {isFxMovement(m) && <span className={s.fxMiniBadge}>FX</span>}
+                                                        </div>
+                                                        {m.document_status_label && (
+                                                            <div className={s.fxTooltip}>
+                                                                <div className={s.fxTooltipTitle}>
+                                                                    {m.doc_type === 'RECEIPT' || m.doc_type === 'PAYMENT' ? 'Recibo' : getComprobanteName(m.doc_type)} {m.number}
+                                                                </div>
+                                                                
+                                                                <div className={s.fxTooltipGrid} style={{ marginBottom: isFxMovement(m) ? 12 : 0 }}>
+                                                                    {m.document_status_kind === 'available' || m.document_status_kind === 'partial_credit' || m.document_status_kind === 'applied' ? (
+                                                                        <>
+                                                                            <span>Total crédito</span>
+                                                                            <strong>{m.document_total != null ? fmt(m.document_total, m.currency) : '-'}</strong>
+                                                                            <span>Aplicado</span>
+                                                                            <strong>{m.document_applied != null ? fmt(m.document_applied, m.currency) : '-'}</strong>
+                                                                            <span>Disponible</span>
+                                                                            <strong>{m.document_available != null ? fmt(m.document_available, m.currency) : '-'}</strong>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span>Total a cobrar</span>
+                                                                            <strong>{m.document_total != null ? fmt(m.document_total, m.currency) : '-'}</strong>
+                                                                            <span>Cobrado/aplic.</span>
+                                                                            <strong>{m.document_applied != null ? fmt(m.document_applied, m.currency) : '-'}</strong>
+                                                                            <span>Saldo pte.</span>
+                                                                            <strong>{m.document_pending != null ? fmt(m.document_pending, m.currency) : '-'}</strong>
+                                                                        </>
+                                                                    )}
+                                                                    <span>Estado</span>
+                                                                    <strong style={{
+                                                                        color: (m.document_status_kind === 'paid' || m.document_status_kind === 'applied') ? '#34d399' :
+                                                                               (m.document_status_kind === 'partial' || m.document_status_kind === 'partial_credit') ? '#fbbf24' :
+                                                                               (m.document_status_kind === 'unpaid') ? '#f87171' : '#60a5fa'
+                                                                    }}>{m.document_status_label}</strong>
+                                                                </div>
+
+                                                                {isFxMovement(m) && hasFxOriginData(m) && (
+                                                                    <>
+                                                                        <div className={s.fxTooltipTitle} style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, marginTop: 10, color: '#94a3b8', fontSize: 11 }}>
+                                                                            Origen FX
+                                                                        </div>
+                                                                        <div className={s.fxTooltipGrid}>
+                                                                            {m.fx_kind === "CREDIT_FX_REVERSAL" && (
+                                                                                <>
+                                                                                    <span style={{ gridColumn: '1 / -1', color: '#fff' }}>Reversa por anulación</span>
+                                                                                    {m.reverses_document_number && m.reverses_document_number !== "-" && (
+                                                                                        <>
+                                                                                            <span>Cancela</span>
+                                                                                            <strong>{m.reverses_document_number}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                </>
+                                                                            )}
+                                                                            {m.source_invoice_number && m.source_invoice_number !== "-" && (
+                                                                                <>
+                                                                                    <span>Factura base</span>
+                                                                                    <strong>{m.source_invoice_number}</strong>
+                                                                                </>
+                                                                            )}
+                                                                            
+                                                                            {m.fx_kind !== "CREDIT_FX_REVERSAL" && (
+                                                                                <>
+                                                                                    {m.source_receipt_number && m.source_receipt_number !== "-" && (
+                                                                                        <>
+                                                                                            <span>Recibo aplicado</span>
+                                                                                            <strong>{m.source_receipt_number}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                    {m.invoice_exchange_rate && m.invoice_exchange_rate !== "-" && (
+                                                                                        <>
+                                                                                            <span>TC factura</span>
+                                                                                            <strong>{m.invoice_exchange_rate}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                    {m.application_exchange_rate && m.application_exchange_rate !== "-" && (
+                                                                                        <>
+                                                                                            <span>TC aplicación</span>
+                                                                                            <strong>{m.application_exchange_rate}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </td>
                                                 <td className={s.cell}>{m.due_date ? fmt(m.due_date, 'date') : '-'}</td>

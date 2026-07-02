@@ -112,8 +112,20 @@ def build_entity_ledger(
     apps_to_q = db.query(
         Application.to_document_id,
         func.sum(Application.amount_applied).label("applied"),
+        func.sum(Application.amount_applied_ars).label("applied_ars")
     ).filter(Application.to_document_id.in_(doc_ids)).group_by(Application.to_document_id).all()
-    applied_to_map = {a.to_document_id: float(a.applied or 0) for a in apps_to_q}
+    applied_to_map = {a.to_document_id: (float(a.applied or 0), float(a.applied_ars or 0)) for a in apps_to_q}
+
+    # Buscar links FX para trazabilidad
+    from app.db.models.models import FxAdjustmentLink, Application as AppModel
+    fx_links_q = db.query(FxAdjustmentLink).options(
+        joinedload(FxAdjustmentLink.source_document),
+        joinedload(FxAdjustmentLink.source_application).joinedload(AppModel.from_document)
+    ).filter(FxAdjustmentLink.generated_document_id.in_(doc_ids)).all()
+    fx_links_map = {link.generated_document_id: link for link in fx_links_q}
+
+    # Buscar links FX como reversa (ND-FX que fue revertida por este doc, a través de document.origin_invoice_id u otro campo, pero por ahora lo más seguro es revisar notes/origin)
+    # Por ahora sólo se requiere la trazabilidad para la vista si es FX o reversa.
 
     # 4. Construir el ledger con saldos acumulados
     balance_ars = 0.0
@@ -183,7 +195,7 @@ def build_entity_ledger(
         applied_total_ars = sum(v[1] for v in apps.values())
 
         if not has_apps:
-            applied_already = applied_to_map.get(doc.id, 0.0)
+            applied_already = applied_to_map.get(doc.id, (0.0, 0.0))[0]
             remaining = max(0.0, total_usd_doc - applied_already)
             
             if remaining < 0.01: payment_status = "PAID"
@@ -236,8 +248,101 @@ def build_entity_ledger(
                 "applied_amount_ars": applied_total_ars,
                 "remaining": remaining,
                 "remaining_ars": max(0.0, total_ars_doc - applied_total_ars),
-                "lines": []
+                "lines": [],
+                "is_exchange_difference": getattr(doc, 'is_fx_adjustment', False)
             }
+            
+            # Administrative status calculation
+            is_fx = getattr(doc, 'is_fx_adjustment', False)
+            if is_fx:
+                doc_total = total_ars_doc
+                if not has_apps:
+                    doc_applied = applied_to_map.get(doc.id, (0.0, 0.0))[1]
+                else:
+                    doc_applied = applied_total_ars
+            else:
+                doc_total = total_usd_doc if is_usd else total_ars_doc
+                if not has_apps:
+                    doc_applied = applied_to_map.get(doc.id, (0.0, 0.0))[0]
+                else:
+                    doc_applied = applied_total if is_usd else applied_total_ars
+                
+            doc_pending = max(0.0, doc_total - doc_applied)
+            
+            if is_positive_impact:
+                # Debt document
+                if doc_pending <= 0.01:
+                    status_label = "PAGO"
+                    status_kind = "paid"
+                elif doc_applied > 0.01:
+                    status_label = "PARCIAL"
+                    status_kind = "partial"
+                else:
+                    status_label = "IMPAGO"
+                    status_kind = "unpaid"
+                
+                entry["document_status_label"] = status_label
+                entry["document_status_kind"] = status_kind
+                entry["document_total"] = doc_total
+                entry["document_applied"] = doc_applied
+                entry["document_pending"] = doc_pending
+                entry["document_available"] = None
+            else:
+                # Credit document
+                if doc_pending <= 0.01:
+                    status_label = "APLICADO"
+                    status_kind = "applied"
+                elif doc_applied > 0.01:
+                    status_label = "PARCIAL"
+                    status_kind = "partial_credit"
+                else:
+                    status_label = "DISPONIBLE"
+                    status_kind = "available"
+                    
+                entry["document_status_label"] = status_label
+                entry["document_status_kind"] = status_kind
+                entry["document_total"] = doc_total
+                entry["document_applied"] = doc_applied
+                entry["document_pending"] = None
+                entry["document_available"] = doc_pending
+            
+            # Trazabilidad FX
+            fx_link = fx_links_map.get(doc.id)
+            if fx_link:
+                entry["fx_kind"] = "DEBIT_FX" if is_positive_impact else "CREDIT_FX"
+                entry["source_invoice_id"] = fx_link.source_document_id
+                entry["source_invoice_number"] = fx_link.source_document.number if fx_link.source_document else "-"
+                
+                receipt_doc = fx_link.source_application.from_document if fx_link.source_application else None
+                entry["source_receipt_id"] = receipt_doc.id if receipt_doc else None
+                entry["source_receipt_number"] = receipt_doc.number if receipt_doc else "-"
+                
+                entry["invoice_exchange_rate"] = fx_link.tc_invoice
+                entry["application_exchange_rate"] = fx_link.tc_application
+                entry["fx_base_amount"] = fx_link.applied_amount_original
+                entry["fx_total_amount"] = fx_link.diff_total_ars
+                
+                # Calcular IVA de la diferencia aproximado a partir de las líneas
+                vat_amount = sum(float(l.vat_amount or 0) for l in doc.lines)
+                entry["fx_vat_amount"] = vat_amount
+            else:
+                # Intento parsear reversa o manual si no hay FxAdjustmentLink pero dice FX
+                text_search = str(doc.notes or "").upper()
+                if "REVERSA" in text_search or "CANCEL" in text_search or getattr(doc, 'is_fx_adjustment', False):
+                    # Para reversas
+                    entry["fx_kind"] = "CREDIT_FX_REVERSAL"
+                    
+                    # Tratar de extraer documento cancelado del notes
+                    import re
+                    match = re.search(r'(?:ND-FX|NC-FX|Factura|ND)\s*([A-Z0-9-]+)', str(doc.notes or ""))
+                    if match:
+                        entry["reverses_document_number"] = match.group(1)
+                    
+                    entry["fx_total_amount"] = total_ars_doc
+                    vat_amount = sum(float(l.vat_amount or 0) for l in doc.lines)
+                    entry["fx_vat_amount"] = vat_amount
+                    entry["fx_base_amount"] = sum(float(l.net_amount or 0) for l in doc.lines)
+
             entries.append(entry)
 
     return list(entries)
