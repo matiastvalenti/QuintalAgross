@@ -11,7 +11,8 @@ import {
   openEditRemito,
   openEditNotaDebito,
   openEditNotaCredito,
-  openEditFacturaCompra
+  openEditFacturaCompra,
+  openStandaloneWindow
 } from '../../utils/openStandaloneWindow';
 import { useCostCenter } from '../../context/CostCenterContext';
 import { API_URL } from '../../config';
@@ -34,6 +35,53 @@ const getShortDescription = (row) => {
         return "Reversa por anulación";
     }
     return text;
+};
+
+const getDocumentStandalonePath = (movement) => {
+    const id = movement.document_id || movement.doc_id || movement.id;
+    const type = movement.doc_type || movement.type;
+  
+    if (!id || !type) return null;
+  
+    const normalizedType = String(type).toUpperCase();
+  
+    switch (normalizedType) {
+      case "INVOICE":
+      case "FCE_MIPYME":
+        return `/standalone/facturas/${id}`;
+      case "RECEIPT":
+        return `/standalone/recibos/${id}?mode=view`;
+      case "DEBIT_NOTE":
+        return `/standalone/notas-debito/${id}`;
+      case "CREDIT_NOTE":
+        return `/standalone/notas-credito/${id}`;
+      case "DELIVERY_NOTE":
+      case "REMIT":
+      case "REMITO":
+        return `/standalone/remitos/${id}`;
+      case "PURCHASE_INVOICE":
+        return `/standalone/facturas-compra/${id}`;
+      case "PURCHASE_DEBIT_NOTE":
+        return `/standalone/notas-debito-compra/${id}`;
+      case "PURCHASE_CREDIT_NOTE":
+        return `/standalone/notas-credito-compra/${id}`;
+      case "PAYMENT":
+        return `/standalone/pagos/${id}?mode=view&isPayment=true`;
+      default:
+        return null;
+    }
+};
+
+const openDocumentFromMovement = (movement, e) => {
+    if (e) e.stopPropagation();
+    const path = getDocumentStandalonePath(movement);
+  
+    if (!path) {
+      console.warn("No se pudo abrir el comprobante: falta referencia al documento.");
+      return;
+    }
+  
+    openStandaloneWindow(path, `_blank`, { width: 1280, height: 820 });
 };
 
 export default function StatementPage({ entityId: propsEntityId, defaultFilters = {} }) {
@@ -642,10 +690,26 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                                         {m.payment_status === 'PAID' ? <CheckCircle2 size={12} className={s.iconPaid} /> : 
                                                          m.payment_status === 'PARTIAL' ? <Clock size={12} className={s.iconPartial} /> : 
                                                          <AlertCircle size={12} className={s.iconOpen} />}
-                                                        <span className={s.docLabel}>{getComprobanteName(m.doc_type)}</span>
+                                                        <button 
+                                                            type="button" 
+                                                            className={s.documentLink} 
+                                                            onClick={(e) => openDocumentFromMovement(m, e)}
+                                                            title="Abrir comprobante"
+                                                        >
+                                                            {getComprobanteName(m.doc_type)}
+                                                        </button>
                                                     </div>
                                                 </td>
-                                                <td className={`${s.cell} ${s.numberCell}`}>{m.number}</td>
+                                                <td className={`${s.cell} ${s.numberCell}`}>
+                                                    <button 
+                                                        type="button" 
+                                                        className={s.numberLink} 
+                                                        onClick={(e) => openDocumentFromMovement(m, e)}
+                                                        title="Abrir comprobante"
+                                                    >
+                                                        {m.number}
+                                                    </button>
+                                                </td>
                                                 <td className={`${s.cell} ${s.descriptionCell}`}>
                                                     <div className={s.descriptionText} title={getDescripcionFallback(m.doc_type, m.description || m.notes)}>
                                                         {getShortDescription(m)}
