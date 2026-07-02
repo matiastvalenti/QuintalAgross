@@ -30,6 +30,11 @@ function getInvoiceLineName(line) {
   );
 }
 
+function isCancelledStatus(val) {
+  const s = String(val || "").toUpperCase();
+  return ["CANCELLED", "CANCELED", "ANNULLED", "ANULADA", "ANULADO", "VOID"].includes(s);
+}
+
 function isSourceLockedLine(line) {
   return Boolean(
     line.sales_order_id ||
@@ -830,12 +835,15 @@ export default function InvoiceForm(props) {
         // if using api (axios instance), an error would throw to catch, but let's assume it returns data or status
         if (res.status === 200 || res.status === 201 || res.data) {
             showToast("Factura anulada correctamente", "success");
-            setStatus("ANNULLED");
-            setIsReadOnly(true);
+            
+            // Recargar estado completo del backend
+            await fetchInvoice(id);
+
+            const resolvedEntityId = entity?.id || initialEntityId || undefined;
 
             const eventData = {
               type: "QUINTAL_DOCUMENT_CANCELLED",
-              entityId: entity?.id,
+              entityId: resolvedEntityId,
               documentId: id,
               docType: "INVOICE",
               timestamp: Date.now()
@@ -851,7 +859,7 @@ export default function InvoiceForm(props) {
 
                 bc.postMessage({
                   type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
-                  entityId: entity?.id,
+                  entityId: resolvedEntityId,
                   documentId: id,
                   docType: "INVOICE",
                   timestamp: Date.now()
@@ -860,7 +868,7 @@ export default function InvoiceForm(props) {
                 if (sourceDeliveryNoteId) {
                     bc.postMessage({
                       type: "QUINTAL_DELIVERY_NOTE_UPDATED",
-                      entityId: entity?.id,
+                      entityId: resolvedEntityId,
                       documentId: sourceDeliveryNoteId,
                       docType: "DELIVERY_NOTE",
                       timestamp: Date.now()
@@ -1022,7 +1030,7 @@ export default function InvoiceForm(props) {
                   </button>
                 )}
                 <div className={s.actionGroup}>
-                    {id && mode !== 'new' && status !== 'CANCELLED' && status !== 'ANNULLED' && (
+                    {id && mode !== 'new' && !isCancelledStatus(status) && (
                         <button className={s.actionBtn} onClick={() => setShowAnnulModal(true)} title="Anular Factura" style={{ color: '#ef4444' }} disabled={saving}>
                             <Trash2 size={18} />
                         </button>
@@ -1239,8 +1247,11 @@ export default function InvoiceForm(props) {
                     
                     if (dnInfo.deliveryNoteId || dnInfo.deliveryNoteNumber) {
                         remitoStatus = "Vinculado";
+                        const facturadoQty = items.filter(l => l.source_dn_line_id || l.delivery_note_id || l.source_delivery_note_id || l.delivery_note_number).reduce((sum, l) => sum + (Number(l.qty) || 0), 0);
                         remitoDetail = `RE ${dnInfo.deliveryNoteNumber || String(dnInfo.deliveryNoteId).slice(-8)}`;
                         remitoColor = '#10b981';
+                        // Keep facturadoQty accessible for rendering
+                        dnInfo.facturadoQty = facturadoQty;
                     }
 
                     return (
@@ -1259,16 +1270,22 @@ export default function InvoiceForm(props) {
                                   <div className={s.relationCard} style={{ opacity: (remitoStatus !== "Pendiente") ? 1 : 0.5 }}>
                                       <div className={s.nodeTitle} style={{ color: remitoColor }}>REMITO</div>
                                       <div className={s.nodeStatus} style={{ color: remitoColor }}>{remitoStatus}</div>
-                                      <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{remitoDetail}</div>
+                                      <div className={s.nodeMetric} style={{ color: '#0f172a', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px' }}>
+                                          <span style={{ fontWeight: 600, fontSize: '12px' }}>{remitoDetail}</span>
+                                          {dnInfo.facturadoQty > 0 && <span>Facturado: {dnInfo.facturadoQty.toFixed(2)} u.</span>}
+                                      </div>
                                   </div>
                                   <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
                               </>
                           )}
 
-                  <div className={s.relationCard} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe' }}>
-                      <div className={s.nodeTitle} style={{ color: '#1d4ed8' }}>{docType === 'CREDIT_NOTE' ? 'NOTA DE CRÉDITO' : docType === 'DEBIT_NOTE' ? 'NOTA DE DÉBITO' : 'FACTURA'}</div>
-                      <div className={s.nodeStatus} style={{ color: '#1d4ed8' }}>Activa</div>
-                      <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{fmt(totals.total)}</div>
+                  <div className={s.relationCard} style={{ background: isCancelledStatus(status) ? '#fee2e2' : '#eff6ff', border: isCancelledStatus(status) ? '1.5px solid #fca5a5' : '1.5px solid #bfdbfe' }}>
+                      <div className={s.nodeTitle} style={{ color: isCancelledStatus(status) ? '#ef4444' : '#1d4ed8' }}>{docType === 'CREDIT_NOTE' ? 'NOTA DE CRÉDITO' : docType === 'DEBIT_NOTE' ? 'NOTA DE DÉBITO' : 'FACTURA'}</div>
+                      <div className={s.nodeStatus} style={{ color: isCancelledStatus(status) ? '#ef4444' : '#1d4ed8' }}>{isCancelledStatus(status) ? 'Anulada' : 'Activa'}</div>
+                      <div className={s.nodeMetric} style={{ color: '#0f172a', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px' }}>
+                          <span style={{ fontWeight: 600, fontSize: '12px' }}>{id ? (number || '(nuevo)') : '(nuevo)'}</span>
+                          <span>{fmt(totals.total)}</span>
+                      </div>
                   </div>
 
                   <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />

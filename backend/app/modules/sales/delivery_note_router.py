@@ -1662,7 +1662,8 @@ def get_delivery_note_traceability(dn_id: str, db: Session = Depends(get_db)):
                 "total_amount_ars": float(inv.total_amount_ars),
                 "currency": inv.currency,
                 "status": inv.status,
-                "paid_amount_ars": sum(float(a.amount_applied_ars or 0) for a in db.query(db_models.Application).filter(db_models.Application.to_document_id == inv.id).all())
+                "paid_amount_ars": sum(float(a.amount_applied_ars or 0) for a in db.query(db_models.Application).filter(db_models.Application.to_document_id == inv.id).all()),
+                "qty_from_this_delivery_note": float(sum(l.qty for l in inv.lines if str(getattr(l, 'source_dn_line_id', '')) in [str(dl.id) for dl in dn.lines]))
             } for inv in invoices
         ]
     }

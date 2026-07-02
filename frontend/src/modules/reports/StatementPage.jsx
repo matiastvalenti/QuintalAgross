@@ -249,7 +249,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         const handleMessage = (event) => {
             const data = event.data || {};
             if (data && typeof data.type === 'string' && data.type.startsWith('QUINTAL_')) {
-                if (data.entityId === selectedEntity?.id) {
+                if (!data.entityId || data.entityId === selectedEntity?.id) {
                     handleRefresh();
                 }
             }

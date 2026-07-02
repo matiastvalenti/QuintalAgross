@@ -54,6 +54,11 @@ import {
 } from "lucide-react";
 import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/ui/TraceabilityStatusBadge";
 
+function isCancelledStatus(val) {
+  const s = String(val || "").toUpperCase();
+  return ["CANCELLED", "CANCELED", "ANNULLED", "ANULADA", "ANULADO", "VOID"].includes(s);
+}
+
 // Helper to compute display value for Remitir column (packages or quantity)
 function formatQty(value) {
   const n = Number(value || 0);
@@ -1304,33 +1309,51 @@ export default function DeliveryNoteForm(props) {
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
             {/* FACTURA */}
-            {invoices.length > 0 ? (
-              <div 
-                className={s.relationCard} 
-                onClick={() => invoices.length === 1 && openNuevaFactura({ id: invoices[0].id })}
-                style={{ cursor: invoices.length === 1 ? 'pointer' : 'default', border: progressInvoiced >= 100 ? '1.5px solid #10b981' : '1.5px solid #f97316' }}
-              >
-                <div className={s.nodeTitle} style={{ color: progressInvoiced >= 100 ? '#10b981' : '#f97316' }}>FACTURA</div>
-                <div className={s.nodeBadge} style={{ background: progressInvoiced >= 100 ? '#d1fae5' : '#ffedd5', color: progressInvoiced >= 100 ? '#059669' : '#c2410c' }}>
-                  {progressInvoiced >= 100 ? '● Vinculada Total' : '● Vinculada Parcial'}
-                </div>
-                <div className={s.nodeMetric} style={{ color: '#0f172a', marginTop: 'auto' }}>
-                  {invoices.length === 1 ? invoices[0].number || 'S/N' : `${invoices.length} facturas`}
-                </div>
-                {mode === 'edit' && progressInvoiced < 100 && (
-                  <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar Resto</button>
-                )}
-              </div>
-            ) : (
-              <div className={s.relationCard}>
-                <div className={s.nodeTitle} style={{ color: '#0b132b' }}>FACTURA</div>
-                <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
-                <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0 factura(s) · 0%</div>
-                {mode === 'edit' && (
-                  <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar</button>
-                )}
-              </div>
-            )}
+            {(() => {
+              const activeInvoices = invoices.filter(inv => !isCancelledStatus(inv.status));
+              const cancelledInvoices = invoices.filter(inv => isCancelledStatus(inv.status));
+              
+              const totalRemittedQty = items.reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+              const totalInvoicedQty = items.reduce((acc, i) => acc + (parseFloat(i.qty_invoiced) || 0), 0);
+              const pendingQty = Math.max(0, totalRemittedQty - totalInvoicedQty);
+              const unitLabel = items.length > 0 && items.every(i => i._unit_label === items[0]._unit_label) ? (items[0]._unit_label || 'u.') : 'u.';
+              
+              if (invoices.length > 0) {
+                return (
+                  <div 
+                    className={s.relationCard} 
+                    onClick={() => invoices.length === 1 && openNuevaFactura({ id: invoices[0].id })}
+                    style={{ cursor: invoices.length === 1 ? 'pointer' : 'default', border: pendingQty <= 0 ? '1.5px solid #10b981' : '1.5px solid #f97316' }}
+                  >
+                    <div className={s.nodeTitle} style={{ color: pendingQty <= 0 ? '#10b981' : '#f97316' }}>FACTURA</div>
+                    <div className={s.nodeBadge} style={{ background: pendingQty <= 0 ? '#d1fae5' : '#ffedd5', color: pendingQty <= 0 ? '#059669' : '#c2410c' }}>
+                      {pendingQty <= 0 ? '● Vinculada Total' : '● Vinculada Parcial'}
+                    </div>
+                    <div className={s.nodeMetric} style={{ color: '#0f172a', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px' }}>
+                      <span style={{ fontWeight: 600, fontSize: '12px' }}>
+                        {activeInvoices.length} activa(s) {cancelledInvoices.length > 0 ? `· ${cancelledInvoices.length} anulada(s)` : ''}
+                      </span>
+                      <span>Facturado: {totalInvoicedQty.toFixed(2)} {unitLabel}</span>
+                      {pendingQty > 0 && <span>Pendiente: {pendingQty.toFixed(2)} {unitLabel}</span>}
+                    </div>
+                    {mode === 'edit' && pendingQty > 0 && (
+                      <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar Resto</button>
+                    )}
+                  </div>
+                );
+              } else {
+                return (
+                  <div className={s.relationCard}>
+                    <div className={s.nodeTitle} style={{ color: '#0b132b' }}>FACTURA</div>
+                    <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
+                    <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0 factura(s) · {totalRemittedQty.toFixed(2)} {unitLabel} pendientes</div>
+                    {mode === 'edit' && (
+                      <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar</button>
+                    )}
+                  </div>
+                );
+              }
+            })()}
 
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
@@ -1345,6 +1368,59 @@ export default function DeliveryNoteForm(props) {
               </div>
             </div>
           </div>
+
+          {/* Related Invoices List */}
+          {invoices.length > 0 && (
+            <div style={{ marginTop: 24, padding: 16, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#334155', marginBottom: 12 }}>Facturas relacionadas</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #cbd5e1', color: '#64748b' }}>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 500 }}>Fecha</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 500 }}>Número</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 500 }}>Estado</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 500 }}>Cant. remito</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 500 }}>Total</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 500 }}>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map(inv => {
+                    const isCancelled = isCancelledStatus(inv.status);
+                    const unitLabel = items.length > 0 && items.every(i => i._unit_label === items[0]._unit_label) ? (items[0]._unit_label || 'u.') : 'u.';
+                    return (
+                      <tr key={inv.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '8px 4px' }}>{inv.date ? inv.date.split('T')[0].split('-').reverse().join('/') : '-'}</td>
+                        <td style={{ padding: '8px 4px', fontWeight: 500 }}>{inv.number}</td>
+                        <td style={{ padding: '8px 4px' }}>
+                          <span style={{ 
+                            padding: '2px 6px', 
+                            borderRadius: 4, 
+                            fontSize: 10, 
+                            fontWeight: 600,
+                            background: isCancelled ? '#fee2e2' : '#d1fae5',
+                            color: isCancelled ? '#ef4444' : '#059669'
+                          }}>
+                            {isCancelled ? 'ANULADA' : 'ACTIVA'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right' }}>{(inv.qty_from_this_delivery_note || 0).toFixed(2)} {unitLabel}</td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right' }}>{inv.currency === 'USD' ? 'u$s' : '$'} {(inv.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right' }}>
+                          <button 
+                            onClick={() => openNuevaFactura({ id: inv.id })}
+                            style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}
+                          >
+                            Ver
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Operational Summary Panel */}
           <div className={s.summaryPanel}>
