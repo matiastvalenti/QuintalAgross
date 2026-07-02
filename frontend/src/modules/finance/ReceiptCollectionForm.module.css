@@ -509,8 +509,13 @@
 }
 
 .summaryRow.saldo.warning {
-  color: #c2410c;
-  background: #ffedd5;
+  color: #b45309;
+  background: #fef3c7;
+}
+
+.summaryRow.saldo.danger {
+  color: #be123c;
+  background: #ffe4e6;
 }
 
 /* Toggle */
@@ -864,6 +869,19 @@
   animation: scaleIn 0.2s ease-out;
 }
 
+.modalCardLarge {
+  width: min(1200px, calc(100vw - 40px));
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  animation: scaleIn 0.2s ease-out;
+}
+
 .modalHeader {
   display: flex;
   align-items: center;
@@ -951,15 +969,15 @@
 @media (max-width: 900px) { .appliedDocRow { align-items: flex-start; flex-direction: column; } .appliedDocAmount { width: 100%; text-align: left; } }
 
 .appliedDocsList { width: 100%; display: flex; flex-direction: column; gap: 8px; }
-.appliedDocRow { width: 100%; display: grid; grid-template-columns: minmax(220px, 1.7fr) 90px 150px 120px 120px 160px; align-items: center; column-gap: 14px; padding: 14px 16px; border: 1px solid #dfe6f0; border-radius: 12px; background: #fff; box-sizing: border-box; }
-.appliedDocCellMain { min-width: 0; }
+.appliedDocRow { width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 16px; padding: 14px 16px; border: 1px solid #dfe6f0; border-radius: 12px; background: #fff; box-sizing: border-box; }
+.appliedDocCellMain { flex: 2; min-width: 200px; }
 .appliedDocCellMain strong { display: block; font-weight: 800; color: #0f172a; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.appliedDocCell, .appliedDocCellAmount { min-width: 0; }
+.appliedDocCell { flex: 1; min-width: 100px; }
+.appliedDocCellAmount { flex: 1.5; min-width: 120px; display: flex; flex-direction: column; align-items: flex-end; text-align: right; }
 .appliedDocCell span, .appliedDocCellAmount span { display: block; font-size: 11px; line-height: 1.1; color: #64748b; font-weight: 700; text-transform: uppercase; margin-bottom: 4px; }
 .appliedDocCell strong, .appliedDocCellAmount strong { display: block; font-size: 14px; line-height: 1.2; color: #0f172a; font-weight: 700; white-space: nowrap; }
-.appliedDocCellAmount { text-align: right; }
 .appliedDocCellAmount strong { font-size: 16px; font-weight: 800; }
-@media (max-width: 900px) { .appliedDocRow { grid-template-columns: 1fr; row-gap: 10px; } .appliedDocCellAmount { text-align: left; } }
+@media (max-width: 900px) { .appliedDocRow { flex-direction: column; align-items: flex-start; } .appliedDocCellAmount { align-items: flex-start; text-align: left; } }
 
 .summaryActions { display: flex; flex-direction: column; gap: 10px; margin-top: 18px; width: 100%; }
 .actionRow { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; }

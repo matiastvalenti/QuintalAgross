@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
+import { openInvoiceCollectionFromInvoice } from "../../utils/openStandaloneWindow";
 import Modal from "../../components/ui/Modal";
 import api from '../../services/api';
 function getInvoiceLineName(line) {
@@ -223,11 +224,27 @@ export default function InvoiceForm(props) {
   useEffect(() => {
     const handleDocumentMessage = (e) => {
         const payload = e.data;
-        if (!payload || payload.type !== 'QUINTAL_DOCUMENT_SAVED') return;
+        if (!payload) return;
         
-        // Si hay una actualización de un documento relacionado (ej: remito o la misma factura) y estamos en modo vista
-        if (mode === "edit" && id && (payload.invoiceId === id || payload.salesOrderId === sourceOrderId)) {
-            fetchInvoice();
+        // Legacy document saved logic
+        if (payload.type === 'QUINTAL_DOCUMENT_SAVED') {
+            if (mode === "edit" && id && (payload.invoiceId === id || payload.salesOrderId === sourceOrderId)) {
+                fetchInvoice();
+            }
+            return;
+        }
+
+        // New finance events logic
+        if (payload.type === 'QUINTAL_RECEIPT_CREATED' || 
+            payload.type === 'QUINTAL_ACCOUNT_BALANCE_CHANGED' || 
+            payload.type === 'QUINTAL_DOCUMENT_UPDATED' || 
+            payload.type === 'QUINTAL_APPLICATION_CREATED') {
+            
+            if (payload.documentId === id || (payload.entityId && entity && payload.entityId === entity.id)) {
+                if (mode === "edit" && id) {
+                    fetchInvoice();
+                }
+            }
         }
     };
 
@@ -244,7 +261,7 @@ export default function InvoiceForm(props) {
         window.removeEventListener("message", handleDocumentMessage);
         if (bc) bc.close();
     };
-  }, [mode, id, sourceOrderId]);
+  }, [mode, id, sourceOrderId, entity]);
 
   const fetchProductsCatalog = async () => {
     try {
@@ -1031,9 +1048,24 @@ export default function InvoiceForm(props) {
                 )}
                 <div className={s.actionGroup}>
                     {id && mode !== 'new' && !isCancelledStatus(status) && (
-                        <button className={s.actionBtn} onClick={() => setShowAnnulModal(true)} title="Anular Factura" style={{ color: '#ef4444' }} disabled={saving}>
-                            <Trash2 size={18} />
-                        </button>
+                        <>
+                            {(() => {
+                                const total = Number(totals.total || 0);
+                                const applied = Number(fullInvoiceData?.amount_applied || 0);
+                                const pending = Math.max(0, total - applied);
+                                if (pending > 0 && docType === 'INVOICE') {
+                                    return (
+                                        <button className={s.actionBtn} onClick={() => openInvoiceCollectionFromInvoice(id)} title="Cobrar Factura" style={{ color: '#059669', borderColor: '#10b981', fontWeight: 600, padding: '0 12px' }}>
+                                            Cobrar
+                                        </button>
+                                    );
+                                }
+                                return null;
+                            })()}
+                            <button className={s.actionBtn} onClick={() => setShowAnnulModal(true)} title="Anular Factura" style={{ color: '#ef4444' }} disabled={saving}>
+                                <Trash2 size={18} />
+                            </button>
+                        </>
                     )}
                     <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title="Imprimir Factura">
                         <Printer size={18} />
@@ -1290,11 +1322,22 @@ export default function InvoiceForm(props) {
 
                   <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
-                  <div className={s.relationCard}>
-                      <div className={s.nodeTitle} style={{ color: '#0b132b' }}>COBRO</div>
-                      <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
-                      <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0%</div>
-                  </div>
+                  {(() => {
+                      const applied = Number(fullInvoiceData?.amount_applied || 0);
+                      const isPartial = applied > 0 && applied < totals.total;
+                      const isPaid = applied >= totals.total && totals.total > 0;
+                      const perc = totals.total > 0 ? (applied / totals.total) * 100 : 0;
+                      
+                      return (
+                          <div className={s.relationCard}>
+                              <div className={s.nodeTitle} style={{ color: isPaid ? '#10b981' : (isPartial ? '#f97316' : '#0b132b') }}>COBRO</div>
+                              <div className={s.nodeStatus} style={{ color: isPaid ? '#10b981' : (isPartial ? '#f97316' : '#eab308') }}>
+                                  {isPaid ? 'Pagado' : isPartial ? 'Parcial' : 'Pendiente'}
+                              </div>
+                              <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{perc.toFixed(0)}%</div>
+                          </div>
+                      );
+                  })()}
 
                   {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE') && (
                       <>

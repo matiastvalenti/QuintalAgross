@@ -99,7 +99,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
           operationType: 'APPLIED_COLLECTION',
           entity: { id: entityId, name: entityName },
           date: today,
-          currency: initialInvoice.currency || 'USD',
+          currency: 'ARS',
           exchangeRate: defaultRate,
           number: 'AUTO',
           status: 'Borrador',
@@ -112,7 +112,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
             original_exchange_rate: initialInvoice.exchange_rate || initialInvoice.fx_rate || 1,
             collection_exchange_rate: defaultRate,
             pending_amount: pending,
-            amount_applied: pending
+            amount_applied: (initialInvoice.currency === 'USD') ? pending * defaultRate : pending
           }],
           payments: []
         };
@@ -179,6 +179,10 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         setStatus(norm.status);
         setApplications(norm.applications);
         setPayments(norm.payments);
+        
+        if (source === 'invoice' && mode === 'new') {
+            setShowInvoicesModal(true);
+        }
       } else if (mounted) {
         setExchangeRate(defaultRate);
       }
@@ -326,7 +330,14 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
   const addInlinePayment = (type) => {
     if (isView) return;
     const amt = (!isAdvance && totalApplied > totalCollected) ? (totalApplied - totalCollected).toFixed(2) : '';
-    let base = { id: generateId(), type, amount: amt, description: '' };
+    let base = { 
+      id: generateId(), 
+      type, 
+      amount: amt, 
+      description: '',
+      currency: currency,
+      fx_rate: 1
+    };
     if (type === 'TRANSFER') {
       base = { ...base, bank_name: '', reference_number: '' };
     }
@@ -350,15 +361,16 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
 
   const validateForm = () => {
     if (!entity) return { valid: false, error: "No hay cliente seleccionado." };
+    
+    if (!isAdvance && applications.length === 0) {
+      return { valid: false, error: "Seleccione al menos un comprobante." };
+    }
+
     if (payments.length === 0) return { valid: false, error: "Agregue al menos un medio de pago." };
     if (totalCollected <= 0) return { valid: false, error: "El importe total debe ser mayor a 0." };
 
-    if (!isAdvance && applications.length === 0) {
-      return { valid: false, error: "Debe seleccionar al menos un comprobante aplicado." };
-    }
-
     if (!isAdvance && !isBalanced) {
-      return { valid: false, error: "El total de medios de pago debe coincidir con el total aplicado." };
+      return { valid: false, error: "El total recibido no coincide con el total aplicado." };
     }
 
     for (let p of payments) {
@@ -505,6 +517,61 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         window.location.replace(`/standalone/recibos/${initialData.id}?mode=view`);
       } else {
         const res = await api.post("/accounting/documents/", payload);
+        
+        const eventEntityId = entity?.id;
+        const invoiceId = initialInvoice?.id;
+        
+        const eventData = {
+          type: "QUINTAL_RECEIPT_CREATED",
+          entityId: eventEntityId,
+          documentId: res.id,
+          docType: "RECEIPT",
+          timestamp: Date.now()
+        };
+        
+        if (window.opener) {
+            window.opener.postMessage(eventData, "*");
+        }
+        
+        try {
+            const bc = new BroadcastChannel("quintal-documents");
+            bc.postMessage(eventData);
+            
+            if (eventEntityId) {
+                bc.postMessage({
+                  type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                  entityId: eventEntityId,
+                  documentId: res.id,
+                  docType: "RECEIPT",
+                  timestamp: Date.now()
+                });
+            }
+            
+            if (applications && applications.length > 0) {
+                applications.forEach(app => {
+                    bc.postMessage({
+                        type: "QUINTAL_DOCUMENT_UPDATED",
+                        entityId: eventEntityId,
+                        documentId: app.to_document_id,
+                        docType: app.doc_type || app.document_type || "INVOICE",
+                        timestamp: Date.now()
+                    });
+                });
+            } else if (invoiceId) {
+                bc.postMessage({
+                  type: "QUINTAL_DOCUMENT_UPDATED",
+                  entityId: eventEntityId,
+                  documentId: invoiceId,
+                  docType: "INVOICE",
+                  timestamp: Date.now()
+                });
+            }
+            
+            bc.close();
+        } catch (e) {
+            console.warn("BroadcastChannel error", e);
+        }
+
         showToast("Recibo creado correctamente", "success");
         window.location.replace(`/standalone/recibos/${res.id}?mode=view`);
       }
@@ -660,33 +727,73 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                   ) : (
                     <div className={s.appliedDocsList}>
                       {applications.map(app => {
-                        const appliedInBase = app.currency === 'USD' && currency === 'ARS' ? app.amount_applied * (app.collection_exchange_rate || exchangeRate) : app.amount_applied;
+                        const tcCobro = app.collection_exchange_rate || exchangeRate || 1;
+                        const isCrossCurrency = (app.currency === 'USD' && currency === 'ARS') || (app.currency === 'ARS' && currency === 'USD');
+                        
+                        let appliedInReceiptCurrency = app.amount_applied;
+                        if (app.currency === 'USD' && currency === 'ARS') appliedInReceiptCurrency = app.amount_applied * tcCobro;
+                        if (app.currency === 'ARS' && currency === 'USD') appliedInReceiptCurrency = app.amount_applied / tcCobro;
+                        
+                        let maxAppliedReceiptCurrency = app.pending_amount;
+                        if (app.currency === 'USD' && currency === 'ARS') maxAppliedReceiptCurrency = app.pending_amount * tcCobro;
+                        if (app.currency === 'ARS' && currency === 'USD') maxAppliedReceiptCurrency = app.pending_amount / tcCobro;
+
+                        const symbol = currency === 'ARS' ? '$' : 'u$s';
+                        const origSymbol = app.currency === 'ARS' ? '$' : 'u$s';
+
                         return (
                           <div key={app.to_document_id} className={s.appliedDocRow}>
                             <div className={s.appliedDocCellMain}>
-                              <strong>
-                                {formatDocumentType(app.document_type)} {app.number}
-                              </strong>
+                              <strong>{formatDocumentType(app.document_type)} {app.number}</strong>
+                              <div style={{ fontSize: '12px', color: '#64748b', marginTop: '2px' }}>
+                                {app.date ? new Date(app.date).toLocaleDateString('es-AR') : '-'}
+                              </div>
                             </div>
                             <div className={s.appliedDocCell}>
-                              <span>Moneda</span>
-                              <strong>{app.currency}</strong>
-                            </div>
-                            <div className={s.appliedDocCell}>
-                              <span>Saldo</span>
-                              <strong>{currency} {formatNumberAR(app.pending_amount)}</strong>
+                              <span>Saldo Original</span>
+                              <strong>{origSymbol} {formatNumberAR(app.pending_amount)}</strong>
                             </div>
                             <div className={s.appliedDocCell}>
                               <span>TC Factura</span>
-                              <strong>{formatNumberAR(app.original_exchange_rate)}</strong>
+                              <strong>{app.currency === 'USD' ? formatNumberAR(app.original_exchange_rate) : '-'}</strong>
                             </div>
                             <div className={s.appliedDocCell}>
                               <span>TC Cobro</span>
-                              <strong>{formatNumberAR(app.collection_exchange_rate || exchangeRate)}</strong>
+                              <strong>{isCrossCurrency ? formatNumberAR(tcCobro) : '-'}</strong>
                             </div>
+                            {isCrossCurrency && (
+                              <div className={s.appliedDocCell}>
+                                <span>Equivalente</span>
+                                <strong>{symbol} {formatNumberAR(maxAppliedReceiptCurrency)}</strong>
+                              </div>
+                            )}
                             <div className={s.appliedDocCellAmount}>
-                              <span>Aplicado</span>
-                              <strong>{currency} {formatNumberAR(appliedInBase)}</strong>
+                              <span>Aplicado ({symbol})</span>
+                              {isView ? (
+                                <strong>{symbol} {formatNumberAR(appliedInReceiptCurrency)}</strong>
+                              ) : (
+                                <input 
+                                  type="number" 
+                                  className={s.cellInput}
+                                  value={appliedInReceiptCurrency}
+                                  max={maxAppliedReceiptCurrency}
+                                  min={0}
+                                  style={{ width: '120px', fontWeight: '700', textAlign: 'right' }}
+                                  onChange={(e) => {
+                                    let valInReceipt = Number(e.target.value);
+                                    if (valInReceipt < 0) valInReceipt = 0;
+                                    if (valInReceipt > maxAppliedReceiptCurrency) valInReceipt = maxAppliedReceiptCurrency;
+                                    
+                                    let valInInv = valInReceipt;
+                                    if (app.currency === 'USD' && currency === 'ARS') valInInv = valInReceipt / tcCobro;
+                                    if (app.currency === 'ARS' && currency === 'USD') valInInv = valInReceipt * tcCobro;
+                                    
+                                    setApplications(prev => prev.map(a => 
+                                      a.to_document_id === app.to_document_id ? { ...a, amount_applied: valInInv } : a
+                                    ));
+                                  }}
+                                />
+                              )}
                             </div>
                           </div>
                         );
@@ -805,20 +912,34 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                   <span>{currency} {formatNumberAR(totalCollected)}</span>
                 </div>
 
-                {!isView && (
-                  Math.abs(diff) < 0.01 && !isAdvance ? (
-                    <div className={s.summaryRow}>
-                      <span style={{ fontWeight: 500, color: '#334155' }}>Diferencia:</span>
-                      <span style={{ fontWeight: 500, color: '#334155' }}>{currency} {formatNumberAR(0)}</span>
-                    </div>
-                  ) : (
-                    <div className={`${s.summaryRow} ${s.saldo} ${isAdvance ? s.success : s.warning}`}>
-                      <span style={{ fontSize: 13, textTransform: 'uppercase' }}>
-                        {isAdvance ? 'Saldo a favor del cliente:' : 'Diferencia:'}
+                {isAdvance ? (
+                  <div className={`${s.summaryRow} ${s.saldo} ${s.success}`}>
+                    <span style={{ fontSize: 13, textTransform: 'uppercase' }}>Saldo a favor del cliente:</span>
+                    <span>{currency} {formatNumberAR(totalCollected)}</span>
+                  </div>
+                ) : (
+                  <>
+                    <div className={`${s.summaryRow} ${s.total}`}>
+                      <span>Diferencia:</span>
+                      <span>
+                        {totalCollected - totalApplied < -0.01 ? '-' : ''}
+                        {currency} {formatNumberAR(Math.abs(totalCollected - totalApplied) < 0.01 ? 0 : Math.abs(totalCollected - totalApplied))}
                       </span>
-                      <span>{currency} {formatNumberAR(isAdvance ? totalCollected : diff)}</span>
                     </div>
-                  )
+                    {!isView && (
+                      <div className={`${s.summaryRow} ${s.saldo} ${
+                        Math.abs(diff) < 0.01 ? s.success : 
+                        totalCollected < totalApplied ? s.danger : 
+                        s.warning
+                      }`}>
+                        <span style={{ fontSize: 13, textTransform: 'uppercase', flex: 1, textAlign: 'center', fontWeight: 'bold' }}>
+                          {Math.abs(diff) < 0.01 ? 'Listo para confirmar' : 
+                           totalCollected < totalApplied ? 'Falta dinero' : 
+                           'Hay excedente'}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
@@ -1044,16 +1165,37 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
 
       {showInvoicesModal && (
         <div className={s.modalOverlay}>
-          <div className={s.modalCard}>
+          <div className={s.modalCardLarge}>
             <ReceiptPendingInvoicesSelector 
               entityId={entity.id}
               entityName={entity.name}
               globalCurrency={currency}
               globalFxRate={exchangeRate}
+              initialSelected={applications}
               onClose={() => setShowInvoicesModal(false)}
-              onProceed={(selectedEntity, apps) => {
+              onProceed={(selectedEntity, apps, newCurrency, newFxRate) => {
+                setCurrency(newCurrency);
+                setExchangeRate(newFxRate);
                 setApplications(apps);
                 setShowInvoicesModal(false);
+                if (payments.length === 0) {
+                    const tApplied = apps.reduce((acc, app) => {
+                      let rate = 1;
+                      if (app.currency === 'USD' && newCurrency === 'ARS') rate = app.collection_exchange_rate || newFxRate || 1;
+                      if (app.currency === 'ARS' && newCurrency === 'USD') rate = 1 / (app.collection_exchange_rate || newFxRate || 1);
+                      return acc + (Number(app.amount_applied || 0) * rate);
+                    }, 0);
+                    
+                    if (tApplied > 0) {
+                        setPayments([{
+                            id: generateId(),
+                            type: 'TRANSFER',
+                            amount: Number(tApplied).toFixed(2),
+                            currency: newCurrency,
+                            fx_rate: 1
+                        }]);
+                    }
+                }
               }}
             />
           </div>
@@ -1163,6 +1305,9 @@ function PaymentRow({ p, isSubmitting, isView, currency, banks, updatePayment, r
           <div className={s.paymentLineMain}>{tipoLabel}</div>
           <div className={s.paymentLineSub} title={detalleLabel}>{detalleLabel}</div>
           <div className={s.paymentLineSub}>{fechaLabel}</div>
+        </div>
+        <div style={{ fontSize: 16, fontWeight: 700, minWidth: 120, textAlign: 'right', paddingRight: 12 }}>
+          {p.currency} {formatNumberAR(p.amount)}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
            {!isView && (
