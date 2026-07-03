@@ -36,10 +36,14 @@ export default function ReceiptPendingInvoicesSelector({
             initialSelected.forEach(sel => {
               const matchedDoc = validDocs.find(d => d.id === sel.to_document_id);
               if (matchedDoc) {
+                const fxRate = sel.collection_exchange_rate || globalFxRate;
+                const amount = (sel.amount_applied !== undefined && sel.amount_applied !== null)
+                  ? sel.amount_applied
+                  : getInitialAmountToPay(matchedDoc, fxRate);
                 newSelected[matchedDoc.id] = {
                   ...matchedDoc,
-                  collection_fx_rate: sel.collection_exchange_rate || globalFxRate,
-                  amount_to_pay: sel.amount_applied || matchedDoc.remaining
+                  collection_fx_rate: fxRate,
+                  amount_to_pay: amount
                 };
               }
             });

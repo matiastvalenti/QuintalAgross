@@ -14,7 +14,7 @@ import {
   Building, User, Link2, Plus, Pencil, CheckCircle, Clock, Activity, FileText, ArrowRight, Search
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
-import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
+import { padPV, padNumber, joinFullNumber, splitFullNumber, formatNumberAR } from "../../utils/formatters";
 import { openInvoiceCollectionFromInvoice } from "../../utils/openStandaloneWindow";
 import Modal from "../../components/ui/Modal";
 import api from '../../services/api';
@@ -1323,18 +1323,39 @@ export default function InvoiceForm(props) {
                   <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
                   {(() => {
+                      if (isCancelledStatus(status)) {
+                          return (
+                              <div className={s.relationCard} style={{ background: '#f8fafc', border: '1px solid #e2e8f0' }}>
+                                  <div className={s.nodeTitle} style={{ color: '#94a3b8' }}>COBRO</div>
+                                  <div className={s.nodeStatus} style={{ color: '#94a3b8' }}>Anulado</div>
+                                  <div className={s.nodeMetric} style={{ color: '#94a3b8' }}>-</div>
+                              </div>
+                          );
+                      }
+                      
                       const applied = Number(fullInvoiceData?.amount_applied || 0);
+                      const pending = Math.max(0, totals.total - applied);
                       const isPartial = applied > 0 && applied < totals.total;
                       const isPaid = applied >= totals.total && totals.total > 0;
                       const perc = totals.total > 0 ? (applied / totals.total) * 100 : 0;
                       
+                      const currStr = currency === 'USD' ? 'u$s' : '$';
+                      
+                      const statusColor = isPaid ? '#10b981' : (isPartial ? '#f97316' : '#ef4444');
+                      const bgStatus = isPaid ? '#ecfdf5' : (isPartial ? '#fff7ed' : '#fef2f2');
+                      const borderStatus = isPaid ? '1.5px solid #a7f3d0' : (isPartial ? '1.5px solid #fed7aa' : '1.5px solid #fecaca');
+                      
                       return (
-                          <div className={s.relationCard}>
-                              <div className={s.nodeTitle} style={{ color: isPaid ? '#10b981' : (isPartial ? '#f97316' : '#0b132b') }}>COBRO</div>
-                              <div className={s.nodeStatus} style={{ color: isPaid ? '#10b981' : (isPartial ? '#f97316' : '#eab308') }}>
+                          <div className={s.relationCard} style={{ background: bgStatus, border: borderStatus }}>
+                              <div className={s.nodeTitle} style={{ color: statusColor }}>COBRO</div>
+                              <div className={s.nodeStatus} style={{ color: statusColor }}>
                                   {isPaid ? 'Pagado' : isPartial ? 'Parcial' : 'Pendiente'}
                               </div>
-                              <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{perc.toFixed(0)}%</div>
+                              <div className={s.nodeMetric} style={{ color: '#0f172a', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px', marginTop: '4px' }}>
+                                  <span>Cobrado: {currStr} {formatNumberAR(applied)}</span>
+                                  <span>Saldo: {currStr} {formatNumberAR(pending)}</span>
+                                  <span style={{ fontWeight: 700, marginTop: '2px', color: statusColor }}>{perc.toFixed(0)}%</span>
+                              </div>
                           </div>
                       );
                   })()}
