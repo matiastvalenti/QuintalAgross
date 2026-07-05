@@ -748,29 +748,57 @@ export default function PurchaseOrderForm(props) {
         const qty = parseFloat(remitoQtys[item.id] || 0);
         return qty > 0;
       })
-      .map((item) => {
-        const qtyPackages = parseFloat(remitoQtys[item.id] || 0);
+      .map((line) => {
+        const qtyPackages = parseFloat(remitoQtys[line.id] || 0);
         const factor = parseFloat(
-          item.product?.quantity_per_container ||
-            item.quantity_per_container ||
-            item._unit_content ||
+          line.product?.quantity_per_container ||
+            line.quantity_per_container ||
+            line._unit_content ||
             1,
         );
         const qtyUnits = Number((qtyPackages * factor).toFixed(2));
+        const orderedBaseQty = parseFloat(line.qty || 0);
+        const deliveredBaseQty = parseFloat(line.qty_delivered || 0);
+        const pendingBaseQty = Math.max(0, orderedBaseQty - deliveredBaseQty);
+
+        const qtyToReceive = qtyUnits;
+        const qtyPending = pendingBaseQty;
+
         return {
-          ...item,
-          qty_packages: qtyPackages, // envases seleccionados
-          qty_to_remit: qtyUnits, // unidades totales (lo que espera DeliveryNoteForm como qty)
+          ...line,
+          purchase_order_id: id,
+          source_purchase_line_id: line.id,
+          qty: qtyToReceive,
+          qty_packages: qtyPackages,
+          qty_to_receive: qtyToReceive,
+          qty_to_remit: qtyToReceive,
+          qty_pending: qtyPending,
+          qty_received: Number(line.qty_received ?? line.qty_delivered ?? 0),
+          product_id: line.product_id,
+          product_name: line.product_name || line.product?.name || line.description,
+          description: line.description || line.product_name || line.product?.name,
+          unit_price: Number(line.unit_price ?? 0),
+          discount_pct: Number(line.discount_pct ?? 0),
+          vat_rate: Number(line.vat_rate ?? 21),
         };
       });
 
-    if (selectedLines.length === 0) {
+    const draftLines = selectedLines;
+    console.log("[OC MODAL] remitoQtys:", remitoQtys);
+    console.log("[OC MODAL] selectedLines raw:", selectedLines);
+    console.log("[OC MODAL] draft final a localStorage:", draftLines);
+
+    if (draftLines.length === 0) {
       return showToast("Seleccioná al menos un ítem para remitir", "warning");
     }
 
     // Guardar líneas en localStorage para que la ventana standalone las lea
-    const draftKey = `remito_draft_ov_${id}`;
-    localStorage.setItem(draftKey, JSON.stringify(selectedLines));
+    const draftKey = `remito_draft_oc_${id}`;
+    console.log("[OC -> Remito Compra] draftKey:", draftKey);
+    console.log("[OC -> Remito Compra] draft completo:", draftLines);
+    console.log("[OC -> Remito Compra] draft.items:", draftLines.map(l=>l.items));
+    console.log("[OC -> Remito Compra] draft.lines:", draftLines);
+    localStorage.setItem(draftKey, JSON.stringify(draftLines));
 
     setShowRemitoModal(false);
 

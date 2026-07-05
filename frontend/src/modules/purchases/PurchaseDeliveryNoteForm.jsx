@@ -12,6 +12,7 @@ import { openEditPurchaseOrder } from '../../utils/openStandaloneWindow';
 import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
+import { TraceabilityStatusBadge } from "../../components/ui/TraceabilityStatusBadge";
 import {
   padPV,
   padNumber,
@@ -79,8 +80,7 @@ export default function PurchaseDeliveryNoteForm(props) {
   const [sourceId, setSourceId] = useState(props.initialSourceId || oc_id || ''); // Changed from ov_id
   const [sourceType, setSourceType] = useState(props.initialSourceType || (oc_id ? 'purchase-order' : '')); // Changed from sales-order
   const [sourceOrderId, setSourceOrderId] = useState(oc_id || ''); // Changed from ov_id
-  const [traceability, setTraceability] = useState(null);
-  const [invoices, setInvoices] = useState([]);
+    const [invoices, setInvoices] = useState([]);
   const [relatedDeliveryNotes, setRelatedDeliveryNotes] = useState([]);
   const [isReadOnly, setIsReadOnly] = useState(false);
   const [showItemSelector, setShowItemSelector] = useState(false);
@@ -91,8 +91,7 @@ export default function PurchaseDeliveryNoteForm(props) {
   const [linkingItemId, setLinkingItemId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [showManualLinkModal, setShowManualLinkModal] = useState(false);
-  const [dnTraceability, setDnTraceability] = useState(null);
-
+  
   // --- Header Data ---
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [ctroCosto, setCtroCosto] = useState(String(costCenter || 1));
@@ -143,7 +142,7 @@ export default function PurchaseDeliveryNoteForm(props) {
 
   const orderedLts = useMemo(() => items.reduce((acc, item) => acc + ((parseFloat(item.qty) || 0) * (parseFloat(item._unit_content) || 1)), 0), [items]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (oc_id) {
       console.log("oc_id recibido en form:", oc_id);
     }
@@ -186,37 +185,59 @@ export default function PurchaseDeliveryNoteForm(props) {
 
   useEffect(() => {
     if (id) {
-       fetchDeliveryNoteTraceability();
-    }
+           }
   }, [id]);
 
   useEffect(() => {
     if (mode === "edit" && id) {
         fetchDeliveryNote();
-        fetchDeliveryNoteTraceability();
-    }
+            }
     else if (mode === "new" && oc_id) { // Changed from ov_id
-        console.log("Cargando OC por ID:", oc_id); // Changed from OV
+        console.log("[Remito Compra] oc_id:", oc_id, "preselectedLines:", preselectedLines?.length ?? 'null');
         if (preselectedLines && preselectedLines.length > 0) {
-            fetchHeaderFromPurchaseOrder(); // Changed from SalesOrder
-            setItems(preselectedLines.map(l => ({
-                id: Math.random(),
-                product_id: l.product_id,
-                description: l.product?.name || l.name || l.description || '',
-                qty: parseFloat(l.qty_to_receive || l.qty || 1), // Changed from remit
-                qty_packages: parseFloat(l.qty_packages || 0) || undefined,
-                unit_price: parseFloat(l.unit_price || 0),
-                discount_pct: parseFloat(l.discount_pct || 0),
-                vat_rate: parseFloat(l.vat_rate || 0.21),
-                _account_code: l.purchase_account_code || l._account_code || 'S/C', // Changed from sales_account_code
-                _unit_content: parseFloat(l._unit_content || 1),
-                _container_name: l._container_name || 'Unidad',
-                _unit_label: l._unit_label || 'u',
-                source_purchase_line_id: l.id, // Changed from source_sales_line_id
-                _parent_number: l.parent_number || '',
-            })));
+            fetchHeaderFromPurchaseOrder(true); // Changed from SalesOrder
+            const normalizedItems = preselectedLines.map((line) => {
+                const qtyToReceive = Number(
+                  line.qty_to_receive ??
+                  line.qty_to_remit ??
+                  line.qty_packages ??
+                  line.qty ??
+                  0
+                );
+                const qtyPending = Number(
+                  line.qty_pending ??
+                  line.pending_qty ??
+                  line.qty_ordered ??
+                  line.qty ??
+                  0
+                );
+                return {
+                    id: crypto.randomUUID?.() || `${line.id}-${Date.now()}`,
+                    purchase_order_id: line.purchase_order_id || sourceId,
+                    source_purchase_line_id: line.source_purchase_line_id || line.id,
+                    product_id: line.product_id,
+                    product_name: line.product_name || line.description,
+                    description: line.description || line.product_name,
+                    qty: qtyToReceive,
+                    qty_packages: qtyToReceive,
+                    qty_to_receive: qtyToReceive,
+                    qty_pending: qtyPending,
+                    qty_received: Number(line.qty_received ?? 0),
+                    unit_price: Number(line.unit_price ?? 0),
+                    discount_pct: Number(line.discount_pct ?? 0),
+                    vat_rate: Number(line.vat_rate ?? 21),
+                    warehouse_id: line.warehouse_id || warehouseId,
+                    _account_code: line.purchase_account_code || line._account_code || 'S/C',
+                    _unit_content: parseFloat(line._unit_content || 1),
+                    _container_name: line._container_name || 'Unidad',
+                    _unit_label: line._unit_label || 'u',
+                    _parent_number: line.parent_number || '',
+                };
+            });
+            console.log("[Modal Remito Compra] normalized items to form:", normalizedItems);
+            setItems(normalizedItems);
         } else if (autoOpenSelector) {
-            fetchHeaderFromPurchaseOrder(); // Changed from SalesOrder
+            fetchHeaderFromPurchaseOrder(false); // Changed from SalesOrder
         } else {
             fetchFromPurchaseOrder(); // Changed from SalesOrder
         }
@@ -226,8 +247,7 @@ export default function PurchaseDeliveryNoteForm(props) {
   useEffect(() => {
     if (sourceId && sourceType === 'purchase-order') { // Changed from sales-order
         const orderIdToTrace = sourceOrderId || sourceId;
-        fetchTraceability(orderIdToTrace);
-    }
+            }
   }, [sourceId, sourceType, sourceOrderId]);
 
   useEffect(() => {
@@ -280,7 +300,7 @@ export default function PurchaseDeliveryNoteForm(props) {
     }
 
     if (isStandalone && mode === 'new') {
-        console.timeEnd("load-remito-data");
+        
     }
   };
 
@@ -314,7 +334,7 @@ export default function PurchaseDeliveryNoteForm(props) {
         setSourceType(data.purchase_order_id ? 'purchase-order' : ''); // Changed from sales-order_id
         if (data.purchase_order_id) { // Changed from sales_order_id
             setSourceOrderId(data.purchase_order_id); // Changed from sales_order_id
-            fetchTraceability(data.purchase_order_id); // Changed from sales_order_id
+             // Changed from sales_order_id
         }
         setBuyer(data.buyer || ''); // Changed from vendedor
         setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
@@ -342,7 +362,7 @@ export default function PurchaseDeliveryNoteForm(props) {
         }
 
         setItems(data.lines.map(l => {
-            const ocL = ocLinesMap[l.source_purchase_line_id] || {}; // Changed from ovL and source_sales_line_id
+            const ocL = ocLinesMap[l.source_purchase_line_id] || {}; // Changed from ovL and source_purchase_line_id
             return {
                 ...l,
                 id: l.id,
@@ -367,7 +387,7 @@ export default function PurchaseDeliveryNoteForm(props) {
     setLoading(false);
   };
 
-  const fetchHeaderFromPurchaseOrder = async () => { // Changed from SalesOrder
+  const fetchHeaderFromPurchaseOrder = async (skipSelector = false) => { // Changed from SalesOrder
     setLoading(true);
     const token = localStorage.getItem("token");
     const res = await fetch(`${API_URL}/purchases/purchase-orders/${oc_id}`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
@@ -379,7 +399,9 @@ export default function PurchaseDeliveryNoteForm(props) {
           if (entityRes.ok) {
             const entData = await entityRes.json();
             setEntity(entData); // This is supplier
-            handleOpenItemSelector(null, data.id, entData.id);
+            if (!skipSelector) {
+              handleOpenItemSelector(null, data.id, entData.id);
+            }
           }
         }
         const costCenterStr = String(data.cost_center || 1);
@@ -387,8 +409,7 @@ export default function PurchaseDeliveryNoteForm(props) {
         setSourceId(data.number);
         setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
-        fetchTraceability(data.id);
-        setBuyer(data.buyer || ''); // Changed from vendedor
+                setBuyer(data.buyer || ''); // Changed from vendedor
         setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
         setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
@@ -419,8 +440,7 @@ export default function PurchaseDeliveryNoteForm(props) {
         setSourceId(data.number);
         setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
-        fetchTraceability(data.id);
-        setBuyer(data.buyer || ''); // Changed from vendedor
+                setBuyer(data.buyer || ''); // Changed from vendedor
         setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
         setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
@@ -433,57 +453,44 @@ export default function PurchaseDeliveryNoteForm(props) {
         setPv(pvCode);
         fetchNextNumber(pvCode);
 
-        const linesRes = await fetch(`${API_URL}/purchases/pending-items/purchase-orders?entity_id=${data.entity_id}`, { // Changed sales to purchases
+        const pendingUrl = `${API_URL}/purchases/pending-items/purchase-orders?purchase_order_id=${oc_id}`;
+        console.log("[Remito Compra] pending URL:", pendingUrl);
+        const linesRes = await fetch(pendingUrl, {
            headers: { Authorization: `Bearer ${token}` }
         });
         if (linesRes.ok) {
            const pendingLines = await linesRes.json();
-           const filteredLines = pendingLines.filter(l => String(l.parent_id) === String(oc_id)); // Changed ov_id
-           setItems(filteredLines.map(l => ({
-              id: Math.random(),
-              product_id: l.product_id,
-              description: l.product_name,
-              qty_ordered: l.qty,
-              qty_received: l.qty_fulfilled, // Changed from qty_fulfilled
-              qty_pending: l.qty_pending,
-              qty: l.qty_pending, // User requested total pendiente by default
-              unit_price: l.unit_price, // This is COST
-              discount_pct: l.discount_pct,
-              vat_rate: l.vat_rate,
-              _account_code: l.purchase_account_code || 'S/C', // Changed from sales_account_code
-              _unit_content: l.quantity_per_container || 1,
-              _container_name: l.container_name || 'Unidad',
-              _unit_label: l.unit_short_name || 'u',
-              source_purchase_line_id: l.id, // Changed from source_sales_line_id
-              _parent_number: l.parent_number
-           })));
+           console.log("[Remito Compra] pending response:", pendingLines);
+           const filteredLines = pendingLines; // Already filtered by purchase_order_id in backend
+           setItems(filteredLines.map(l => {
+              const uc = l.quantity_per_container || 1;
+              return {
+                 id: Math.random(),
+                 product_id: l.product_id,
+                 description: l.product_name,
+                 qty_ordered: l.qty,
+                 qty_received: l.qty_fulfilled, // Changed from qty_fulfilled
+                 qty_pending: l.qty_pending,
+                 qty: l.qty_pending, // User requested total pendiente by default
+                 qty_packages: uc > 1 ? l.qty_pending / uc : l.qty_pending,
+                 unit_price: l.unit_price, // This is COST
+                 discount_pct: l.discount_pct,
+                 vat_rate: l.vat_rate,
+                 _account_code: l.purchase_account_code || 'S/C', // Changed from sales_account_code
+                 _unit_content: uc,
+                 _container_name: l.container_name || 'Unidad',
+                 _unit_label: l.unit_short_name || 'u',
+                 source_purchase_line_id: l.id, // Changed from source_purchase_line_id
+                 _parent_number: l.parent_number
+              };
+           }));
         }
     }
     setLoading(false);
   };
 
-  const fetchTraceability = async (orderId) => {
-    if (!orderId) return;
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/purchases/purchase-orders/${orderId}/traceability`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
-    if (res.ok) {
-        setTraceability(await res.json());
-    }
-  };
-
-  const fetchDeliveryNoteTraceability = async () => {
-    if (!id) return;
-    try {
-        const token = localStorage.getItem("token");
-        const res = await fetch(`${API_URL}/purchases/delivery-notes/${id}/traceability`, { headers: { Authorization: `Bearer ${token}` } }); // Changed sales to purchases
-        if (res.ok) {
-            setDnTraceability(await res.json());
-        }
-    } catch (error) {
-        console.error("Error fetching DN traceability:", error);
-    }
-  };
-
+  
+  
   const searchEntities = async (q) => {
     const token = localStorage.getItem("token");
     const res = await fetch(`${API_URL}/entities/?q=${q}&type=supplier`, { headers: { Authorization: `Bearer ${token}` } }); // Changed type to supplier
@@ -557,8 +564,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           setSourceOrderId(item.parent_id);
           setSourceId(item.parent_number);
           setSourceType('purchase-order'); // Changed from sales-order
-          fetchTraceability(item.parent_id);
-      }
+                }
       if (item.currency === 'USD' && currency === 'ARS') {
         finalUnitPrice = item.unit_price * exchangeRate;
       } else if (item.currency === 'ARS' && currency === 'USD') {
@@ -576,7 +582,7 @@ export default function PurchaseDeliveryNoteForm(props) {
         _unit_content: item.quantity_per_container || 1,
         _container_name: item.container_name || 'Unidad',
         _unit_label: item.unit_short_name || item.unit_label || 'u',
-        source_purchase_line_id: item.id, // Changed from source_sales_line_id
+        source_purchase_line_id: item.id, // Changed from source_purchase_line_id
         _parent_number: item.parent_number,
         currency: item.currency
       };
@@ -604,23 +610,19 @@ export default function PurchaseDeliveryNoteForm(props) {
   };
 
   const updateItem = (itemId, field, value) => {
-    setItems(items.map((i) => {
+    setItems(prev => prev.map((i) => {
         if (i.id !== itemId) return i;
-        const newItem = { ...i, [field]: value };
-        if (field === 'qty_packages') {
-            newItem.qty_packages = Number(value);
-            newItem.qty = Number(value) * (i._unit_content || 1);
-        }
+        const newItem = { ...i, [field]: value === "" ? "" : Number(value) };
         if (field === 'qty') {
-            newItem.qty = Number(value);
-            const factor = i._unit_content || 1;
-            if (factor > 1) {
-                newItem.qty_packages = Number(value) / factor;
-            }
+            newItem.qty = value === "" ? "" : Number(value);
         }
-        if (field === 'equiv') { // Check if this is needed
+        if (field === 'qty_packages') {
+            newItem.qty_packages = value === "" ? "" : Number(value);
+            newItem.qty = (value === "" ? 0 : Number(value)) * (i._unit_content || 1);
+        }
+        if (field === 'equiv') {
             const factor = i._unit_content || 1;
-            newItem.qty = Number(value) / factor;
+            newItem.qty = (value === "" ? 0 : Number(value)) / factor;
         }
         return newItem;
     }));
@@ -678,9 +680,9 @@ export default function PurchaseDeliveryNoteForm(props) {
         due_date: dueDate,
         currency: currency,
         exchange_rate: exchangeRate,
-        buyer: buyer, // Changed from vendedor
-        buyer_id: buyerId, // Changed from salesperson_id
-        purchase_condition_id: selectedConditionId, // Changed from sale_condition_id
+        buyer: buyer,
+        buyer_id: buyerId,
+        purchase_condition_id: selectedConditionId,
         cost_center: parseInt(ctroCosto),
         notes: observations,
         vehicle_driver: vehicleDriver,
@@ -690,19 +692,20 @@ export default function PurchaseDeliveryNoteForm(props) {
             product_id: l.product_id,
             description: l.description,
             qty: Number(l.qty),
-            qty_packages: l.qty_packages,
+            qty_packages: l.qty_packages !== undefined ? l.qty_packages : Number(l.qty) / (l._unit_content || 1),
             package_size: l._unit_content,
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
             vat_rate: l.vat_rate,
-            source_purchase_line_id: l.source_purchase_line_id // Changed from source_sales_line_id
+            source_purchase_line_id: l.source_purchase_line_id || l.id,
+            purchase_order_id: l.purchase_order_id
         }))
     };
 
     try {
         const isEdit = mode === 'edit' && id;
         const method = isEdit ? "PUT" : "POST";
-        let url = `${API_URL}/purchases/delivery-notes/`; // Changed sales to purchases
+        let url = `${API_URL}/purchases/delivery-notes/`;
         if (isEdit) {
             url = `${API_URL}/purchases/delivery-notes/${id}`; // Changed sales to purchases
         } else if (sourceId) {
@@ -890,10 +893,10 @@ export default function PurchaseDeliveryNoteForm(props) {
                                             <div style={{ color: (item.qty_pending || 0) > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {(item.qty_pending || 0).toFixed(2)}</div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                                            <input type="number" step="0.01" min="0" max={item.qty_pending || 0} className={s.tableInput} value={item.qty_packages !== undefined ? item.qty_packages : (item.qty || 0)} onChange={(e) => updateItem(item.id, 'qty_packages', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
+                                            <input type="number" step="0.01" min="0" max={item.qty_pending ?? undefined} className={s.tableInput} value={item.qty ?? ""} onChange={(e) => updateItem(item.id, 'qty', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
                                             {item._unit_content > 1 && (
                                                 <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>
-                                                    = {(item.qty || 0).toFixed(2)} {item._unit_label || 'u'}
+                                                    = {(Number(item.qty || 0) / (item._unit_content || 1)).toFixed(2)} {item._container_name || 'Envases'}
                                                 </div>
                                             )}
                                         </div>

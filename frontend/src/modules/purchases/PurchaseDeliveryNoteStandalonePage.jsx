@@ -33,9 +33,13 @@ export default function PurchaseDeliveryNoteStandalonePage() {
     if (!draftKey) return null;
     try {
       const raw = localStorage.getItem(draftKey);
+      console.log("[REMITO STANDALONE] draftKey:", draftKey);
+      console.log("[REMITO STANDALONE] raw localStorage:", raw);
       if (raw) {
+        const draft = JSON.parse(raw);
+        console.log("[REMITO STANDALONE] parsed draft:", draft);
         localStorage.removeItem(draftKey); // limpiar después de leer
-        return JSON.parse(raw);
+        return draft;
       }
     } catch (e) { /* ignorar */ }
     return null;
@@ -47,7 +51,8 @@ export default function PurchaseDeliveryNoteStandalonePage() {
     console.log("URL actual:", window.location.href);
     console.log("oc_id leído:", ocId); // Changed from ovId
     console.log("draft_key:", draftKey, "| líneas pre-seleccionadas:", preselectedLines?.length ?? 0);
-    console.time("load-remito-data");
+    console.log("[REMITO STANDALONE] preselectedLines final:", preselectedLines);
+    
     requestAnimationFrame(() => {
       setTimeout(() => setIsReady(true), 50);
     });
