@@ -134,6 +134,13 @@ body {
   font-family: var(--font-sans);
 }
 
+body.standalone-document-body {
+  background: #fff;
+}
+body.standalone-document-body #root {
+  background: transparent;
+}
+
 #root {
   height: 100%;
   width: 100%;

@@ -1,0 +1,14 @@
+[1mdiff --git a/backend/dashboard_debug.txt b/backend/dashboard_debug.txt[m
+[1mindex 26cbe7bc..a3ddd92c 100644[m
+[1m--- a/backend/dashboard_debug.txt[m
+[1m+++ b/backend/dashboard_debug.txt[m
+[36m@@ -575,3 +575,9 @@[m [mAttributeError: type object 'CashPosition' has no attribute 'cost_center'[m
+ [2026-07-01 23:20:31.639012] Starting dashboard summary (Refreshed) - CostCenter: 1[m
+ [2026-07-01 23:20:31.996414] Error in critical stock: type object 'Product' has no attribute 'track_stock'[m
+ [2026-07-01 23:20:34.698254] Error in funnel: type object 'Application' has no attribute 'date'[m
+[32m+[m[32m[2026-07-02 00:02:12.257301] Starting dashboard summary (Refreshed) - CostCenter: 1[m
+[32m+[m[32m[2026-07-02 00:02:12.262521] Error in critical stock: type object 'Product' has no attribute 'track_stock'[m
+[32m+[m[32m[2026-07-02 00:02:15.794132] Error in funnel: type object 'Application' has no attribute 'date'[m
+[32m+[m[32m[2026-07-02 00:02:49.884336] Starting dashboard summary (Refreshed) - CostCenter: 1[m
+[32m+[m[32m[2026-07-02 00:02:49.887930] Error in critical stock: type object 'Product' has no attribute 'track_stock'[m
+[32m+[m[32m[2026-07-02 00:02:52.025268] Error in funnel: type object 'Application' has no attribute 'date'[m

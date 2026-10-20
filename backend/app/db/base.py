@@ -21,3 +21,9 @@ from app.db.models.grain_models import (
 from app.db.models.task_models import Task, Notification
 from app.db.models.field_models import Farm, Lot, FieldActivity, FieldInputUsage, Machinery
 from app.db.models.geo_models import Country, Province, Locality, PostalCode
+
+from app.db.models.service_models import ServiceWork, ServiceWorkCost, ServiceWorkBilling, ServiceInvoiceRequest
+from app.db.models.employee_fund_models import EmployeeAccess, ClaimFunding, EmployeeFundOperation
+from app.db.models.employee_fund_models import EmployeeReceiptUpload
+from app.db.models.employee_fund_models import EmployeeFundCut
+from app.db.models.employee_fund_models import ExpenseReceiptAuthorization

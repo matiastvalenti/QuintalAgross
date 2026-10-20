@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import os
+from pathlib import Path
 from app.db.session import engine, Base, run_migrations, SessionLocal
 from sqlalchemy import text
 
@@ -36,14 +37,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Quintal Agross API v2", lifespan=lifespan)
 
-# Ensure uploads directory exists
-if not os.path.exists("uploads"):
-    os.makedirs("uploads")
+# Resolve resources from this file, independently of the launch directory.
+BACKEND_ROOT = Path(__file__).resolve().parent.parent
+UPLOADS_DIR = BACKEND_ROOT / "uploads"
+UPLOADS_DIR.mkdir(exist_ok=True)
 
-# Mount static files
-app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
-# Note: excel directory was moved to app/api/excel in my refactor logic
-app.mount("/templates", StaticFiles(directory="app/api/excel"), name="templates")
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+app.mount("/templates", StaticFiles(directory=str(BACKEND_ROOT / "app/api/excel")), name="templates")
 
 app.add_middleware(
     CORSMiddleware,

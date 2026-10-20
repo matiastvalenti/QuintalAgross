@@ -8,6 +8,7 @@
  * Incluye todos los providers necesarios para que los formularios funcionen
  * de forma completamente autónoma (auth, toast, cost-center, window-context).
  */
+import { useEffect } from "react";
 import { Outlet } from "react-router-dom";
 import { AuthProvider } from "../../context/AuthContext";
 import { WindowProvider } from "../../context/WindowContext";
@@ -15,6 +16,10 @@ import { CostCenterProvider } from "../../context/CostCenterContext";
 import { ToastProvider } from "../../context/ToastContext";
 
 export default function StandaloneLayout() {
+  useEffect(() => {
+    document.body.classList.add("standalone-document-body");
+    return () => document.body.classList.remove("standalone-document-body");
+  }, []);
   return (
     <CostCenterProvider>
       <AuthProvider>
@@ -23,12 +28,13 @@ export default function StandaloneLayout() {
             <div
               style={{
                 width: "100vw",
-                height: "100vh",
-                overflow: "auto",
+                height: "fit-content",
+                maxHeight: "100vh",
+                overflowY: "auto",
+                overflowX: "hidden",
                 background: "#fff",
                 boxSizing: "border-box",
-                display: "flex",
-                flexDirection: "column",
+                display: "block",
               }}
             >
               <Outlet />

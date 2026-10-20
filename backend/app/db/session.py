@@ -25,13 +25,20 @@ def run_migrations(engine):
         # Parche manual de columnas para Purchase Orders (Fix 500 error)
         with engine.connect() as conn:
             # Patch for purchase_order_lines
-            for col in ['unit_cost', 'total_cost', 'qty_received', 'qty_invoiced']:
+            for col in ['unit_cost', 'total_cost', 'qty_received', 'qty_invoiced', 'qty_packages', 'package_size']:
                 try:
                     conn.execute(text(f"ALTER TABLE purchase_order_lines ADD COLUMN {col} REAL DEFAULT 0.0"))
                     conn.commit()
                     print(f"Patched: Added {col} to purchase_order_lines")
                 except Exception:
                     pass # Column already exists
+            
+            try:
+                conn.execute(text(f"ALTER TABLE purchase_order_lines ADD COLUMN package_unit TEXT"))
+                conn.commit()
+                print(f"Patched: Added package_unit to purchase_order_lines")
+            except Exception:
+                pass
                     
             # Patch for purchase_orders (cabecera)
             for col in ['warehouse_id', 'vendedor', 'salesperson_id', 'attachment_url']:

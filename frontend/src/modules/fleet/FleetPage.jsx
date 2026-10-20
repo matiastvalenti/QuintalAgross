@@ -15,13 +15,12 @@ import EmptyState from '../../components/ui/EmptyState';
 
 const VEHICLE_TYPES = [
     { value: 'TRUCK', label: 'Camión', icon: Truck },
-    { value: 'VAN', label: 'Camioneta', icon: Car },
-    { value: 'CAR', label: 'Auto', icon: Car },
-    { value: 'HARVESTER', label: 'Cosechadora', icon: Package },
+    { value: 'PICKUP', label: 'Camioneta', icon: Car },
+    { value: 'TRACTOR', label: 'Tractor', icon: Package },
     { value: 'PULVERIZER', label: 'Pulverizadora', icon: Info },
     { value: 'DRONE_AGRAS', label: 'Dron Agras', icon: Plane },
     { value: 'DRONE_MAVIC', label: 'Dron Mavic', icon: Plane },
-    { value: 'OTHER', label: 'Otro', icon: Info }
+    { value: 'OTHER', label: 'Otro equipo / vehículo', icon: Info }
 ];
 
 export default function FleetPage() {
@@ -138,6 +137,7 @@ export default function FleetPage() {
 
     const handleViewExpenses = async (veh) => {
         setViewingDetails(veh);
+        setVehicleExpensesDetail([]);
         setLoadingDetails(true);
         try {
             const data = await api.get(`/vehicles/${veh.id}/expenses`, {
@@ -166,7 +166,7 @@ export default function FleetPage() {
         <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px 0 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <ContentHeader 
-                    title="Control Gastero de Flota" 
+                    title="Gastos de vehículos y equipos" 
                     breadcrumbs={[{label: 'Configuración'}, {label: 'Flota'}]}
                     actions={<Button onClick={() => handleOpenModal()} icon={<Plus size={18}/>}>Nuevo Vehículo</Button>}
                 />
@@ -218,7 +218,7 @@ export default function FleetPage() {
                                             <th>Tipo</th>
                                             <th>Patente</th>
                                             <th>Alertas</th>
-                                            <th>Total Gastos</th>
+                                            <th>Gastos con impuestos (ARS)</th>
                                             <th>Chofer Principal</th>
                                             <th>Estado</th>
                                             <th style={{ textAlign: 'right' }}>Acciones</th>
@@ -393,7 +393,7 @@ export default function FleetPage() {
                                     <div style={{ fontSize: 13, fontWeight: 600 }}>{new Date(dateFrom).toLocaleDateString()} - {new Date(dateTo).toLocaleDateString()}</div>
                                 </div>
                                 <div>
-                                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)' }}>TOTAL ACUMULADO</div>
+                                    <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)' }}>TOTAL CON IMPUESTOS (ARS)</div>
                                     <div style={{ fontSize: 16, fontWeight: 800, color: 'var(--bad)' }}>
                                         {new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(viewingDetails.total_expenses || 0)}
                                     </div>

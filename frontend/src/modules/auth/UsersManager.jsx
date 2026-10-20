@@ -26,6 +26,7 @@ const PERMISSION_GROUPS = [
             { id: "sales_orders", label: "Orden de Ventas" },
             { id: "sales_delivery", label: "Remitos (Venta)" },
             { id: "sales_invoices", label: "Facturas" },
+            { id: "service_works", label: "Servicios y trabajos (incluye costos)" },
             { id: "sales_notes", label: "Notas de Débito/Crédito" },
             { id: "customers", label: "Clientes / Entidades" }
         ]
@@ -54,7 +55,13 @@ const PERMISSION_GROUPS = [
             { id: "cash", label: "Cajas" },
             { id: "cheques", label: "Cheques" },
             { id: "payments", label: "Recibos y Pagos" },
-            { id: "banks", label: "Bancos" }
+            { id: "banks", label: "Bancos" },
+            { id: "employee_expenses", label: "Rendiciones propias (ver/cargar/presentar/eliminar)" },
+            { id: "employee_expenses_all", label: "Ver y gestionar empleados ajenos (Ver)" },
+            { id: "employee_expense_exceptions", label: "Autorizar gastos sin comprobante (Crear)" },
+            { id: "employee_review", label: "Revisar rendiciones (Crear: aprobar; Editar: devolver)" },
+            { id: "employee_funds", label: "Movimientos de fondos de empleados (Crear)" },
+            { id: "employee_reconciliation", label: "Cortes de empleados (Crear: marcar; Editar: conciliar)" }
         ]
     },
     {

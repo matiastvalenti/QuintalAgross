@@ -45,10 +45,12 @@ const inputBlurStyle = (e) => {
     e.target.style.boxShadow = 'none';
 };
 
-export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client' }) {
+export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client', onSelectExisting }) {
     const [activeTab, setActiveTab] = useState('general');
     const [saving, setSaving] = useState(false);
     const [salespeople, setSalespeople] = useState([]);
+    const [duplicateError, setDuplicateError] = useState(null);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const [formData, setFormData] = useState({
         name: '',
@@ -142,6 +144,110 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
         setFormData(prev => ({ ...prev, [field]: finalValue }));
     };
 
+    const { showToast } = useToast ? useToast() : { showToast: console.log };
+
+    const handleConvertToMixed = async (existingId) => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/entities/${existingId}/convert-to-mixed`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            if (!res.ok) {
+                const errData = await res.json().catch(() => ({}));
+                throw new Error(errData.detail || 'Error al convertir la entidad.');
+            }
+            const saved = await res.json();
+            setDuplicateError(null);
+            if (onSelectExisting) {
+                await onSelectExisting(saved);
+            }
+            if (showToast) {
+                showToast("La entidad fue convertida a Mixta.", "success");
+            } else {
+                alert("La entidad fue convertida a Mixta.");
+            }
+        } catch (err) {
+            if (showToast) {
+                showToast(err.message, "error");
+            } else {
+                alert(err.message);
+            }
+        }
+    };
+
+    const handleDelete = () => {
+        setShowDeleteConfirm(true);
+    };
+
+    const executeDelete = async () => {
+        setShowDeleteConfirm(false);
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/entities/${entity.id}`, {
+                method: 'DELETE',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            if (!res.ok) {
+                if (res.status === 400) {
+                    try {
+                        const errData = await res.json();
+                        if (errData.detail && errData.detail.code === "ENTITY_HAS_DEPENDENCIES") {
+                            const labels = {
+                                documents: "Comprobantes",
+                                account_movements: "Movimientos de cuenta",
+                                sales_orders: "Órdenes de venta",
+                                purchase_orders: "Órdenes de compra",
+                                delivery_notes: "Remitos",
+                                cheques: "Cheques",
+                                expense_claims: "Rendiciones de gastos"
+                            };
+                            const deps = errData.detail.dependencies || {};
+                            const activeDeps = Object.entries(deps)
+                                .filter(([_, count]) => count > 0)
+                                .map(([key, count]) => `${labels[key] || key}: ${count}`)
+                                .join(", ");
+                            
+                            const msg = activeDeps 
+                                ? `No se puede eliminar esta entidad porque tiene operaciones asociadas. (${activeDeps})`
+                                : "No se puede eliminar esta entidad porque tiene operaciones asociadas.";
+                            throw new Error(msg);
+                        }
+                    } catch (pErr) {
+                        console.error("Error parsing validation error", pErr);
+                    }
+                    throw new Error('No se puede eliminar esta entidad porque tiene comprobantes, movimientos u operaciones asociadas.');
+                }
+                if (res.status === 403) {
+                    throw new Error('No tenés permisos para eliminar entidades.');
+                }
+                throw new Error('Error al intentar eliminar la entidad.');
+            }
+            
+            if (showToast) {
+                showToast("Entidad eliminada correctamente.", "success");
+            } else {
+                alert("Entidad eliminada correctamente.");
+            }
+            
+            if (onSave) {
+                onSave(null);
+            }
+        } catch (err) {
+            if (showToast) {
+                showToast(err.message, "error");
+            } else {
+                alert(err.message);
+            }
+        }
+    };
+
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
         setSaving(true);
@@ -167,11 +273,28 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                 body: JSON.stringify(payload)
             });
             
-            if (!res.ok) throw new Error('Error al guardar');
+            if (!res.ok) {
+                if (res.status === 409) {
+                    try {
+                        const errData = await res.json();
+                        if (errData.detail && errData.detail.code === "DUPLICATE_TAX_ID") {
+                            setDuplicateError(errData.detail);
+                            return;
+                        }
+                    } catch (pErr) {
+                        console.error("Error parsing conflict error", pErr);
+                    }
+                }
+                throw new Error('Error al guardar');
+            }
             const saved = await res.json();
             onSave(saved);
         } catch (err) {
-            showToast(err.message, "error");
+            if (showToast) {
+                showToast(err.message, "error");
+            } else {
+                alert(err.message);
+            }
         } finally {
             setSaving(false);
         }
@@ -208,6 +331,29 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                     ))}
                 </div>
                 <div style={{ display: 'flex', gap: 12 }}>
+                    {entity && (
+                        <button 
+                            type="button"
+                            onClick={handleDelete}
+                            style={{
+                                padding: '8px 14px',
+                                background: '#fff',
+                                border: '1px solid #fee2e2',
+                                borderRadius: '8px',
+                                color: '#ef4444',
+                                fontSize: '12px',
+                                fontWeight: 600,
+                                cursor: 'pointer',
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 8,
+                                transition: 'all 0.2s ease',
+                                marginRight: '4px'
+                            }}
+                        >
+                            <Trash2 size={16} /> Eliminar
+                        </button>
+                    )}
                     <button 
                         onClick={onCancel}
                         style={{
@@ -579,6 +725,168 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                     )}
                 </form>
             </div>
+
+            {duplicateError && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        background: 'white',
+                        padding: '24px',
+                        borderRadius: '8px',
+                        width: '450px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        <h3 style={{ margin: '0 0 12px 0', color: 'var(--text)', fontSize: '18px', fontWeight: 700 }}>
+                            CUIT ya registrado
+                        </h3>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563' }}>
+                            Ya existe una entidad registrada con ese CUIT.
+                        </p>
+                        
+                        <div style={{
+                            background: '#f3f4f6',
+                            padding: '12px',
+                            borderRadius: '6px',
+                            fontSize: '13px',
+                            color: '#374151',
+                            marginBottom: '20px',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px'
+                        }}>
+                            <div><strong>Nombre:</strong> {duplicateError.existing_entity?.name}</div>
+                            <div><strong>Código:</strong> {duplicateError.existing_entity?.code}</div>
+                            <div><strong>Tipo actual:</strong> {duplicateError.existing_entity?.type === 'client' ? 'Cliente' : duplicateError.existing_entity?.type === 'provider' ? 'Proveedor' : duplicateError.existing_entity?.type === 'mixed' ? 'Mixto' : duplicateError.existing_entity?.type}</div>
+                            <div><strong>CUIT:</strong> {duplicateError.existing_entity?.tax_id}</div>
+                        </div>
+
+                        <div style={{ display: 'flex', justifyContent: 'end', gap: '8px', flexWrap: 'wrap' }}>
+                            <button
+                                type="button"
+                                onClick={() => setDuplicateError(null)}
+                                style={{
+                                    padding: '8px 14px',
+                                    background: 'white',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#4b5563'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    if (onSelectExisting) {
+                                        onSelectExisting(duplicateError.existing_entity);
+                                    }
+                                    setDuplicateError(null);
+                                }}
+                                style={{
+                                    padding: '8px 14px',
+                                    background: '#f1f5f9',
+                                    border: '1px solid #cbd5e1',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: 600,
+                                    color: '#1e293b'
+                                }}
+                            >
+                                Ver entidad existente
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => handleConvertToMixed(duplicateError.existing_entity?.id)}
+                                style={{
+                                    padding: '8px 14px',
+                                    background: 'var(--primary)',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '12px',
+                                    fontWeight: 600
+                                }}
+                            >
+                                Convertir a Mixto
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {showDeleteConfirm && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999
+                }}>
+                    <div style={{
+                        background: 'white',
+                        padding: '24px',
+                        borderRadius: '8px',
+                        width: '450px',
+                        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+                    }}>
+                        <h3 style={{ margin: '0 0 12px 0', color: '#ef4444', fontSize: '18px', fontWeight: 700 }}>
+                            ¿Seguro que querés eliminar esta entidad?
+                        </h3>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
+                            Solo se puede eliminar si no tiene comprobantes, movimientos ni operaciones asociadas.
+                        </p>
+                        
+                        <div style={{ display: 'flex', justifyContent: 'end', gap: '12px' }}>
+                            <button
+                                type="button"
+                                onClick={() => setShowDeleteConfirm(false)}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: 'white',
+                                    border: '1px solid #d1d5db',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600,
+                                    color: '#4b5563'
+                                }}
+                            >
+                                Cancelar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={executeDelete}
+                                style={{
+                                    padding: '8px 16px',
+                                    background: '#ef4444',
+                                    color: 'white',
+                                    border: 'none',
+                                    borderRadius: '6px',
+                                    cursor: 'pointer',
+                                    fontSize: '13px',
+                                    fontWeight: 600
+                                }}
+                            >
+                                Sí, eliminar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

@@ -11,6 +11,7 @@ import api from '../../services/api';
 import { formatCurrency } from '../../utils/formatters';
 import { useWindow } from '../../context/WindowContext';
 import { useCostCenter } from '../../context/CostCenterContext';
+import { openEntityDashboard } from '../../utils/openStandaloneWindow';
 import s from './MoraManagement.module.css';
 
 const fmtUSD = (v) => v !== undefined && v !== null ? `u$s ${v.toLocaleString('es-AR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : 'u$s 0,00';
@@ -215,7 +216,7 @@ export default function MoraManagement() {
                           <MessageCircle size={18} /> INICIAR RECLAMO
                        </button>
                      )}
-                     <button className={`${s.actionBtn} ${s.ghostBtn}`} onClick={() => openWindow('entity-dashboard', { entityId: debtor.id }, { title: `Vista 360 - ${debtor.name}`, width: 1100, height: 800 })}>
+                     <button className={`${s.actionBtn} ${s.ghostBtn}`} onClick={() => openEntityDashboard(debtor.id, { title: `Vista 360 - ${debtor.name}`, width: 1100, height: 800 })}>
                         <Layout size={18} /> VISTA 360
                      </button>
                      <button className={`${s.actionBtn} ${s.ghostBtn}`} onClick={() => navigate(`/contabilidad/cuenta-corriente/${debtor.id}`)}>

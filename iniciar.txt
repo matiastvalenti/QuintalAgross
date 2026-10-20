@@ -7,3 +7,4 @@ Terminal 2 — Frontend:
   cd frontend
   npm run dev
 
+

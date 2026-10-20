@@ -191,7 +191,7 @@ def create_settlement(data: grain_schemas.GrainSettlementCreate, background_task
         exchange_rate=float(data.exchange_rate),
         total_amount=float(data.net_amount),
         total_amount_ars=float(data.net_amount * data.exchange_rate),
-        status=models.DocumentStatus.OPEN,
+        status=models.DocumentStatus.OPEN if data.coe_number else models.DocumentStatus.DRAFT,
         notes=f"LPG {data.number} - {data.observations or ''}",
         unidad_negocio="Cereales",
         cost_center=data.cost_center,
@@ -210,15 +210,11 @@ def create_settlement(data: grain_schemas.GrainSettlementCreate, background_task
     # 2. Grain Settlement Header
     settle_dict = data.model_dump(exclude={'items', 'taxes', 'movement_ids'})
     
-    # AFIP Integration: Generate COE 
-    from app.modules.inventory.afip_lpg_service import AfipLpgService
-    if not settle_dict.get('coe_number'):
-        settle_dict['coe_number'] = AfipLpgService.request_coe(settle_dict)
-
+    # Guardar no solicita COE. Solo conservar el informado por el usuario.
     db_settle = grain_models.GrainSettlement(
         **settle_dict,
         document_id=db_doc.id,
-        status="OPEN"
+        status="OPEN" if data.coe_number else "DRAFT"
     )
     db.add(db_settle)
     db.flush()
@@ -265,15 +261,14 @@ def create_settlement(data: grain_schemas.GrainSettlementCreate, background_task
             m.settled = True
             m.settlement_id = db_settle.id
     
-    db.commit()
-    db.refresh(db_settle)
-    
-    # Generar Asiento Contable
+    from app.modules.accounting.document_guards import require_accounting
     try:
-        from app.modules.accounting.ledger_engine import create_journal_entry_for_document
-        create_journal_entry_for_document(db, db_doc)
-    except Exception as e:
-        print(f"Error automátic journalizing LPG: {e}")
+        require_accounting(db, db_doc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(db_settle)
 
     # Enviar notificación por email en segundo plano
     background_tasks.add_task(send_settlement_notification, db, db_settle.id)

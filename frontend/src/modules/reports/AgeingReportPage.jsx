@@ -5,6 +5,7 @@ import { Search, Download, ArrowUpDown, ChevronRight, ChevronDown,
 import { useNavigate } from 'react-router-dom';
 import { useWindow } from '../../context/WindowContext';
 import { useCostCenter } from '../../context/CostCenterContext';
+import { openEntityDashboard } from '../../utils/openStandaloneWindow';
 
 import ContentHeader from '../../components/layout/ContentHeader';
 import Button from '../../components/ui/Button';
@@ -334,7 +335,7 @@ export default function AgeingReportPage() {
                                                 className={s.pillsBtn}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
-                                                    openWindow('entity-dashboard', { entityId: ent.id }, { title: `Vista 360 - ${ent.name}`, width: 1100, height: 800 });
+                                                    openEntityDashboard(ent.id, { title: `Vista 360 - ${ent.name}`, width: 1100, height: 800 });
                                                 }}
                                                 title="Ver Vista 360"
                                                 style={{ margin: '0 auto' }}

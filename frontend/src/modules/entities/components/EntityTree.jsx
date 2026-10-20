@@ -4,24 +4,24 @@ import { Users, Truck, UserCheck, ChevronRight } from 'lucide-react';
 const ENTITY_TYPES = [
     { id: 'client', label: 'Clientes', icon: Users, color: 'var(--primary)' },
     { id: 'provider', label: 'Proveedores', icon: Truck, color: 'var(--success)' },
+    { id: 'mixed', label: 'Mixtos', icon: UserCheck, color: 'var(--warning)' },
     { id: 'employee', label: 'Empleados', icon: UserCheck, color: '#ec4899' },
-    { id: 'mixed', label: 'Mixtos / Cta Comp', icon: UserCheck, color: 'var(--warning)' },
 ];
 
 export default function EntityTree({ onSelect, selectedId }) {
     return (
-        <div style={{ padding: '24px 12px' }}>
+        <div style={{ padding: '12px 8px' }}>
             <h4 style={{ 
-                fontSize: '11px', 
+                fontSize: '10px', 
                 fontWeight: 700,
                 textTransform: 'uppercase', 
                 color: '#94a3b8', 
-                margin: '0 0 16px 16px', 
+                margin: '0 0 10px 10px', 
                 letterSpacing: '0.1em' 
             }}>
                 Categorías
             </h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                 {ENTITY_TYPES.map(type => {
                     const Icon = type.icon;
                     const isActive = selectedId === type.id;
@@ -33,9 +33,9 @@ export default function EntityTree({ onSelect, selectedId }) {
                             style={{
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: 12,
-                                padding: '10px 16px',
-                                borderRadius: '10px',
+                                gap: 10,
+                                padding: '6px 12px',
+                                borderRadius: '8px',
                                 background: isActive ? 'var(--primary-light)' : 'transparent',
                                 border: 'none',
                                 cursor: 'pointer',
@@ -63,12 +63,19 @@ export default function EntityTree({ onSelect, selectedId }) {
                                     borderRadius: '0 4px 4px 0' 
                                 }} />
                             )}
-                            <Icon size={18} style={{ color: isActive ? 'var(--primary)' : '#94a3b8' }} />
-                            <span style={{ flex: 1, fontSize: '14px', fontWeight: isActive ? 600 : 500 }}>
-                                {type.label}
-                            </span>
+                            <Icon size={16} style={{ color: isActive ? 'var(--primary)' : '#94a3b8' }} />
+                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+                                <span style={{ fontSize: '13px', fontWeight: isActive ? 600 : 500 }}>
+                                    {type.label}
+                                </span>
+                                {type.id === 'mixed' && (
+                                    <span style={{ fontSize: '9px', color: '#94a3b8', marginTop: -2 }}>
+                                        Cliente y proveedor
+                                    </span>
+                                )}
+                            </div>
                             <ChevronRight 
-                                size={14} 
+                                size={12} 
                                 style={{ 
                                     opacity: isActive ? 1 : 0, 
                                     transform: isActive ? 'translateX(0)' : 'translateX(-4px)',
@@ -81,21 +88,21 @@ export default function EntityTree({ onSelect, selectedId }) {
             </div>
             
             <div style={{ 
-                marginTop: 32, 
-                padding: '16px', 
-                borderRadius: '12px', 
+                marginTop: 20, 
+                padding: '10px', 
+                borderRadius: '8px', 
                 background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)', 
                 border: '1px solid #e2e8f0', 
-                fontSize: '12px', 
+                fontSize: '11px', 
                 color: '#64748b', 
-                lineHeight: 1.6,
+                lineHeight: 1.5,
                 boxShadow: '0 1px 2px rgba(0,0,0,0.03)'
             }}>
-                <div style={{ fontWeight: 700, color: '#475569', marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <Users size={14} /> Tip del día
+                <div style={{ fontWeight: 700, color: '#475569', marginBottom: 2, display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <Users size={12} /> Tip del día
                 </div>
                 <p style={{ margin: 0 }}>
-                    Las entidades mixtas se sincronizan automáticamente entre las listas de compras y ventas.
+                    Las entidades mixtas se sincronizan en compras y ventas.
                 </p>
             </div>
         </div>

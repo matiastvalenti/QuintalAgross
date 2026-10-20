@@ -10,6 +10,7 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
+import { openNuevoPago } from '../../utils/openStandaloneWindow';
 import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import { chequeService } from '../../api/cheques';
@@ -275,7 +276,15 @@ export default function ChequesPage() {
             check_type: c.tipo || "FISICO"
         }));
 
-        openWindow('receipt-form', { isPayment: true, initialPayments }, { title: 'Orden de Pago (Endoso)', width: 1200, height: 850 });
+        const draftId = crypto.randomUUID();
+        localStorage.setItem(`receipt_draft_${draftId}`, JSON.stringify({ initialPayments }));
+
+        openNuevoPago({ 
+            draft_id: draftId,
+            title: 'Orden de Pago (Endoso)', 
+            width: 1200, 
+            height: 850 
+        });
     };
 
     const toggleSelect = (id) => {

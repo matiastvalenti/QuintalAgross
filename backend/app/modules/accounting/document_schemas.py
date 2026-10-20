@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from app.db.models.models import DocumentType, CurrencyType, DocumentStatus, PaymentMethod, DocumentReasonType
 
 # ──────────────────────────────────────────────
@@ -58,6 +58,7 @@ class DocumentLineResponse(DocumentLineBase):
 
 class DocumentLineCreate(DocumentLineBase):
     product_id: Optional[str] = None
+    id: Optional[str] = None
 
 class DocumentVehicleExpenseBase(BaseModel):
     vehicle_id: str
@@ -154,11 +155,16 @@ class ApplicationResponse(ApplicationBase):
     amount_applied_ars: float
     exchange_rate: float # Override to make it non-optional in response
     created_at: datetime
+    fx_settled_amount: Optional[float] = None  # USD settled by receipt plus its linked NC
+    is_system_fx: bool = False
     # Extra fields for traceability injected by router
     to_document_number: Optional[str] = None
     to_document_date: Optional[datetime] = None
     to_document_total: Optional[float] = None
     to_document_applied: Optional[float] = None
+    # Campos de la factura destino necesarios para reconstruir TC Factura y moneda
+    to_document_currency: Optional[str] = None        # moneda de la factura (USD, ARS)
+    to_document_exchange_rate: Optional[float] = None # TC histórico de la factura
     model_config = ConfigDict(from_attributes=True)
 
 # ──────────────────────────────────────────────
@@ -172,6 +178,7 @@ class DocumentBase(BaseModel):
     currency: CurrencyType = CurrencyType.ARS
     exchange_rate: float = 1.0
     total_amount: float
+    net_amount: float = 0.0
     line: Optional[str] = None
     notes: Optional[str] = None  # Observaciones/notas
     attachment_url: Optional[str] = None
@@ -188,6 +195,7 @@ class DocumentBase(BaseModel):
     return_stock: Optional[bool] = False
 
 class DocumentCreate(DocumentBase):
+    status: Literal[DocumentStatus.OPEN, DocumentStatus.DRAFT] = DocumentStatus.OPEN
     entity_id: str
     reimbursement_entity_id: Optional[str] = None
     lines: Optional[List[DocumentLineCreate]] = None
@@ -230,6 +238,10 @@ class DocumentResponse(DocumentBase):
     attachment_url: Optional[str] = None
     total_amount_ars: float
     status: DocumentStatus
+    is_draft: bool = False
+    cae: Optional[str] = None
+    cae_due_date: Optional[datetime] = None
+    afip_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[str] = None
@@ -238,6 +250,12 @@ class DocumentResponse(DocumentBase):
     salesperson_id: Optional[str] = None
     commission_amount: float = 0.0
     is_initial_load: bool = False
+    source_invoice_number: Optional[str] = None
+    source_invoice_currency: Optional[str] = None
+    source_invoice_exchange_rate: Optional[float] = None
+    reverses_document_id: Optional[str] = None
+    reverses_document_type: Optional[str] = None
+    reverses_document_number: Optional[str] = None
     # Applications made BY this document (e.g. receipt applying to invoices)
     applied_to: List[ApplicationResponse] = []
     # Applications made TO this document (e.g. invoices being paid)
@@ -247,18 +265,25 @@ class DocumentResponse(DocumentBase):
     retentions: List[DocumentRetentionResponse] = []
     history: List[DocumentHistoryResponse] = []
     
+    delivery_status: str = "NOT_REQUIRED"
+    delivery_quantities: List[Dict[str, Any]] = []
+
     # Traceability progress (0 to 100)
     delivered_pct: float = 0.0
     invoiced_pct: float = 0.0
     paid_pct: float = 0.0
+
+    # Trazabilidad OV / Remito y saldo
+    sales_orders: List[Dict[str, Any]] = []
+    delivery_notes: List[Dict[str, Any]] = []
+    pending_amount: Optional[float] = None
+    amount_applied: Optional[float] = None
     
     model_config = ConfigDict(from_attributes=True)
 
 class DocumentWithLinesResponse(DocumentResponse):
     lines: List[DocumentLineResponse] = []
     payments: List[PaymentItemResponse] = []
-    sales_orders: List[dict] = []
-    delivery_notes: List[dict] = []
 
 
 

@@ -1,3 +1,4 @@
+from app.modules.accounting.document_guards import require_unmanaged_employee_document
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -30,6 +31,8 @@ def apply_manually(req: ApplicationRequest, db: Session = Depends(get_db), curre
     # 1. Validar documentos
     from_doc = db.query(models.Document).filter(models.Document.id == req.from_document_id).first()
     to_doc = db.query(models.Document).filter(models.Document.id == req.to_document_id).first()
+    require_unmanaged_employee_document(db,from_doc)
+    require_unmanaged_employee_document(db,to_doc)
 
     if not from_doc or not to_doc:
         raise HTTPException(status_code=404, detail="Uno de los documentos no existe")
@@ -99,6 +102,8 @@ def delete_application(application_id: str, db: Session = Depends(get_db), curre
     
     from_doc = app.from_document
     to_doc = app.to_document
+    require_unmanaged_employee_document(db,from_doc)
+    require_unmanaged_employee_document(db,to_doc)
     
     # El fx_link se borra por cascade delete-orphan en el modelo models.py (línea 440)
     # pero los documentos generados (NC/ND) deben ser anulados o manejados.

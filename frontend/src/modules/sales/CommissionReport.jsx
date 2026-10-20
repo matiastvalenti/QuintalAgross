@@ -12,6 +12,7 @@ import Button from '../../components/ui/Button';
 import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import { useWindow } from '../../context/WindowContext';
+import { openEditRecibo } from '../../utils/openStandaloneWindow';
 import api from '../../services/api';
 import t from '../../components/ui/Table.module.css';
 import st from './CommissionReport.module.css';
@@ -136,16 +137,12 @@ export default function CommissionReport({ onClose, isWindow }) {
   };
 
   const openPaymentWindow = (applications) => {
-    openWindow('receipt-form', {
-      mode: 'new',
-      isPayment: true,
-      initialEntity: {
-        id: selected.salesperson_id,
-        name: selected.salesperson_name
-      },
-      initialApplications: applications,
-      initialCurrency: applications[0]?.currency || 'USD'
-    }, {
+    const draftId = crypto.randomUUID();
+    localStorage.setItem(`receipt_draft_${draftId}`, JSON.stringify({ initialPayments: applications }));
+
+    openNuevoPago({
+      draft_id: draftId,
+      entityId: selected.salesperson_id,
       title: 'Nueva Orden de Pago',
       width: 1100,
       height: 650
@@ -169,10 +166,9 @@ export default function CommissionReport({ onClose, isWindow }) {
 
   const viewDocument = (docId) => {
     if (!docId) return;
-    openWindow('receipt-form', {
-      id: docId,
+    openEditPago(docId, {
       mode: 'edit',
-      isPayment: true
+      title: `Pago ${docId}`
     });
   };
 

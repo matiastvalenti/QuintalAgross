@@ -1,9 +1,19 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
     Search, Download, Activity, Printer, ChevronRight, Filter, 
-    CheckCircle2, Clock, AlertCircle, X, Receipt, Wallet
+    CheckCircle2, Clock, AlertCircle, X, Receipt, Wallet, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
+import { 
+  openEditFactura, 
+  openEditRecibo, 
+  openEditPago, 
+  openEditRemito,
+  openEditNotaDebito,
+  openEditNotaCredito,
+  openEditFacturaCompra,
+  openStandaloneWindow
+} from '../../utils/openStandaloneWindow';
 import { useCostCenter } from '../../context/CostCenterContext';
 import { API_URL } from '../../config';
 import api from '../../services/api';
@@ -14,6 +24,98 @@ import Input from '../../components/ui/Input';
 import Select from '../../components/ui/Select';
 import Button from '../../components/ui/Button';
 import s from './StatementPage.module.css';
+
+const isFxMovement = (m) => {
+  const text = `${m.description || ""} ${m.notes || ""} ${m.reason_type || ""}`.toUpperCase();
+  return (
+    text.includes("DIFERENCIA DE CAMBIO") ||
+    text.includes("EXCHANGE_DIFFERENCE") ||
+    text.includes("ND-FX") ||
+    text.includes("NC-FX") ||
+    m.is_exchange_difference === true ||
+    m.reason_type === "EXCHANGE_DIFFERENCE"
+  );
+};
+
+const getShortDescription = (m) => {
+  const text = m.description || m.notes || "";
+  if (isFxMovement(m)) {
+    const tcMatch = text.match(/TC\s*([\d.,]+)\s*(?:->|→)\s*([\d.,]+)/i);
+    if (text.toLowerCase().includes("reversa") || text.toLowerCase().includes("cancel")) {
+      return "Reversa por anulación";
+    }
+    if (tcMatch) {
+      return `Diferencia de cambio\nTC ${tcMatch[1]} → ${tcMatch[2]}`;
+    }
+    return "Diferencia de cambio";
+  }
+  return text || "-";
+};
+
+const getFxTitle = (m) => {
+  if (m.fx_kind === "CREDIT_FX_REVERSAL") {
+      return `NC-FX ${m.number}`;
+  }
+  return `ND-FX ${m.number}`;
+};
+
+const hasFxOriginData = (m) => {
+  const isValid = (val) => val && val !== "-";
+  return Boolean(
+    isValid(m.source_invoice_number) ||
+    isValid(m.source_receipt_number) ||
+    isValid(m.reverses_document_number) ||
+    isValid(m.invoice_exchange_rate) ||
+    isValid(m.application_exchange_rate)
+  );
+};
+
+const getDocumentStandalonePath = (movement) => {
+    const id = movement.document_id || movement.doc_id || movement.id;
+    const type = movement.doc_type || movement.type;
+  
+    if (!id || !type) return null;
+  
+    const normalizedType = String(type).toUpperCase();
+  
+    switch (normalizedType) {
+      case "INVOICE":
+      case "FCE_MIPYME":
+        return `/standalone/facturas/${id}`;
+      case "RECEIPT":
+        return `/standalone/recibos/${id}?mode=view`;
+      case "DEBIT_NOTE":
+        return `/standalone/notas-debito/${id}`;
+      case "CREDIT_NOTE":
+        return `/standalone/notas-credito/${id}`;
+      case "DELIVERY_NOTE":
+      case "REMIT":
+      case "REMITO":
+        return `/standalone/remitos/${id}`;
+      case "PURCHASE_INVOICE":
+        return `/standalone/facturas-compra/${id}`;
+      case "PURCHASE_DEBIT_NOTE":
+        return `/standalone/notas-debito-compra/${id}`;
+      case "PURCHASE_CREDIT_NOTE":
+        return `/standalone/notas-credito-compra/${id}`;
+      case "PAYMENT":
+        return `/standalone/pagos/${id}?mode=view&isPayment=true`;
+      default:
+        return null;
+    }
+};
+
+const openDocumentFromMovement = (movement, e) => {
+    if (e) e.stopPropagation();
+    const path = getDocumentStandalonePath(movement);
+  
+    if (!path) {
+      console.warn("No se pudo abrir el comprobante: falta referencia al documento.");
+      return;
+    }
+  
+    openStandaloneWindow(path, `_blank`, { width: 1280, height: 820 });
+};
 
 export default function StatementPage({ entityId: propsEntityId, defaultFilters = {} }) {
     const { openWindow } = useWindow();
@@ -42,29 +144,35 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
     const [unbilledMovements, setUnbilledMovements] = useState([]);
     const [showUnbilled, setShowUnbilled] = useState(false);
     const [saleConditions, setSaleConditions] = useState([]);
+    const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
     
+    const todayStr = new Date().toISOString().split('T')[0];
+    const yearStartStr = `${new Date().getFullYear()}-01-01`;
+
     const [filters, setFilters] = useState({
-        from_date: '',
-        to_date: '',
+        from_date: yearStartStr,
+        to_date: todayStr,
         currency: '',
         doc_type: '',
         sale_condition: '',
         only_unapplied: false,
         only_overdue: false,
-        search: ''
+        search: '',
+        view: 'customer'
     });
 
     const resetFilters = () => {
-        setFilters({
-            from_date: '',
-            to_date: '',
+        setFilters(prev => ({
+            from_date: yearStartStr,
+            to_date: todayStr,
             currency: '',
             doc_type: '',
             sale_condition: '',
             only_unapplied: false,
             only_overdue: false,
-            search: ''
-        });
+            search: '',
+            view: prev.view   // Preserve active view on reset
+        }));
     };
 
     const setDatePreset = (preset) => {
@@ -112,6 +220,9 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                 api.get(`/entities/${selectedEntity.id}/dashboard`, { params: { cost_center: costCenter } })
             ]);
             
+            // DEBUG: verificar qué devuelve el endpoint de remitos
+            console.log('[Remitos] RAW response:', JSON.stringify(unbilledRes, null, 2));
+            
             setMovements(ledgerRes || []);
             setUnbilledMovements(unbilledRes || []);
             setSaleConditions(scRes || []);
@@ -133,14 +244,31 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         window.addEventListener('invoice-changed', handleRefresh);
         window.addEventListener('receipt-changed', handleRefresh);
         window.addEventListener('cost-center-changed', handleRefresh);
+        window.addEventListener('delivery-note-changed', handleRefresh);
+
+        const handleMessage = (event) => {
+            const data = event.data || {};
+            if (data && typeof data.type === 'string' && data.type.startsWith('QUINTAL_')) {
+                if (!data.entityId || data.entityId === selectedEntity?.id) {
+                    handleRefresh();
+                }
+            }
+        };
+
+        window.addEventListener('message', handleMessage);
+        const bc = new BroadcastChannel("quintal-documents");
+        bc.onmessage = handleMessage;
         
         return () => {
             window.removeEventListener('account-changed', handleRefresh);
             window.removeEventListener('invoice-changed', handleRefresh);
             window.removeEventListener('receipt-changed', handleRefresh);
             window.removeEventListener('cost-center-changed', handleRefresh);
+            window.removeEventListener('delivery-note-changed', handleRefresh);
+            window.removeEventListener('message', handleMessage);
+            bc.close();
         }
-    }, [fetchLedger]);
+    }, [fetchLedger, selectedEntity]);
 
     // Search Entities
     const searchEntities = async (query) => {
@@ -178,8 +306,16 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                 m.notes?.toLowerCase().includes(q)
             );
         }
+        console.log('[Remitos] filteredUnbilledMovements:', list.map(m => ({ number: m.number, status: m.status, technical_status: m.technical_status, currency: m.currency, total_amount: m.total_amount, invoiced_amount: m.invoiced_amount, pending_amount: m.pending_amount })));
         return list;
     }, [unbilledMovements, filters.search, filters.doc_type]);
+
+    // Helper para formatear importes de remitos sin guiones falsos
+    const fmtRemitoAmount = (value, currency) => {
+        if (value === null || value === undefined || value === '') return '-';
+        const cur = String(currency || '').toUpperCase().includes('USD') ? 'USD' : 'ARS';
+        return fmt(Number(value), cur);
+    };
 
     const totals = useMemo(() => {
         const t = { d_ars: 0, h_ars: 0, d_usd: 0, h_usd: 0, b_ars: 0, b_usd: 0 };
@@ -195,18 +331,62 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         return t;
     }, [filteredMovements]);
 
-    const docMapping = {
-        'INVOICE': 'Factura',
-        'RECEIPT': 'Recibo',
-        'CREDIT_NOTE': 'Nota de Crédito',
-        'DEBIT_NOTE': 'Nota de Débito',
-        'PAYMENT': 'Orden de Pago',
-        'PURCHASE_INVOICE': 'Factura Compra',
-        'PURCHASE_DEBIT_NOTE': 'ND Compra',
-        'PURCHASE_CREDIT_NOTE': 'NC Compra',
-        'LPG_PRIMARY': 'Liq. Primaria',
-        'LPG_SECONDARY': 'Liq. Secundaria',
-        'DELIVERY_NOTE': 'Remito'
+    const unbilledTotals = useMemo(() => {
+        const t = { ars: { total: 0, invoiced: 0, pending: 0 }, usd: { total: 0, invoiced: 0, pending: 0 } };
+        filteredUnbilledMovements.forEach(m => {
+            const cur = String(m.currency || '').toUpperCase().includes('USD') ? 'usd' : 'ars';
+            if (m.total_amount) t[cur].total += m.total_amount;
+            if (m.invoiced_amount) t[cur].invoiced += m.invoiced_amount;
+            if (m.pending_amount) t[cur].pending += m.pending_amount;
+        });
+        return t;
+    }, [filteredUnbilledMovements]);
+
+    // Helpers for display
+    const getCircuitoFallback = (docType, circuit) => {
+        if (circuit && circuit !== '-') return circuit;
+        const dt = docType?.toUpperCase();
+        if (['INVOICE', 'FCE_MIPYME', 'DEBIT_NOTE', 'CREDIT_NOTE'].includes(dt)) return 'Venta';
+        if (dt === 'RECEIPT') return 'Cobranza';
+        if (['PURCHASE_INVOICE', 'PURCHASE_DEBIT_NOTE', 'PURCHASE_CREDIT_NOTE'].includes(dt)) return 'Compra';
+        if (dt === 'PAYMENT') return 'Pago';
+        return '-';
+    };
+
+    const getDescripcionFallback = (docType, desc) => {
+        if (desc && desc !== '-') return desc;
+        const dt = docType?.toUpperCase();
+        switch (dt) {
+            case 'INVOICE':
+            case 'FCE_MIPYME': return 'Factura de Venta';
+            case 'DEBIT_NOTE': return 'Nota de Débito de Venta';
+            case 'CREDIT_NOTE': return 'Nota de Crédito de Venta';
+            case 'RECEIPT': return 'Recibo de Cliente';
+            case 'PURCHASE_INVOICE': return 'Factura de Compra';
+            case 'PURCHASE_DEBIT_NOTE': return 'Nota de Débito de Compra';
+            case 'PURCHASE_CREDIT_NOTE': return 'Nota de Crédito de Compra';
+            case 'PAYMENT': return 'Orden de Pago';
+            default: return '-';
+        }
+    };
+
+    const getComprobanteName = (docType) => {
+        const dt = docType?.toUpperCase();
+        switch (dt) {
+            case 'INVOICE':
+            case 'FCE_MIPYME': return 'Factura';
+            case 'RECEIPT': return 'Recibo';
+            case 'PAYMENT': return 'Orden de Pago';
+            case 'DEBIT_NOTE':
+            case 'PURCHASE_DEBIT_NOTE': return 'Nota de Débito';
+            case 'CREDIT_NOTE':
+            case 'PURCHASE_CREDIT_NOTE': return 'Nota de Crédito';
+            case 'PURCHASE_INVOICE': return 'Factura de Compra';
+            case 'LPG_PRIMARY': return 'Liq. Primaria';
+            case 'LPG_SECONDARY': return 'Liq. Secundaria';
+            case 'DELIVERY_NOTE': return 'Remito';
+            default: return docType || '-';
+        }
     };
 
     // Actions
@@ -231,8 +411,10 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
 
             return {
                 'Fecha': formatDateStr(m.date),
-                'Comprobante': docMapping[m.doc_type] || m.doc_type || '-',
+                'Circuito': getCircuitoFallback(m.doc_type, m.circuit),
+                'Comprobante': getComprobanteName(m.doc_type),
                 'Número': m.number || '-',
+                'Descripción': getDescripcionFallback(m.doc_type, m.description || m.notes),
                 'Vencimiento': formatDateStr(m.due_date),
                 'Moneda': m.currency || '-',
                 'TC': m.exchange_rate || '',
@@ -249,8 +431,10 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
         // Add Totals row
         exportData.push({
             'Fecha': 'TOTALES',
+            'Circuito': '',
             'Comprobante': '',
             'Número': '',
+            'Descripción': '',
             'Vencimiento': '',
             'Moneda': '',
             'TC': '',
@@ -268,56 +452,39 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
 
     const handleRowClick = (m) => {
         if (m.is_initial_load) return;
-        let windowKey = '';
-        let titlePrefix = '';
-        let extraProps = {};
-        
+
+        let title = `${m.doc_type} ${m.number || ''}`;
         switch (m.doc_type) {
             case 'INVOICE':
-                windowKey = 'invoice-form';
-                titlePrefix = 'Factura';
-                break;
+                return openEditFactura(m.id, { title });
             case 'CREDIT_NOTE':
-                windowKey = 'credit-note-form';
-                titlePrefix = 'Nota Crédito';
-                break;
+                return openEditNotaCredito(m.id, { title });
             case 'DEBIT_NOTE':
-                windowKey = 'debit-note-form';
-                titlePrefix = 'Nota Débito';
-                break;
+                return openEditNotaDebito(m.id, { title });
             case 'PURCHASE_INVOICE':
-                windowKey = 'purchase-invoice-form';
-                titlePrefix = 'Factura Compra';
-                extraProps = { context: 'purchases' };
-                break;
+                return openEditFacturaCompra(m.id, { title });
             case 'RECEIPT':
-                windowKey = 'receipt-form';
-                titlePrefix = 'Recibo';
-                break;
+                return openEditRecibo(m.id, { title });
             case 'PAYMENT':
-                windowKey = 'receipt-form'; // Usually shared or similar form
-                titlePrefix = 'Orden de Pago';
-                extraProps = { isPayment: true };
-                break;
+                return openEditPago(m.id, { title });
+            case 'DELIVERY_NOTE':
+                return openEditRemito(m.id, { title });
             case 'LPG_PRIMARY':
             case 'LPG_SECONDARY':
-                windowKey = 'grain-settlement';
-                titlePrefix = m.doc_type === 'LPG_PRIMARY' ? 'Liq. Primaria' : 'Liq. Secundaria';
-                break;
-            case 'DELIVERY_NOTE':
-                windowKey = 'delivery-note';
-                titlePrefix = 'Remito';
+                openWindow('grain-settlement', { id: m.id, mode: "edit" }, {
+                    title: `${m.doc_type === 'LPG_PRIMARY' ? 'Liq. Primaria' : 'Liq. Secundaria'} ${m.number || ''}`,
+                    width: 1200,
+                    height: 750,
+                    singletonKey: `lpg-${m.id}`
+                });
                 break;
             default:
                 return;
         }
+    };
 
-        openWindow(windowKey, { id: m.id, mode: "edit", ...extraProps }, {
-            title: `${titlePrefix} ${m.number || ''}`,
-            width: 1200,
-            height: 750,
-            singletonKey: `${windowKey}-${m.id}`
-        });
+    const handleSetView = (v) => {
+        setFilters(prev => ({ ...prev, view: v }));
     };
 
     return (
@@ -335,7 +502,32 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                         minChars={0}
                     />
                 </div>
-                
+
+                {/* Segmented View Selector — always visible in topBar */}
+                <div style={{ display: 'flex', background: '#f1f5f9', borderRadius: '10px', padding: '4px', gap: '2px', flexShrink: 0 }}>
+                    {[['customer','Cliente'],['supplier','Proveedor'],['consolidated','Consolidado']].map(([val, label]) => (
+                        <button
+                            key={val}
+                            onClick={() => handleSetView(val)}
+                            style={{
+                                padding: '7px 18px',
+                                borderRadius: '7px',
+                                border: 'none',
+                                background: filters.view === val ? 'white' : 'transparent',
+                                fontWeight: filters.view === val ? '700' : '500',
+                                color: filters.view === val ? '#1d4ed8' : '#64748b',
+                                boxShadow: filters.view === val ? '0 1px 4px rgba(0,0,0,0.12)' : 'none',
+                                cursor: 'pointer',
+                                fontSize: '12px',
+                                transition: 'all 0.18s',
+                                whiteSpace: 'nowrap'
+                            }}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+
                 <div className={s.actionsGroup}>
                     <Button variant="secondary" size="md" onClick={handleExport} className={s.exportBtn}>
                         <Download size={16} /> Exportar Excel
@@ -348,35 +540,46 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
 
             <div className={s.container}>
                 {selectedEntity ? (
-                    <div className={s.animate}>
+                    <div className={s.contentPanel}>
                         {/* Summary Header Cards */}
                         <div className={s.summaryHeader}>
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #1d4ed8' }}>
-                                <div className={s.cardIconBox} style={{ background: '#eff6ff', color: '#1d4ed8' }}><Receipt size={20}/></div>
+                                <div className={s.cardIconBox} style={{ background: '#eff6ff', color: '#1d4ed8' }}><Receipt size={16}/></div>
                                 <div className={s.cardContentBox}>
-                                    <div className={s.cardTitle}>Saldo Global ARS</div>
-                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
-                                        {fmt(dashboard?.total_balance || totals.b_ars, 'ARS')}
+                                    <div className={s.cardTitle}>Saldo ARS</div>
+                                    <div className={s.balanceValue} style={{ color: totals.b_ars < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                        {fmt(totals.b_ars, 'ARS')}
                                     </div>
-                                    <div className={s.cardSubLabel}>Saldo total histórico de la cuenta</div>
+                                    <div className={s.cardSubLabel}>Saldo real en pesos</div>
                                 </div>
                             </div>
 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #7c3aed' }}>
-                                <div className={s.cardIconBox} style={{ background: '#f5f3ff', color: '#7c3aed' }}><Wallet size={20}/></div>
+                                <div className={s.cardIconBox} style={{ background: '#f5f3ff', color: '#7c3aed' }}><Wallet size={16}/></div>
                                 <div className={s.cardContentBox}>
-                                    <div className={s.cardTitle}>Saldo Global USD</div>
-                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance_usd || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
-                                        {fmt(dashboard?.total_balance_usd || totals.b_usd, 'USD')}
+                                    <div className={s.cardTitle}>Saldo USD</div>
+                                    <div className={s.balanceValue} style={{ color: totals.b_usd < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                        {fmt(totals.b_usd, 'USD')}
                                     </div>
-                                    <div className={s.cardSubLabel}>Saldo total en moneda extranjera</div>
+                                    <div className={s.cardSubLabel}>Saldo real en dólares</div>
+                                </div>
+                            </div>
+
+                            <div className={s.summaryCard} style={{ borderLeft: '4px solid #0f766e' }}>
+                                <div className={s.cardIconBox} style={{ background: '#f0fdfa', color: '#0f766e' }}><Activity size={16}/></div>
+                                <div className={s.cardContentBox}>
+                                    <div className={s.cardTitle}>Total convertido a ARS</div>
+                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                        {fmt(dashboard?.total_balance || 0, 'ARS')}
+                                    </div>
+                                    <div className={s.cardSubLabel}>Total informativo convertido</div>
                                 </div>
                             </div>
 
                             <div className={s.summaryCard} style={{ borderLeft: '4px solid #ea580c' }}>
-                                <div className={s.cardIconBox} style={{ background: '#fff7ed', color: '#ea580c' }}><Clock size={20}/></div>
+                                <div className={s.cardIconBox} style={{ background: '#fff7ed', color: '#ea580c' }}><Clock size={16}/></div>
                                 <div className={s.cardContentBox}>
-                                    <div className={s.cardTitle}>Pendiente Invoicing</div>
+                                    <div className={s.cardTitle}>Pendiente de facturar</div>
                                     <div className={s.balanceValue} style={{ color: '#ea580c' }}>
                                         {fmt(dashboard?.unbilled_balance_usd || 0, 'USD')}
                                     </div>
@@ -385,22 +588,16 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                             </div>
                         </div>
 
-                        {/* Premium Comprehensive Filter Bar */}
+                        {/* Premium Comprehensive Filter Bar - Compacted */}
                         <div className={s.filterBar}>
-                            <div className={s.filterGrid}>
+                            <div className={s.filterRowPrimary}>
                                 {/* Dates & Presets */}
-                                <div className={s.filterCol} style={{ gridColumn: 'span 2' }}>
-                                    <span className={s.filterLabel}>Rango de Fechas</span>
+                                <div className={s.filterColDate}>
+                                    <span className={s.filterLabel}>Fechas</span>
                                     <div className={s.dateRange}>
                                         <input type="date" className={s.dateInp} value={filters.from_date} onChange={e => setFilters({...filters, from_date: e.target.value})} />
                                         <ChevronRight size={14} style={{color: '#94a3b8'}} />
                                         <input type="date" className={s.dateInp} value={filters.to_date} onChange={e => setFilters({...filters, to_date: e.target.value})} />
-                                    </div>
-                                    <div className={s.presets}>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('today')}>Hoy</button>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('this_month')}>Mes Actual</button>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('last_month')}>Mes Anterior</button>
-                                        <button className={s.presetBtn} onClick={() => setDatePreset('this_year')}>Año</button>
                                     </div>
                                 </div>
 
@@ -412,7 +609,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         value={filters.doc_type}
                                         onChange={e => setFilters({...filters, doc_type: e.target.value})}
                                     >
-                                        <option value="">TODOS LOS TIPOS</option>
+                                        <option value="">TODOS</option>
                                         <option value="INVOICE">FACTURAS</option>
                                         <option value="RECEIPT">RECIBOS</option>
                                         <option value="CREDIT_NOTE">NOTAS CRÉDITO</option>
@@ -430,7 +627,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         value={filters.sale_condition}
                                         onChange={e => setFilters({...filters, sale_condition: e.target.value})}
                                     >
-                                        <option value="">TODAS LAS CONDICIONES</option>
+                                        <option value="">TODAS</option>
                                         {saleConditions.map(sc => (
                                             <option key={sc.id} value={sc.id}>{sc.description.toUpperCase()}</option>
                                         ))}
@@ -446,223 +643,365 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         <button className={`${s.tglBtn} ${filters.currency === 'USD' ? s.active : ''}`} onClick={() => setFilters({...filters, currency: 'USD'})}>USD</button>
                                     </div>
                                 </div>
-                            </div>
 
-                            <div className={s.filterGrid} style={{ paddingTop: 20, borderTop: '1px solid rgba(226, 232, 240, 0.5)' }}>
-                                {/* Payment Status */}
-                                <div className={s.filterCol}>
-                                    <span className={s.filterLabel}>Estado Pago</span>
-                                    <div className={s.toggleButtons}>
-                                        <button className={`${s.tglBtn} ${!filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: false})}>HISTÓRICO</button>
-                                        <button className={`${s.tglBtn} ${filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: true})} style={{ color: filters.only_unapplied ? '#d97706' : 'inherit' }}>SOLO PENDIENTES</button>
-                                    </div>
-                                </div>
-
-                                {/* Overdue */}
-                                <div className={s.filterCol}>
-                                    <span className={s.filterLabel}>Vencimientos</span>
-                                    <div className={s.toggleButtons}>
-                                        <button className={`${s.tglBtn} ${!filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: false})}>TODOS</button>
-                                        <button className={`${s.tglBtn} ${filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: true})} style={{ color: filters.only_overdue ? '#dc2626' : 'inherit' }}>SOLO VENCIDOS</button>
-                                    </div>
-                                </div>
-
-                                {/* Show Unbilled */}
-                                <div className={s.filterCol}>
-                                    <span className={s.filterLabel}>Remitos Pendientes</span>
-                                    <div className={s.toggleButtons}>
-                                        <button className={`${s.tglBtn} ${!showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(false)}>OCULTOS</button>
-                                        <button className={`${s.tglBtn} ${showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(true)} style={{ color: showUnbilled ? '#1e293b' : 'inherit' }}>MOSTRAR</button>
-                                    </div>
-                                </div>
-
-                                {/* Search & Clear */}
+                                {/* Search */}
                                 <div className={s.searchCol}>
-                                    <div className={s.filterCol} style={{ flex: 1 }}>
-                                        <span className={s.filterLabel}>Búsqueda Rápida</span>
-                                        <div className={s.searchContainer}>
-                                            <Search size={14} className={s.searchIcon} />
-                                            <input 
-                                                className={s.searchInp}
-                                                placeholder="Número, nota o tipo..." 
-                                                value={filters.search} 
-                                                onChange={e => setFilters({...filters, search: e.target.value})}
-                                            />
-                                        </div>
+                                    <div className={s.searchContainer}>
+                                        <Search size={14} className={s.searchIcon} />
+                                        <input 
+                                            className={s.searchInp}
+                                            placeholder="Buscar..." 
+                                            value={filters.search} 
+                                            onChange={e => setFilters({...filters, search: e.target.value})}
+                                        />
                                     </div>
+                                    <button className={s.advancedToggleBtn} onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}>
+                                        <Filter size={14} style={{ marginRight: 4 }} />
+                                        Filtros avanzados {showAdvancedFilters ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    </button>
                                     <button className={s.clearBtn} onClick={resetFilters} title="Limpiar todos los filtros">
-                                        <X size={16} />
+                                        <X size={14} />
                                     </button>
                                 </div>
                             </div>
+
+                            {showAdvancedFilters && (
+                                <div className={s.filterRowAdvanced}>
+                                    {/* Presets Chips */}
+                                    <div className={s.presetsChips}>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('today')}>Hoy</button>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('this_month')}>Mes Actual</button>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('last_month')}>Mes Anterior</button>
+                                        <button className={s.presetChip} onClick={() => setDatePreset('this_year')}>Año</button>
+                                    </div>
+
+                                    <div className={s.advancedDivider}></div>
+
+                                    {/* Payment Status */}
+                                    <div className={s.filterCol} style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                        <span className={s.filterLabel}>Estado:</span>
+                                        <div className={s.toggleButtons} style={{height: 26}}>
+                                            <button className={`${s.tglBtn} ${!filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: false})}>HIST</button>
+                                            <button className={`${s.tglBtn} ${filters.only_unapplied ? s.active : ''}`} onClick={() => setFilters({...filters, only_unapplied: true})} style={{ color: filters.only_unapplied ? '#d97706' : 'inherit' }}>PENDIENTES</button>
+                                        </div>
+                                    </div>
+
+                                    {/* Overdue */}
+                                    <div className={s.filterCol} style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                        <span className={s.filterLabel}>Vencimientos:</span>
+                                        <div className={s.toggleButtons} style={{height: 26}}>
+                                            <button className={`${s.tglBtn} ${!filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: false})}>TODOS</button>
+                                            <button className={`${s.tglBtn} ${filters.only_overdue ? s.active : ''}`} onClick={() => setFilters({...filters, only_overdue: true})} style={{ color: filters.only_overdue ? '#dc2626' : 'inherit' }}>VENCIDOS</button>
+                                        </div>
+                                    </div>
+
+                                    {/* Show Unbilled */}
+                                    <div className={s.filterCol} style={{flexDirection: 'row', alignItems: 'center', gap: 6}}>
+                                        <span className={s.filterLabel}>Remitos:</span>
+                                        <div className={s.toggleButtons} style={{height: 26}}>
+                                            <button className={`${s.tglBtn} ${!showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(false)}>OCULTOS</button>
+                                            <button className={`${s.tglBtn} ${showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(true)} style={{ color: showUnbilled ? '#1e293b' : 'inherit' }}>MOSTRAR</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
 
-                        {/* Professional Ledger Table */}
-                        <div className={s.tableContainer}>
-                            <table className={s.ledgerTable}>
-                                <colgroup>
-                                    <col style={{ width: '85px' }} />
-                                    <col style={{ width: '110px' }} />
-                                    <col style={{ width: '125px' }} />
-                                    <col style={{ width: '85px' }} />
-                                    <col style={{ width: '55px' }} />
-                                    <col style={{ width: '65px' }} />
-                                    <col style={{ width: 'auto' }} />
-                                    {/* Monetary cols */}
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '100px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '90px' }} />
-                                    <col style={{ width: '100px' }} />
-                                </colgroup>
-                                <thead className={s.thead}>
-                                    <tr className={s.groupHeader}>
-                                        <th colSpan={7}></th>
-                                        <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Valores en Pesos (ARS)</th>
-                                        <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Valores en Dólares (USD)</th>
-                                    </tr>
-                                    <tr>
-                                        <th className={s.th}>Fecha</th>
-                                        <th className={s.th}>Comprobante</th>
-                                        <th className={s.th}>Número</th>
-                                        <th className={s.th}>Vencimiento</th>
-                                        <th className={s.th}>Moneda</th>
-                                        <th className={s.th}>TC</th>
-                                        <th className={s.th}>Condición</th>
-                                        {/* ARS */}
-                                        <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
-                                        {/* USD */}
-                                        <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                        <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {filteredMovements.map((m, idx) => (
-                                        <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
-                                            <td className={s.cell}>{fmt(m.date, 'date')}</td>
-                                            <td className={s.cell}>
-                                                <div className={s.statusBadge}>
-                                                    {m.payment_status === 'PAID' ? <CheckCircle2 size={12} className={s.iconPaid} /> : 
-                                                     m.payment_status === 'PARTIAL' ? <Clock size={12} className={s.iconPartial} /> : 
-                                                     <AlertCircle size={12} className={s.iconOpen} />}
-                                                    <span className={s.docLabel}>{docMapping[m.doc_type] || m.doc_type}</span>
-                                                </div>
-                                            </td>
-                                            <td className={s.cell}>{m.number}</td>
-                                            <td className={s.cell}>{m.due_date ? fmt(m.due_date, 'date') : '-'}</td>
-                                            <td className={s.cell}>{m.currency}</td>
-                                            <td className={s.cell}>{m.exchange_rate}</td>
-                                            <td className={s.cell} title={m.sale_condition}>{m.sale_condition || '-'}</td>
-                                            
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars > 0 ? fmt(m.amount_ars, 'ARS') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars < 0 ? fmt(Math.abs(m.amount_ars), 'ARS') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum} ${s.balanceArs}`}>{fmt(m.balance_ars, 'ARS')}</td>
-
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd > 0 ? fmt(m.amount_usd, 'USD') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd < 0 ? fmt(Math.abs(m.amount_usd), 'USD') : '-'}</td>
-                                            <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`}>{fmt(m.balance_usd, 'USD')}</td>
+                        {/* Professional Ledger Table & Remitos — Scrollable Area */}
+                        <div className={s.statementBodyScroll}>
+                            <div className={s.tableWrapper}>
+                                <table className={s.ledgerTable}>
+                                    <colgroup>
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '80px' }} />
+                                        <col style={{ width: '110px' }} />
+                                        <col style={{ width: '125px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '85px' }} />
+                                        <col style={{ width: '55px' }} />
+                                        <col style={{ width: '65px' }} />
+                                        <col style={{ width: 'auto' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '90px' }} />
+                                        <col style={{ width: '100px' }} />
+                                    </colgroup>
+                                    <thead className={s.thead}>
+                                        <tr className={s.groupHeader}>
+                                            <th colSpan={9}></th>
+                                            <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Valores en Pesos (ARS)</th>
+                                            <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Valores en Dólares (USD)</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                                <tfoot className={s.tfoot}>
-                                    <tr>
-                                        <td colSpan={7} className={s.totalLabel}>TOTALES ACUMULADOS</td>
-                                        <td className={s.cellTotal}>{fmt(totals.d_ars, 'ARS')}</td>
-                                        <td className={s.cellTotal}>{fmt(totals.h_ars, 'ARS')}</td>
-                                        <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceArs}`}>{fmt(totals.b_ars, 'ARS')}</td>
-                                        
-                                        <td className={s.cellTotal}>{fmt(totals.d_usd, 'USD')}</td>
-                                        <td className={s.cellTotal}>{fmt(totals.h_usd, 'USD')}</td>
-                                        <td className={`${s.cellTotal} ${s.finalBalance} ${s.balanceUsd}`}>{fmt(totals.b_usd, 'USD')}</td>
-                                    </tr>
-                                </tfoot>
-                            </table>
-                        </div>
-
-                        {/* Unbilled Delivery Notes Section */}
-                        {showUnbilled && (
-                            <div className={s.unbilledSection}>
-                                <div className={s.sectionHeader}>
-                                    <h3 className={s.sectionTitle}>Remitos Pendientes de Facturar</h3>
-                                    <div className={s.sectionLine}></div>
-                                </div>
-                                
-                                <div className={s.tableContainer} style={{marginTop: 16}}>
-                                    <table className={s.ledgerTable}>
-                                        <colgroup>
-                                            <col style={{ width: '85px' }} />
-                                            <col style={{ width: '110px' }} />
-                                            <col style={{ width: '125px' }} />
-                                            <col style={{ width: '85px' }} />
-                                            <col style={{ width: '55px' }} />
-                                            <col style={{ width: '65px' }} />
-                                            <col style={{ width: 'auto' }} />
-                                            {/* Monetary cols */}
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '100px' }} />
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '90px' }} />
-                                            <col style={{ width: '100px' }} />
-                                        </colgroup>
-                                        <thead className={s.thead}>
-                                            <tr className={s.groupHeader}>
-                                                <th colSpan={7}></th>
-                                                <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(36, 56, 156, 0.05)', color: '#24389c' }}>Estimado ARS</th>
-                                                <th colSpan={3} style={{ borderLeft: '1px solid #e2e8f0', background: 'rgba(217, 119, 6, 0.05)', color: '#d97706' }}>Estimado USD</th>
-                                            </tr>
-                                            <tr>
-                                                <th className={s.th}>Fecha</th>
-                                                <th className={s.th}>Tipo</th>
-                                                <th className={s.th}>Número</th>
-                                                <th className={s.th}>Vencimiento</th>
-                                                <th className={s.th}>Moneda</th>
-                                                <th className={s.th}>TC</th>
-                                                <th className={s.th}>Condición</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Total</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Debe</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Haber</th>
-                                                <th className={`${s.th} ${s.cellNum}`}>Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {filteredUnbilledMovements.length > 0 ? filteredUnbilledMovements.map((m, idx) => (
-                                                <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick({ ...m, doc_type: 'DELIVERY_NOTE' })}>
-                                                    <td className={s.cell}>{fmt(m.date, 'date')}</td>
-                                                    <td className={s.cell}>
-                                                        <div className={s.statusBadge}>
-                                                            <Clock size={12} style={{ color: '#d97706' }} />
-                                                            <span className={s.docLabel}>REMITO</span>
+                                        <tr>
+                                            <th className={s.th}>Fecha</th>
+                                            <th className={s.th}>Estado</th>
+                                            <th className={s.th}>Comprobante</th>
+                                            <th className={`${s.th} ${s.numberCell}`}>Número</th>
+                                            <th className={`${s.th} ${s.descriptionCell}`}>Descripción</th>
+                                            <th className={s.th}>Vencimiento</th>
+                                            <th className={s.th}>Moneda</th>
+                                            <th className={s.th}>TC</th>
+                                            <th className={s.th}>Condición</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Debe</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Haber</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Debe</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Haber</th>
+                                            <th className={`${s.th} ${s.cellNum}`}>Saldo</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {filteredMovements.length > 0 ? filteredMovements.map((m, idx) => (
+                                            <tr key={m.id || idx} className={s.row} onClick={() => handleRowClick(m)}>
+                                                <td className={s.cell}>{fmt(m.date, 'date')}</td>
+                                                <td className={s.cell}>
+                                                    {m.document_status_label ? (
+                                                        <span className={`${s.docStateBadge} ${
+                                                            m.document_status_kind === 'paid' || m.document_status_kind === 'applied' ? s.statusPaid :
+                                                            m.document_status_kind === 'partial' || m.document_status_kind === 'partial_credit' ? s.statusPartial :
+                                                            m.document_status_kind === 'unpaid' ? s.statusUnpaid :
+                                                            m.document_status_kind === 'available' ? s.statusAvailable : ''
+                                                        }`}>
+                                                            {m.document_status_label}
+                                                        </span>
+                                                    ) : getCircuitoFallback(m.doc_type, m.circuit)}
+                                                </td>
+                                                <td className={s.cell}>
+                                                    <div className={s.statusBadge} style={{ textTransform: 'none' }}>
+                                                        {m.payment_status === 'PAID' ? <CheckCircle2 size={12} className={s.iconPaid} /> : 
+                                                         m.payment_status === 'PARTIAL' ? <Clock size={12} className={s.iconPartial} /> : 
+                                                         <AlertCircle size={12} className={s.iconOpen} />}
+                                                        <button 
+                                                            type="button" 
+                                                            className={s.documentLink} 
+                                                            onClick={(e) => openDocumentFromMovement(m, e)}
+                                                            title="Abrir comprobante"
+                                                        >
+                                                            {getComprobanteName(m.doc_type)}
+                                                        </button>
+                                                        {m.is_draft && <strong title="Incluido en el saldo; pendiente de registro fiscal">BORRADOR</strong>}
+                                                    </div>
+                                                </td>
+                                                <td className={`${s.cell} ${s.numberCell}`}>
+                                                    <button 
+                                                        type="button" 
+                                                        className={s.numberLink} 
+                                                        onClick={(e) => openDocumentFromMovement(m, e)}
+                                                        title="Abrir comprobante"
+                                                    >
+                                                        {m.number}
+                                                    </button>
+                                                </td>
+                                                <td className={`${s.cell} ${s.descriptionCell}`}>
+                                                    <div className={s.fxTooltipWrap}>
+                                                        <div className={s.descriptionText} title={!m.document_status_label && !isFxMovement(m) ? getDescripcionFallback(m.doc_type, m.description || m.notes) : undefined}>
+                                                            {getShortDescription(m)}
+                                                            {isFxMovement(m) && <span className={s.fxMiniBadge}>FX</span>}
                                                         </div>
-                                                    </td>
-                                                    <td className={s.cell}>{m.number}</td>
-                                                    <td className={s.cell}>-</td>
-                                                    <td className={s.cell}>{m.currency}</td>
-                                                    <td className={s.cell}>{m.exchange_rate}</td>
-                                                    <td className={s.cell} title={m.sale_condition}>{m.sale_condition || '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars > 0 ? fmt(m.amount_ars, 'ARS') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars < 0 ? fmt(Math.abs(m.amount_ars), 'ARS') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum} ${s.balanceArs}`}>{fmt(m.balance_ars, 'ARS')}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd > 0 ? fmt(m.amount_usd, 'USD') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd < 0 ? fmt(Math.abs(m.amount_usd), 'USD') : '-'}</td>
-                                                    <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`}>{fmt(m.balance_usd, 'USD')}</td>
-                                                </tr>
-                                            )) : (
-                                                <tr>
-                                                    <td colSpan={13} style={{ textAlign: 'center', padding: '20px', color: '#64748b' }}>No hay remitos pendientes con los filtros aplicados.</td>
-                                                </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                        {m.document_status_label && (
+                                                            <div className={s.fxTooltip}>
+                                                                <div className={s.fxTooltipTitle}>
+                                                                    {m.doc_type === 'RECEIPT' || m.doc_type === 'PAYMENT' ? 'Recibo' : getComprobanteName(m.doc_type)} {m.number}
+                                                                </div>
+                                                                
+                                                                <div className={s.fxTooltipGrid} style={{ marginBottom: isFxMovement(m) ? 12 : 0 }}>
+                                                                    {m.document_status_kind === 'available' || m.document_status_kind === 'partial_credit' || m.document_status_kind === 'applied' ? (
+                                                                        <>
+                                                                            <span>Total crédito</span>
+                                                                            <strong>{m.document_total != null ? fmt(m.document_total, m.currency) : '-'}</strong>
+                                                                            <span>Aplicado</span>
+                                                                            <strong>{m.document_applied != null ? fmt(m.document_applied, m.currency) : '-'}</strong>
+                                                                            <span>Disponible</span>
+                                                                            <strong>{m.document_available != null ? fmt(m.document_available, m.currency) : '-'}</strong>
+                                                                        </>
+                                                                    ) : (
+                                                                        <>
+                                                                            <span>Total a cobrar</span>
+                                                                            <strong>{m.document_total != null ? fmt(m.document_total, m.currency) : '-'}</strong>
+                                                                            <span>Cobrado/aplic.</span>
+                                                                            <strong>{m.document_applied != null ? fmt(m.document_applied, m.currency) : '-'}</strong>
+                                                                            <span>Saldo pte.</span>
+                                                                            <strong>{m.document_pending != null ? fmt(m.document_pending, m.currency) : '-'}</strong>
+                                                                        </>
+                                                                    )}
+                                                                    <span>Estado</span>
+                                                                    <strong style={{
+                                                                        color: (m.document_status_kind === 'paid' || m.document_status_kind === 'applied') ? '#34d399' :
+                                                                               (m.document_status_kind === 'partial' || m.document_status_kind === 'partial_credit') ? '#fbbf24' :
+                                                                               (m.document_status_kind === 'unpaid') ? '#f87171' : '#60a5fa'
+                                                                    }}>{m.document_status_label}</strong>
+                                                                </div>
+
+                                                                {isFxMovement(m) && hasFxOriginData(m) && (
+                                                                    <>
+                                                                        <div className={s.fxTooltipTitle} style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 10, marginTop: 10, color: '#94a3b8', fontSize: 11 }}>
+                                                                            Origen FX
+                                                                        </div>
+                                                                        <div className={s.fxTooltipGrid}>
+                                                                            {m.fx_kind === "CREDIT_FX_REVERSAL" && (
+                                                                                <>
+                                                                                    <span style={{ gridColumn: '1 / -1', color: '#fff' }}>Reversa por anulación</span>
+                                                                                    {m.reverses_document_number && m.reverses_document_number !== "-" && (
+                                                                                        <>
+                                                                                            <span>Cancela</span>
+                                                                                            <strong>{m.reverses_document_number}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                </>
+                                                                            )}
+                                                                            {m.source_invoice_number && m.source_invoice_number !== "-" && (
+                                                                                <>
+                                                                                    <span>Factura base</span>
+                                                                                    <strong>{m.source_invoice_number}</strong>
+                                                                                </>
+                                                                            )}
+                                                                            
+                                                                            {m.fx_kind !== "CREDIT_FX_REVERSAL" && (
+                                                                                <>
+                                                                                    {m.source_receipt_number && m.source_receipt_number !== "-" && (
+                                                                                        <>
+                                                                                            <span>Recibo aplicado</span>
+                                                                                            <strong>{m.source_receipt_number}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                    {m.invoice_exchange_rate && m.invoice_exchange_rate !== "-" && (
+                                                                                        <>
+                                                                                            <span>TC factura</span>
+                                                                                            <strong>{m.invoice_exchange_rate}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                    {m.application_exchange_rate && m.application_exchange_rate !== "-" && (
+                                                                                        <>
+                                                                                            <span>TC aplicación</span>
+                                                                                            <strong>{m.application_exchange_rate}</strong>
+                                                                                        </>
+                                                                                    )}
+                                                                                </>
+                                                                            )}
+                                                                        </div>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td className={s.cell}>{m.due_date ? fmt(m.due_date, 'date') : '-'}</td>
+                                                <td className={s.cell}>{m.currency}</td>
+                                                <td className={s.cell}>{m.exchange_rate}</td>
+                                                <td className={s.cell} title={m.sale_condition}>{m.sale_condition || '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars > 0 ? fmt(m.amount_ars, 'ARS') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_ars < 0 ? fmt(Math.abs(m.amount_ars), 'ARS') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum} ${s.balanceArs}`}>{fmt(m.balance_ars, 'ARS')}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd > 0 ? fmt(m.amount_usd, 'USD') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum}`}>{m.amount_usd < 0 ? fmt(Math.abs(m.amount_usd), 'USD') : '-'}</td>
+                                                <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`}>{fmt(m.balance_usd, 'USD')}</td>
+                                            </tr>
+                                        )) : (
+                                            <tr>
+                                                <td colSpan={15} style={{ textAlign: 'center', padding: '40px 20px', color: '#64748b', fontSize: '13px' }}>
+                                                    {filters.view === 'customer' ? 'No hay movimientos como cliente en el período seleccionado.' : 
+                                                     filters.view === 'supplier' ? 'No hay movimientos como proveedor en el período seleccionado.' : 
+                                                     'No hay movimientos en el período seleccionado.'}
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                    <tfoot className={s.tfoot}>
+                                        <tr>
+                                            <td colSpan={9} className={s.totalLabelCell}>TOTALES ACUMULADOS</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.d_ars, 'ARS')}</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.h_ars, 'ARS')}</td>
+                                            <td className={`${s.totalAmountCell} ${s.finalBalance} ${s.balanceArs}`}>{fmt(totals.b_ars, 'ARS')}</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.d_usd, 'USD')}</td>
+                                            <td className={s.totalAmountCell}>{fmt(totals.h_usd, 'USD')}</td>
+                                            <td className={`${s.totalAmountCell} ${s.finalBalance} ${s.balanceUsd}`}>{fmt(totals.b_usd, 'USD')}</td>
+                                        </tr>
+                                    </tfoot>
+                                </table>
                             </div>
-                        )}
+                            {/* Unbilled Delivery Notes Section */}
+                            {showUnbilled && (
+                                <div className={s.remitosSection}>
+                                    <div className={s.remitosHeader}>Remitos pendientes de facturar</div>
+                                    {filteredUnbilledMovements.length > 0 ? (
+                                        <div className={s.remitosTableWrapper}>
+                                            <table className={s.remitosTable}>
+                                                <thead>
+                                                    <tr>
+                                                        <th>Fecha</th>
+                                                        <th>Estado</th>
+                                                        <th>Número</th>
+                                                        <th>Moneda</th>
+                                                        <th style={{ textAlign: 'right' }}>Total remito</th>
+                                                        <th style={{ textAlign: 'right' }}>Facturado</th>
+                                                        <th style={{ textAlign: 'right' }}>Pendiente de facturar</th>
+                                                        <th>Factura/s relacionada/s</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {filteredUnbilledMovements.map((m, idx) => (
+                                                        <tr key={m.id || idx}>
+                                                            <td className={s.cell}>{fmt(m.date, 'date')}</td>
+                                                            <td className={s.cell}>
+                                                                <div className={s.statusBadge} style={{ textTransform: 'none', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                                                                    {m.status === 'FACTURADO' ? <CheckCircle2 size={12} style={{ color: '#34d399' }} /> :
+                                                                     m.status === 'ANULADO' ? <AlertCircle size={12} style={{ color: '#f87171' }} /> :
+                                                                     <Clock size={12} style={{ color: '#d97706' }} />}
+                                                                    <span className={s.docLabel} style={{
+                                                                        color: m.status === 'FACTURADO' ? '#34d399' :
+                                                                               m.status === 'ANULADO' ? '#f87171' : '#d97706'
+                                                                    }}>{m.status_label || m.status || 'PENDIENTE'}</span>
+                                                                </div>
+                                                            </td>
+                                                            <td className={s.cell}>
+                                                                <span 
+                                                                    className={s.numberLink} 
+                                                                    onClick={() => handleRowClick({ ...m, doc_type: 'DELIVERY_NOTE' })}
+                                                                >
+                                                                    {m.number}
+                                                                </span>
+                                                            </td>
+                                                            <td className={s.cell}>{String(m.currency || '').toUpperCase().includes('USD') ? 'USD' : (m.currency || '-')}</td>
+                                                            <td className={`${s.cell} ${s.cellNum}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(m.total_amount, m.currency)}</td>
+                                                            <td className={`${s.cell} ${s.cellNum}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(m.invoiced_amount, m.currency)}</td>
+                                                            <td className={`${s.cell} ${s.cellNum} ${s.balanceUsd}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(m.pending_amount, m.currency)}</td>
+                                                            <td className={s.cell}>{m.related_invoices && m.related_invoices.length > 0 ? m.related_invoices.join(', ') : '-'}</td>
+                                                        </tr>
+                                                    ))}
+                                                </tbody>
+                                                <tfoot className={s.tfoot}>
+                                                    {unbilledTotals.ars.total > 0 && (
+                                                        <tr>
+                                                            <td colSpan={4} className={s.totalLabelCell}>TOTALES REMITOS PENDIENTES (ARS)</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.ars.total, 'ARS')}</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.ars.invoiced, 'ARS')}</td>
+                                                            <td className={`${s.totalAmountCell} ${s.balanceUsd}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.ars.pending, 'ARS')}</td>
+                                                            <td></td>
+                                                        </tr>
+                                                    )}
+                                                    {(unbilledTotals.usd.total > 0 || unbilledTotals.ars.total === 0) && (
+                                                        <tr>
+                                                            <td colSpan={4} className={s.totalLabelCell}>TOTALES REMITOS PENDIENTES (USD)</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.usd.total, 'USD')}</td>
+                                                            <td className={s.totalAmountCell} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.usd.invoiced, 'USD')}</td>
+                                                            <td className={`${s.totalAmountCell} ${s.balanceUsd}`} style={{ textAlign: 'right' }}>{fmtRemitoAmount(unbilledTotals.usd.pending, 'USD')}</td>
+                                                            <td></td>
+                                                        </tr>
+                                                    )}
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    ) : (
+                                        <div className={s.emptyRemitosBox}>
+                                            <strong>Sin remitos pendientes</strong>
+                                            <span>No hay remitos pendientes de facturar para este cliente.</span>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 ) : (
                     <div className={s.emptyState}>

@@ -158,3 +158,25 @@
     color: var(--text-secondary);
     padding-right: 8px;
 }
+
+.inputWrapper.side {
+    height: 28px;
+}
+
+.input.side {
+    background: #f1f5f9;
+    border: none;
+    border-radius: 6px;
+    height: 100%;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 2px 6px;
+    color: #1e293b;
+    text-align: right;
+    box-shadow: none;
+}
+
+.input.side:focus {
+    box-shadow: none;
+    background: #e2e8f0;
+}

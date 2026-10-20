@@ -7,8 +7,9 @@ import Modal from "../../components/ui/Modal";
 import Drawer from "../../components/ui/Drawer";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
-import { useWindow } from "../../context/WindowContext";
-import { useToast } from "../../context/ToastContext";
+import { useWindow } from '../../context/WindowContext';
+import { openEditOrdenVenta, openNuevaFactura } from '../../utils/openStandaloneWindow';
+import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
 import {
@@ -48,9 +49,32 @@ import {
   CheckSquare,
   Square,
   AlertCircle,
-  ArrowRight
+  ArrowRight,
+  Pencil
 } from "lucide-react";
 import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/ui/TraceabilityStatusBadge";
+
+function isCancelledStatus(val) {
+  const s = String(val || "").toUpperCase();
+  return ["CANCELLED", "CANCELED", "ANNULLED", "ANULADA", "ANULADO", "VOID"].includes(s);
+}
+
+// Helper to compute display value for Remitir column (packages or quantity)
+function formatQty(value) {
+  const n = Number(value || 0);
+  return Number.isInteger(n)
+    ? String(n)
+    : n.toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+function getDisplayPackages(item) {
+  const qty = Number(item.qty || 0);
+  const factor = Number(item._unit_content || 1);
+  if (factor > 1) {
+    return `${formatQty(qty / factor)} env.`;
+  }
+  return `${formatQty(qty)} ${item._unit_label || 'u'}.`;
+}
 import s from "./SalesOrderForm.module.css";
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
@@ -72,17 +96,19 @@ export default function DeliveryNoteForm(props) {
   const { costCenter } = useCostCenter();
 
   const [mode, setMode] = useState(initialMode);
-  const [id, setId] = useState(initialId);
   const [loading, setLoading] = useState(mode === "edit");
+  const [saving, setSaving] = useState(false);
+  const [id, setId] = useState(initialId);
   const [items, setItems ] = useState([]);
   const [activeTab, setActiveTab ] = useState("items");
   const [sourceId, setSourceId] = useState(props.initialSourceId || ov_id || '');
   const [sourceType, setSourceType] = useState(props.initialSourceType || (ov_id ? 'sales-order' : ''));
   const [sourceOrderId, setSourceOrderId] = useState(ov_id || '');
+  const [ovHasInvoices, setOvHasInvoices] = useState(false);
   const [traceability, setTraceability] = useState(null);
   const [invoices, setInvoices] = useState([]);
   const [relatedDeliveryNotes, setRelatedDeliveryNotes] = useState([]);
-  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit" || initialMode === "view");
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [selectableItems, setSelectableItems] = useState([]);
   const [selectorLoading, setSelectorLoading] = useState(false);
@@ -92,6 +118,10 @@ export default function DeliveryNoteForm(props) {
   const [searchTerm, setSearchTerm] = useState("");
   const [showManualLinkModal, setShowManualLinkModal] = useState(false);
   const [dnTraceability, setDnTraceability] = useState(null);
+  
+  // Facturación
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [invoiceQtys, setInvoiceQtys] = useState({});
 
   // --- Header Data ---
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -125,8 +155,7 @@ export default function DeliveryNoteForm(props) {
   const totals = useMemo(() => {
     return items.reduce(
       (acc, i) => {
-        const factor = i._unit_content || 1;
-        const sub = (i.qty || 0) * factor * (i.unit_price || 0);
+        const sub = (i.qty || 0) * (i.unit_price || 0);
         const bonif = sub * ((i.discount_pct || 0) / 100);
         const net = sub - bonif;
         const vat = net * (i.vat_rate || 0.21);
@@ -141,7 +170,7 @@ export default function DeliveryNoteForm(props) {
     );
   }, [items]);
 
-  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + ((parseFloat(item.qty) || 0) * (parseFloat(item._unit_content) || 1)), 0), [items]);
+  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + (parseFloat(item.qty) || 0), 0), [items]);
 
   useEffect(() => {
     if (ov_id) {
@@ -212,7 +241,7 @@ export default function DeliveryNoteForm(props) {
                 _unit_content: parseFloat(l._unit_content || 1),
                 _container_name: l._container_name || 'Unidad',
                 _unit_label: l._unit_label || 'u',
-                source_sales_line_id: l.id,
+                source_sales_line_id: l.source_sales_line_id || l.id,
                 _parent_number: l.parent_number || '',
             })));
         } else if (autoOpenSelector) {
@@ -222,6 +251,34 @@ export default function DeliveryNoteForm(props) {
         }
     }
   }, [mode, id, ov_id, autoOpenSelector]);
+
+  useEffect(() => {
+    const handleDocumentMessage = (e) => {
+        const payload = e.data;
+        if (!payload || payload.type !== 'QUINTAL_DOCUMENT_SAVED') return;
+        
+        if (payload.documentType === 'invoice' && mode === 'edit' && id) {
+            if (payload.deliveryNoteId === id || payload.salesOrderId === sourceOrderId) {
+                fetchDeliveryNote();
+                fetchDeliveryNoteTraceability();
+            }
+        }
+    };
+
+    window.addEventListener("message", handleDocumentMessage);
+    let bc;
+    try {
+        bc = new BroadcastChannel("quintal-documents");
+        bc.onmessage = handleDocumentMessage;
+    } catch (err) {
+        console.error("BroadcastChannel not supported", err);
+    }
+
+    return () => {
+        window.removeEventListener("message", handleDocumentMessage);
+        if (bc) bc.close();
+    };
+  }, [mode, id, sourceOrderId]);
 
   useEffect(() => {
     if (sourceId && sourceType === 'sales-order') {
@@ -388,6 +445,10 @@ export default function DeliveryNoteForm(props) {
         setSourceId(data.number);
         setSourceType('sales-order');
         setSourceOrderId(data.id);
+        const statusStr = data.status || "";
+        if (statusStr.includes("INVOICED") || statusStr.includes("FACTURADO") || statusStr.includes("COMPLETED")) {
+            setOvHasInvoices(true);
+        }
         fetchTraceability(data.id);
         setVendedor(data.vendedor || '');
         setSalespersonId(data.salesperson_id || '');
@@ -420,6 +481,10 @@ export default function DeliveryNoteForm(props) {
         setSourceId(data.number);
         setSourceType('sales-order');
         setSourceOrderId(data.id);
+        const statusStr = data.status || "";
+        if (statusStr.includes("INVOICED") || statusStr.includes("FACTURADO") || statusStr.includes("COMPLETED")) {
+            setOvHasInvoices(true);
+        }
         fetchTraceability(data.id);
         setVendedor(data.vendedor || '');
         setSalespersonId(data.salesperson_id || '');
@@ -564,11 +629,15 @@ export default function DeliveryNoteForm(props) {
       } else if (item.currency === 'ARS' && currency === 'USD') {
         finalUnitPrice = exchangeRate > 0 ? item.unit_price / exchangeRate : item.unit_price;
       }
+      const factor = item.quantity_per_container || 1;
+      const qtyBase = selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0);
+      
       return {
         id: Math.random(),
         product_id: item.product_id,
         description: item.product_name || item.description,
-        qty: selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0),
+        qty: qtyBase,
+        qty_packages: factor > 1 ? qtyBase / factor : undefined,
         unit_price: finalUnitPrice,
         discount_pct: item.discount_pct || 0,
         vat_rate: item.vat_rate || 0.21,
@@ -668,7 +737,7 @@ export default function DeliveryNoteForm(props) {
         }
     }
 
-    setLoading(true);
+    setSaving(true);
     const token = localStorage.getItem("token");
     const payload = {
         entity_id: entity.id,
@@ -731,15 +800,121 @@ export default function DeliveryNoteForm(props) {
             const savedId = data.id || id;
             showToast("Remito guardado exitosamente", "success");
             window.dispatchEvent(new CustomEvent("delivery-note-changed"));
+            
+            // Emit QUINTAL_DOCUMENT_SAVED
+            const eventPayload = {
+                type: "QUINTAL_DOCUMENT_SAVED",
+                documentType: "delivery-note",
+                deliveryNoteId: savedId,
+                salesOrderId: sourceOrderId,
+                entityId: entity.id,
+                timestamp: Date.now()
+            };
+            const balanceEvent = {
+                type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                entityId: entity.id,
+                documentId: savedId,
+                docType: "delivery-note",
+                timestamp: Date.now()
+            };
+            
+            if (window.opener) {
+                window.opener.postMessage(eventPayload, "*");
+                window.opener.postMessage(balanceEvent, "*");
+            }
+            try {
+                const bc = new BroadcastChannel("quintal-documents");
+                bc.postMessage(eventPayload);
+                bc.postMessage(balanceEvent);
+                bc.close();
+            } catch (err) {
+                console.error("BroadcastChannel error:", err);
+            }
+
             setMode("edit");
             setId(savedId);
+            setIsReadOnly(true);
+            // Fetch fresh saved note to load the updated view schema values and totals
+            fetchDeliveryNote();
         } else {
             const err = await res.json();
             showToast(err.detail || "Error al guardar", "error");
         }
     } finally {
-        setLoading(false);
+        setSaving(false);
     }
+  };
+
+  const handleOpenInvoiceModal = () => {
+    const qtys = {};
+    items.forEach(item => {
+      const qtyInvoicedUnits = parseFloat(item.qty_invoiced || 0);
+      const qtyOrderedUnits = parseFloat(item.qty || 0);
+      const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
+      const orderedPkgs = factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+      const invoicedPkgs = factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+      const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
+      qtys[item.id] = pendingPkgs;
+    });
+    setInvoiceQtys(qtys);
+    setShowInvoiceModal(true);
+  };
+
+  const handleConfirmInvoice = () => {
+    const selectedLines = items
+      .filter(item => (parseFloat(invoiceQtys[item.id] || 0)) > 0)
+      .map(item => {
+        const qtyPkgs = parseFloat(invoiceQtys[item.id] || 0);
+        const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
+        const qtyUnits = factor > 1 ? qtyPkgs * factor : qtyPkgs;
+        const lineName = item.product_name || item.product?.name || item.description || item.name || item.concept || item.item_name || '';
+        
+        return {
+          ...item,
+          product_id: item.product_id || item.product?.id,
+          product_name: lineName,
+          description: lineName,
+          concept: lineName,
+          name: lineName,
+          qty: qtyUnits,
+          quantity: qtyUnits,
+          qty_packages: qtyPkgs,
+          qty_to_invoice: qtyUnits,
+          unit: item.unit || item._unit_label || 'LT',
+          unit_price: item.unit_price || item.price || 0,
+          price: item.unit_price || item.price || 0,
+          tax_rate: item.tax_rate ?? item.vat_rate ?? 21,
+          delivery_note_id: id,
+          source_sales_line_id: item.source_sales_line_id || null, // from DeliveryNote item.
+          source_dn_line_id: item.id,
+          accounting_account_id: item.product?.sales_account_id || item.sales_account_id || item.accounting_account_id || null
+        };
+      });
+
+    if (selectedLines.length === 0) {
+      showToast('Seleccioná al menos un ítem para facturar', 'warning');
+      return;
+    }
+
+    setShowInvoiceModal(false);
+
+    const draftId = `dn_${id}_${Date.now()}`;
+    const draftData = {
+      sourceType: 'delivery-note',
+      deliveryNoteId: id,
+      salesOrderId: sourceOrderId || null,
+      customerName: entity?.name,
+      currency: currency,
+      exchangeRate: exchangeRate,
+      pointOfSale: pv,
+      paymentCondition: selectedConditionId,
+      sellerId: salespersonId,
+      costCenter: ctroCosto,
+      lines: selectedLines
+    };
+    localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify(draftData));
+    
+    openNuevaFactura({ draft_id: draftId });
   };
 
   const handlePrint = () => {
@@ -766,15 +941,14 @@ export default function DeliveryNoteForm(props) {
 
   return (
     <>
-      <div className={`${s.formCard}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
+      <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
           {isLocked && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(37, 99, 235, 0.05)', color: '#1d4ed8', padding: '8px 24px', fontSize: 10, fontWeight: 900, textAlign: 'center', borderBottom: '1px solid rgba(37, 99, 235, 0.1)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, backdropFilter: 'blur(4px)' }}>
                 <Receipt size={14} /> DOCUMENTO BLOQUEADO POR FACTURACIÓN. NO SE PERMITEN MODIFICACIONES.
                 <button style={{ pointerEvents: 'auto', background: 'none', border: 'none', color: '#1d4ed8', textDecoration: 'underline', cursor: 'pointer', marginLeft: 12, fontSize: 10, fontWeight: 950 }} onClick={() => closeWindow(windowId)}>SALIR</button>
             </div>
           )}
-
-          {/* Header Section */}
+              {/* Header Section */}
           <div className={s.headerLine} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
               <div className={s.compactHeaderTitle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
@@ -791,11 +965,44 @@ export default function DeliveryNoteForm(props) {
                   </div>
               </div>
               <div className={s.headerActions}>
-                  <button className={s.saveBtn} onClick={handleSave} disabled={isLocked} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                      <Save size={16} />
-                      Guardar
-                  </button>
+                  {isReadOnly ? (
+                    <button 
+                      className={s.saveBtn} 
+                      style={{ background: '#64748b', cursor: 'pointer' }} 
+                      onClick={() => {
+                        if (isLocked) {
+                          showToast("Atención: este remito está bloqueado por facturación.", "warning");
+                        } else {
+                          setIsReadOnly(false);
+                        }
+                      }}
+                      title="Activar modo edición"
+                      disabled={isLocked}
+                    >
+                        <Pencil size={16} />
+                        Editar
+                    </button>
+                  ) : (
+                    <button className={s.saveBtn} onClick={handleSave} disabled={isLocked || saving} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
+                        {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
+                        {saving ? "Guardando..." : "Guardar"}
+                    </button>
+                  )}
                   <div className={s.actionGroup}>
+                      {mode === "edit" && 
+                       (initialData?.note_type === "SALE" || !initialData?.note_type) && 
+                       status !== "CANCELLED" && 
+                       items.some(i => (parseFloat(i.qty || 0) - parseFloat(i.qty_invoiced || 0)) > 0) && (
+                          <button 
+                              className={s.saveBtn} 
+                              style={{ background: '#7c3aed', color: 'white', border: 'none', marginLeft: 8, height: 36, padding: '0 16px', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', fontWeight: 800, fontSize: 13 }} 
+                              onClick={handleOpenInvoiceModal}
+                              title="Generar factura"
+                          >
+                              <Receipt size={16} />
+                              Generar factura
+                          </button>
+                      )}
                       <button className={s.actionBtn} disabled={!id || isLocked} onClick={async () => {
                           if (!window.confirm("¿Estás seguro de anular este remito? Esta acción no se puede deshacer.")) return;
                           try {
@@ -805,29 +1012,64 @@ export default function DeliveryNoteForm(props) {
                               });
                               if (res.ok) {
                                   window.dispatchEvent(new CustomEvent("delivery-note-changed"));
+                                  
+                                  const eventPayload = {
+                                      type: "QUINTAL_DOCUMENT_CANCELLED",
+                                      documentType: "delivery-note",
+                                      deliveryNoteId: id,
+                                      entityId: entity?.id,
+                                      timestamp: Date.now()
+                                  };
+                                  const balanceEvent = {
+                                      type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
+                                      entityId: entity?.id,
+                                      documentId: id,
+                                      docType: "delivery-note",
+                                      timestamp: Date.now()
+                                  };
+                                  if (window.opener) {
+                                      window.opener.postMessage(eventPayload, "*");
+                                      window.opener.postMessage(balanceEvent, "*");
+                                  }
+                                  try {
+                                      const bc = new BroadcastChannel("quintal-documents");
+                                      bc.postMessage(eventPayload);
+                                      bc.postMessage(balanceEvent);
+                                      bc.close();
+                                  } catch (err) {
+                                      console.error("BroadcastChannel error:", err);
+                                  }
+                                  
                                   closeWindow(windowId);
                               }
                           } catch (e) {
                               console.error(e);
                           }
                       }} title="Anular Remito" style={{ color: '#ef4444' }}>
-                          <Trash2 size={18} /> Anular
+                          <Trash2 size={18} />
                       </button>
                       <button className={s.actionBtn} disabled={!id} onClick={handlePrintPreprinted} title="Imprimir Remito">
-                          <Printer size={18} /> Imprimir
+                          <Printer size={18} />
                       </button>
                       <button className={s.actionBtn} onClick={() => closeWindow(windowId)} title="Volver">
-                          <X size={18} /> Volver
+                          <X size={18} />
                       </button>
                   </div>
               </div>
           </div>
+          {/* Alertas */}
+          {!isReadOnly && sourceType === 'sales-order' && ovHasInvoices && (
+              <div style={{ margin: '0 24px 16px', padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: '8px', display: 'flex', alignItems: 'center', gap: '12px', color: '#1e3a8a', fontSize: '14px', fontWeight: 500 }}>
+                  <span style={{ fontSize: '18px' }}>ℹ️</span>
+                  Esta orden de venta ya tiene una factura asociada. El remito se vinculará automáticamente a esa factura.
+              </div>
+          )}
 
           {/* Body: 2 Column Layout */}
           <div className={s.bodyTwoColumns} style={{ opacity: isLocked ? 0.8 : 1 }}>
               {/* Columna Izquierda: Ítems y Productos */}
               <div className={s.leftCol}>
-                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden' }}>
+                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden', flex: 1, minHeight: 0 }}>
                       {items.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {isReadOnly ? null : (
@@ -841,7 +1083,7 @@ export default function DeliveryNoteForm(props) {
                                     <div></div>
                                 </div>
                             )}
-                            <div className={s.itemsList} style={{ overflowX: 'hidden' }}>
+                            <div className={s.itemsList}>
                                 {items.map(item => {
                                     if (isReadOnly) {
                                         const qtyOrdered = parseFloat(item.qty_ordered) || 0;
@@ -851,29 +1093,35 @@ export default function DeliveryNoteForm(props) {
                                         const qtyPackages = item.qty_packages;
                                         const qty = item.qty || 0;
                                         const hasPackages = qtyPackages !== undefined && qtyPackages !== null;
-                                        const subtotal = qty * (item.unit_price || 0);
+                                        
+                                        const totalQty = qty;
+                                        const subtotalNeto = totalQty * (item.unit_price || 0) * (1 - (item.discount_pct || 0)/100);
+                                        const vatAmount = subtotalNeto * (item.vat_rate || 0.21);
+                                        const totalAmount = subtotalNeto + vatAmount;
                                         
                                         return (
                                             <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                    <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.name || item.product?.name || item.description}</div>
-                                                    <div style={{ display: 'flex', gap: 12, fontSize: 11, background: '#f8fafc', padding: '4px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                                                        <div style={{ color: '#64748b' }}><span style={{ fontWeight: 800 }}>Ped:</span> {qtyOrdered.toFixed(2)}</div>
-                                                        <div style={{ color: 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Rem:</span> {qtyDelivered.toFixed(2)}</div>
-                                                        <div style={{ color: qtyPending > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {qtyPending.toFixed(2)}</div>
+                                                    <div>
+                                                        <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.name || item.product?.name || item.description || ''}</div>
+                                                    </div>
+                                                    <div style={{ display: 'flex', gap: 8, fontSize: 10, fontWeight: 800, background: '#f8fafc', padding: '4px 8px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                                        <span style={{ color: '#64748b' }}>Ped: {qtyOrdered.toFixed(2)}</span>
+                                                        <span style={{ color: '#059669' }}>Rem: {qtyDelivered.toFixed(2)}</span>
+                                                        <span style={{ color: qtyPending > 0 ? '#d97706' : '#059669' }}>Pte: {qtyPending.toFixed(2)}</span>
                                                     </div>
                                                 </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569' }}>
-                                                    {hasPackages ? (
-                                                        <>
-                                                            <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qtyPackages} envases</div>
-                                                            <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {qtyPackages} envases = {qty.toFixed(2)} {item._unit_label || 'u'}</div>
-                                                        </>
-                                                    ) : (
-                                                        <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qty.toFixed(2)} {item._unit_label || 'u'}</div>
+                                                
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569', alignItems: 'center' }}>
+                                                                                    <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {totalQty.toFixed(2)} {item._unit_label || 'u'}</div>
+                                                    {Number(item._unit_content || 1) > 1 && (
+                                                        <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {getDisplayPackages(item)}</div>
                                                     )}
-                                                    <div><span style={{ fontWeight: 800 }}>Precio:</span> {Number(item.unit_price || 0).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })} / {item._unit_label || 'u'}</div>
-                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Subtotal:</span> {Number(subtotal).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })}</div>
+                                                    
+                                                    <div><span style={{ fontWeight: 800 }}>Precio:</span> {fmt(item.unit_price)} / {item._unit_label || 'u'}</div>
+                                                    <div><span style={{ fontWeight: 800 }}>Subtotal:</span> {fmt(subtotalNeto)}</div>
+                                                    <div><span style={{ fontWeight: 800 }}>IVA:</span> {fmt(vatAmount)}</div>
+                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Total:</span> {fmt(totalAmount)}</div>
                                                 </div>
                                             </div>
                                         );
@@ -893,7 +1141,11 @@ export default function DeliveryNoteForm(props) {
                                             <div style={{ color: (item.qty_pending || 0) > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {(item.qty_pending || 0).toFixed(2)}</div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                                            <input type="number" step="0.01" min="0" max={item.qty_pending || 0} className={s.tableInput} value={item.qty_packages !== undefined ? item.qty_packages : (item.qty || 0)} onChange={(e) => updateItem(item.id, 'qty_packages', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
+                                            <input type="number" step="0.01" min="0" max={item.qty_pending || 0} className={s.tableInput} value={
+            item.qty_packages !== undefined ? item.qty_packages : (
+              Number(item._unit_content) > 1 ? (Number(item.qty) || 0) / Number(item._unit_content) : (item.qty || 0)
+            )
+          } onChange={(e) => updateItem(item.id, 'qty_packages', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
                                             {item._unit_content > 1 && (
                                                 <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>
                                                     = {(item.qty || 0).toFixed(2)} {item._unit_label || 'u'}
@@ -928,9 +1180,29 @@ export default function DeliveryNoteForm(props) {
                         </div>
                       )}
                   </div>
+
+                  {/* Observaciones (Mismo ancho que productos, altura fija y flex-shrink 0) */}
+                  <div className={s.sideBlock} style={{ height: 80, display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'center', padding: '8px 16px', flexShrink: 0 }}>
+                      <div className={s.sideBlockTitle} style={{ margin: 0, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                          <ClipboardList size={14} /> OBSERVACIONES
+                      </div>
+                      <div style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'center' }}>
+                          {isReadOnly ? (
+                              <div style={{ fontSize: 12, color: observations ? 'var(--text)' : '#64748b', fontStyle: observations ? 'normal' : 'italic' }}>
+                                  {observations || 'Sin observaciones'}
+                              </div>
+                          ) : (
+                              <textarea
+                                  style={{ width: '100%', height: '100%', minHeight: 'unset', padding: '6px 12px', borderRadius: 8, border: '1px solid var(--border-color)', background: '#fff', resize: 'none', fontSize: 12, boxSizing: 'border-box' }}
+                                  value={observations}
+                                  onChange={e => setObservations(e.target.value)}
+                                  placeholder="Añadir observaciones logísticas o referencias..."
+                              />
+                          )}
+                      </div>
+                  </div>
               </div>
 
-              {/* Columna Derecha: Panel Lateral Administrativo */}
               {/* Columna Derecha: Panel Lateral Administrativo */}
               <div className={s.rightCol}>
                   {/* Bloque Cliente */}
@@ -978,7 +1250,7 @@ export default function DeliveryNoteForm(props) {
                   </div>
 
                   {/* Bloque Operativo / Logística */}
-                  <div className={s.sideBlock} style={{ height: '100%' }}>
+                  <div className={s.sideBlock}>
                       <div className={s.sideBlockTitle}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
                       <div className={s.sideField}>
                           <label>TRANSPORTE</label>
@@ -998,29 +1270,19 @@ export default function DeliveryNoteForm(props) {
                               <input className={s.sideInput} value={vehiclePlate} onChange={e => setVehiclePlate(e.target.value)} placeholder="Ej: AB123CD" />
                           )}
                       </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 12, flex: 1 }}>
-                          <label style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-secondary)' }}>OBSERVACIONES</label>
-                          <textarea 
-                             style={{ flex: 1, minHeight: 80, padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-color)', background: isReadOnly ? 'var(--bg-secondary)' : '#fff', resize: 'none', fontSize: 12 }} 
-                             value={observations} 
-                             onChange={e => setObservations(e.target.value)} 
-                             placeholder="Añadir observaciones logísticas o referencias..."
-                             readOnly={isReadOnly}
-                          />
-                      </div>
                   </div>
               </div>
           </div>
 
 
-          {/* Relations Bar: OV → REMITO → FACTURA → STOCK → OBSERVACIONES */}
+          {/* Relations Bar: OV → REMITO → FACTURA → STOCK */}
           <div className={s.relationsBar}>
 
             {/* ORDEN DE VENTA */}
             {sourceId ? (
               <div
                 className={s.relationCard}
-                onClick={() => { if (sourceOrderId) openWindow('sales-order', { id: sourceOrderId, mode: 'edit' }, { title: `Pedido ${sourceId}`, width: 1200 }); }}
+                onClick={() => { if (sourceOrderId) openEditOrdenVenta(sourceOrderId, { title: `Pedido ${sourceId}`, width: 1200 }); }}
               >
                 <div className={s.nodeTitle} style={{ color: '#2563eb' }}>ORDEN DE VENTA</div>
                 <div className={s.nodeBadge}>● Vinculada</div>
@@ -1047,13 +1309,51 @@ export default function DeliveryNoteForm(props) {
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
             {/* FACTURA */}
-            <div className={s.relationCard}>
-              <div className={s.nodeTitle} style={{ color: invoices.length > 0 ? '#f97316' : '#0b132b' }}>FACTURA</div>
-              <div className={s.nodeStatus} style={{ color: progressInvoiced >= 100 ? '#10b981' : progressInvoiced > 0 ? '#f97316' : '#eab308' }}>
-                {progressInvoiced >= 100 ? 'Completa' : progressInvoiced > 0 ? 'Parcial' : 'Pendiente'}
-              </div>
-              <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{invoices.length} factura(s) · {Math.round(progressInvoiced)}%</div>
-            </div>
+            {(() => {
+              const activeInvoices = invoices.filter(inv => !isCancelledStatus(inv.status));
+              const cancelledInvoices = invoices.filter(inv => isCancelledStatus(inv.status));
+              
+              const totalRemittedQty = items.reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0);
+              const totalInvoicedQty = items.reduce((acc, i) => acc + (parseFloat(i.qty_invoiced) || 0), 0);
+              const pendingQty = Math.max(0, totalRemittedQty - totalInvoicedQty);
+              const unitLabel = items.length > 0 && items.every(i => i._unit_label === items[0]._unit_label) ? (items[0]._unit_label || 'u.') : 'u.';
+              
+              if (invoices.length > 0) {
+                return (
+                  <div 
+                    className={s.relationCard} 
+                    onClick={() => invoices.length === 1 && openNuevaFactura({ id: invoices[0].id })}
+                    style={{ cursor: invoices.length === 1 ? 'pointer' : 'default', border: pendingQty <= 0 ? '1.5px solid #10b981' : '1.5px solid #f97316' }}
+                  >
+                    <div className={s.nodeTitle} style={{ color: pendingQty <= 0 ? '#10b981' : '#f97316' }}>FACTURA</div>
+                    <div className={s.nodeBadge} style={{ background: pendingQty <= 0 ? '#d1fae5' : '#ffedd5', color: pendingQty <= 0 ? '#059669' : '#c2410c' }}>
+                      {pendingQty <= 0 ? '● Vinculada Total' : '● Vinculada Parcial'}
+                    </div>
+                    <div className={s.nodeMetric} style={{ color: '#0f172a', marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '2px', fontSize: '11px' }}>
+                      <span style={{ fontWeight: 600, fontSize: '12px' }}>
+                        {activeInvoices.length} activa(s) {cancelledInvoices.length > 0 ? `· ${cancelledInvoices.length} anulada(s)` : ''}
+                      </span>
+                      <span>Facturado: {totalInvoicedQty.toFixed(2)} {unitLabel}</span>
+                      {pendingQty > 0 && <span>Pendiente: {pendingQty.toFixed(2)} {unitLabel}</span>}
+                    </div>
+                    {mode === 'edit' && pendingQty > 0 && (
+                      <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar Resto</button>
+                    )}
+                  </div>
+                );
+              } else {
+                return (
+                  <div className={s.relationCard}>
+                    <div className={s.nodeTitle} style={{ color: '#0b132b' }}>FACTURA</div>
+                    <div className={s.nodeStatus} style={{ color: '#eab308' }}>Pendiente</div>
+                    <div className={s.nodeMetric} style={{ color: '#0f172a' }}>0 factura(s) · {totalRemittedQty.toFixed(2)} {unitLabel} pendientes</div>
+                    {mode === 'edit' && (
+                      <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Generar</button>
+                    )}
+                  </div>
+                );
+              }
+            })()}
 
             <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
@@ -1067,13 +1367,60 @@ export default function DeliveryNoteForm(props) {
                 {items.reduce((acc, i) => acc + (parseFloat(i.qty) || 0), 0).toFixed(2)} u. · {warehouses.find(w => w.id === warehouseId)?.name || 'S/D'}
               </div>
             </div>
-
-            {/* OBSERVACIONES */}
-            <div className={s.relationCard} style={{ maxWidth: '140px', background: 'transparent', border: 'none', paddingLeft: 8, cursor: 'default' }} onClick={(e) => e.stopPropagation()}>
-              <div className={s.nodeTitle} style={{ color: '#64748b' }}>OBSERVACIONES</div>
-              <div className={s.obsText} style={{ marginTop: 4 }}>{observations || 'Sin observaciones'}</div>
-            </div>
           </div>
+
+          {/* Related Invoices List */}
+          {invoices.length > 0 && (
+            <div style={{ marginTop: 24, padding: 16, background: '#f8fafc', borderRadius: 8, border: '1px solid #e2e8f0' }}>
+              <div style={{ fontWeight: 600, fontSize: 13, color: '#334155', marginBottom: 12 }}>Facturas relacionadas</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #cbd5e1', color: '#64748b' }}>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 500 }}>Fecha</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 500 }}>Número</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'left', fontWeight: 500 }}>Estado</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 500 }}>Cant. remito</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 500 }}>Total</th>
+                    <th style={{ padding: '8px 4px', textAlign: 'right', fontWeight: 500 }}>Acción</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {invoices.map(inv => {
+                    const isCancelled = isCancelledStatus(inv.status);
+                    const unitLabel = items.length > 0 && items.every(i => i._unit_label === items[0]._unit_label) ? (items[0]._unit_label || 'u.') : 'u.';
+                    return (
+                      <tr key={inv.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+                        <td style={{ padding: '8px 4px' }}>{inv.date ? inv.date.split('T')[0].split('-').reverse().join('/') : '-'}</td>
+                        <td style={{ padding: '8px 4px', fontWeight: 500 }}>{inv.number}</td>
+                        <td style={{ padding: '8px 4px' }}>
+                          <span style={{ 
+                            padding: '2px 6px', 
+                            borderRadius: 4, 
+                            fontSize: 10, 
+                            fontWeight: 600,
+                            background: isCancelled ? '#fee2e2' : '#d1fae5',
+                            color: isCancelled ? '#ef4444' : '#059669'
+                          }}>
+                            {isCancelled ? 'ANULADA' : 'ACTIVA'}
+                          </span>
+                        </td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right' }}>{(inv.qty_from_this_delivery_note || 0).toFixed(2)} {unitLabel}</td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right' }}>{inv.currency === 'USD' ? 'u$s' : '$'} {(inv.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
+                        <td style={{ padding: '8px 4px', textAlign: 'right' }}>
+                          <button 
+                            onClick={() => openNuevaFactura({ id: inv.id })}
+                            style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}
+                          >
+                            Ver
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
 
           {/* Operational Summary Panel */}
           <div className={s.summaryPanel}>
@@ -1126,6 +1473,112 @@ export default function DeliveryNoteForm(props) {
           </div>
       </div>
 
+      {/* Invoicing Selection Modal */}
+      <Modal open={showInvoiceModal} title="Seleccionar ítems a facturar" onClose={() => setShowInvoiceModal(false)} wide>
+        <div style={{ padding: '0 24px 24px' }}>
+          <p style={{ fontSize: 13, color: '#64748b', marginBottom: 20, fontWeight: 600 }}>
+            Seleccioná los productos y cantidades que querés incluir en esta factura.
+            Lo que no factures quedará como <strong>pendiente</strong> en este remito.
+          </p>
+
+          <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 24 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '10px 16px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', alignItems: 'center' }}>
+              <div></div>
+              <div>PRODUCTO</div>
+              <div style={{ textAlign: 'center' }}>REMITIDO</div>
+              <div style={{ textAlign: 'center' }}>YA FACT.</div>
+              <div style={{ textAlign: 'center' }}>PENDIENTE</div>
+              <div style={{ textAlign: 'center' }}>A FACTURAR AHORA</div>
+            </div>
+            {items.map(item => {
+              const qtyInvoicedUnits = parseFloat(item.qty_invoiced || 0);
+              const qtyOrderedUnits = parseFloat(item.qty || 0);
+              const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
+              const orderedPkgs = factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+              const invoicedPkgs = factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+              const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
+              const currentQty = invoiceQtys[item.id] !== undefined ? invoiceQtys[item.id] : pendingPkgs;
+              const isSelected = currentQty > 0;
+              const unitLabel = item._unit_label || 'u';
+
+              return (
+                <div key={item.id} style={{ display: 'grid', gridTemplateColumns: '32px 2fr 110px 110px 110px 140px', gap: 12, padding: '14px 16px', borderBottom: '1px solid #f1f5f9', alignItems: 'center', background: isSelected ? '#f5f3ff' : '#fff', transition: 'background 0.15s' }}>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    {pendingPkgs > 0 ? (
+                      <button
+                        style={{ border: 'none', background: 'none', cursor: 'pointer', color: isSelected ? '#7c3aed' : '#cbd5e1', padding: 0 }}
+                        onClick={() => {
+                          if (isSelected) {
+                            setInvoiceQtys(prev => ({ ...prev, [item.id]: 0 }));
+                          } else {
+                            setInvoiceQtys(prev => ({ ...prev, [item.id]: pendingPkgs }));
+                          }
+                        }}
+                      >
+                        {isSelected ? <CheckSquare size={20} /> : <Square size={20} />}
+                      </button>
+                    ) : (
+                      <Check size={18} style={{ color: '#059669' }} title="Totalmente facturado" />
+                    )}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: '#1e293b' }}>{item.product?.name || item.name || item.description || 'Sin nombre'}</div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#94a3b8' }}>{item.product?.brand?.name || item.brand}</div>
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{orderedPkgs} env.</div>
+                    {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyOrderedUnits} {unitLabel}</div>}
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{invoicedPkgs} env.</div>
+                    {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyInvoicedUnits} {unitLabel}</div>}
+                  </div>
+                  <div style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 13, fontWeight: 900, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{pendingPkgs.toFixed(2)} env.</div>
+                    {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{(pendingPkgs * factor).toFixed(1)} {unitLabel}</div>}
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
+                    {pendingPkgs > 0 ? (
+                      <>
+                        <input
+                          type="number"
+                          min={0}
+                          max={pendingPkgs}
+                          step="any"
+                          value={currentQty}
+                          onChange={e => {
+                            const val = Math.min(parseFloat(e.target.value) || 0, pendingPkgs);
+                            setInvoiceQtys(prev => ({ ...prev, [item.id]: val }));
+                          }}
+                          style={{ width: 90, padding: '6px 10px', borderRadius: 10, border: `2px solid ${isSelected ? '#7c3aed' : '#e2e8f0'}`, textAlign: 'center', fontWeight: 800, fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none' }}
+                        />
+                        {factor > 1 && <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {unitLabel}</div>}
+                      </>
+                    ) : (
+                      <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>—</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: 12, color: '#64748b', fontWeight: 700 }}>
+              {Object.values(invoiceQtys).filter(q => q > 0).length} ítems seleccionados para facturar
+            </div>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button onClick={() => setShowInvoiceModal(false)} style={{ padding: '10px 22px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
+              <button
+                onClick={handleConfirmInvoice}
+                style={{ padding: '10px 24px', borderRadius: 12, border: 'none', background: '#7c3aed', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
+              >
+                <Receipt size={16} /> Ir a Facturar
+              </button>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {/* Item Selector Modal omitted for brevity if it's identical, wait I must include it because it was in the original */}
       {showItemSelector && (
@@ -1151,7 +1604,7 @@ export default function DeliveryNoteForm(props) {
                          </Button>
                       </div>
 
-                      <div className={t.tableWrap} style={{ maxHeight: '60vh', overflowY: 'auto', borderRadius: 24, border: '1px solid #e2e8f0', boxShadow: '0 15px 25px -5px rgba(0,0,0,0.08)' }}>
+                      <div className={t.tableWrap} style={{ borderRadius: 24, border: '1px solid #e2e8f0', boxShadow: '0 15px 25px -5px rgba(0,0,0,0.08)' }}>
                         <table className={t.table}>
                            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                               <tr style={{ background: '#f8fafc', fontSize: 10, letterSpacing: '0.02em', color: '#64748b' }}>

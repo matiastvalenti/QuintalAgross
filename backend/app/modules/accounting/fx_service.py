@@ -1,5 +1,8 @@
 from sqlalchemy.orm import Session
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
+from fastapi import HTTPException
+from app.modules.accounting.document_status_service import get_document_usage, recalc_document_status
 from app.db import models
 from app.modules.accounting.fx_engine import (
     calculate_fx_adjustment,
@@ -24,8 +27,32 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
     if existing_link:
         return existing_link
 
-    # 2. Build preview data
+    # Only ARS receipts settling USD sales generate exchange differences.
     to_doc = app.to_document
+    receipt = app.from_document
+    if (receipt.doc_type != models.DocumentType.RECEIPT or
+            receipt.currency != models.CurrencyType.ARS or
+            to_doc.currency != models.CurrencyType.USD or
+            to_doc.doc_type not in (models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE) or
+            to_doc.is_exchange_difference):
+        return None
+    if receipt.entity_id != to_doc.entity_id:
+        raise HTTPException(400, "El recibo y la factura deben pertenecer al mismo cliente.")
+    if receipt.status == models.DocumentStatus.CANCELLED or to_doc.status == models.DocumentStatus.CANCELLED:
+        raise HTTPException(400, "No se pueden aplicar documentos anulados.")
+    values = [Decimal(str(v or 0)) for v in (app.amount_applied, app.exchange_rate, to_doc.exchange_rate)]
+    if any(not v.is_finite() or v <= 0 for v in values):
+        raise HTTPException(400, "El monto y ambos tipos de cambio deben ser positivos y finitos.")
+    amount, tc_payment, tc_invoice = values
+    cash = (amount * tc_payment).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    # The source application is already flushed; exclude it from available credit.
+    other_usage = Decimal(str(get_document_usage(receipt, db))) - Decimal(str(app.amount_applied_ars or 0))
+    if other_usage + cash > Decimal(str(receipt.total_amount)) + Decimal('0.02'):
+        raise HTTPException(400, "El recibo no alcanza para cubrir la aplicación y su diferencia de cambio.")
+    if get_document_usage(to_doc, db) > float(to_doc.total_amount) + 0.000001:
+        raise HTTPException(400, "La aplicación supera el saldo pendiente de la factura.")
+
+    # 2. Build preview data
     lines = db.query(models.DocumentLine).filter(
         models.DocumentLine.document_id == to_doc.id
     ).order_by(models.DocumentLine.line_order).all()
@@ -52,7 +79,13 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
     )
     
     if not result.needs_adjustment:
+        if tc_payment != tc_invoice and abs(cash - amount * tc_invoice) >= Decimal('0.01'):
+            raise HTTPException(400, "No se pudo calcular la diferencia de cambio con el detalle de la factura.")
         return None
+
+    expected_difference = abs(amount * (tc_payment - tc_invoice)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    if abs(Decimal(str(result.total_ars)) - expected_difference) > Decimal('0.01'):
+        raise HTTPException(400, "El detalle de la factura no permite conciliar la diferencia de cambio con su total.")
 
     # Si es compensación, no tiene impacto fiscal (IVA 0%)
     if mode == "COMPENSATION":
@@ -65,12 +98,33 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
     doc_type = models.DocumentType.DEBIT_NOTE if result.sign == "ND" else models.DocumentType.CREDIT_NOTE
     sign_label = "ND" if result.sign == "ND" else "NC"
     
+    from app.modules.sales import numbering_service
+
     if mode == "COMPENSATION":
         doc_number = f"COMP-FX-{app_id[:8]}".upper()
         notes = f"Compensación interna CC por diferencia de cambio (TC {to_doc.exchange_rate} -> {app.exchange_rate})"
     else:
-        doc_number = f"{sign_label}-FX-{app_id[:8]}".upper()
-        notes = f"Ajuste automático por diferencia de cambio (TC {to_doc.exchange_rate} -> {app.exchange_rate})"
+        import re
+        # Extraer PV de la factura origen
+        pv = "0001"
+        if to_doc.number:
+            parts = to_doc.number.split("-")
+            pv_part = parts[-2] if len(parts) >= 2 else parts[0]
+            pv_match = re.search(r'\d+', pv_part)
+            if pv_match:
+                candidate = pv_match.group().zfill(4)
+                if len(candidate) == 4 and candidate != "0000":
+                    pv = candidate
+        
+
+        # Determinar doc_tag correcto (NDA, NDB, etc)
+        letter = to_doc.line or "A"
+        doc_tag = f"ND{letter}" if result.sign == "ND" else f"NC{letter}"
+        
+        doc_number = numbering_service.get_next_number(db, pv, doc_tag)
+        numbering_service.increment_last_number(db, pv, doc_tag)
+        
+        notes = f"Ajuste automático por diferencia de cambio (TC {to_doc.exchange_rate} -> {app.exchange_rate}). Recibo: {app.from_document.number} [ID:{app.from_document_id}]"
         
     new_doc = models.Document(
         entity_id=to_doc.entity_id,
@@ -85,10 +139,14 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
         line=to_doc.line,
         notes=notes,
         salesperson_id=to_doc.salesperson_id,
-        vendedor=to_doc.vendedor
+        vendedor=to_doc.vendedor,
+        cost_center=to_doc.cost_center,           # heredar centro de costos de la factura
+        source_invoice_id=to_doc.id,              # trazabilidad con la factura origen
+        reason_type=models.DocumentReasonType.EXCHANGE_DIFFERENCE,
+        is_exchange_difference=True,
     )
     db.add(new_doc)
-    db.flush() 
+    db.flush()
 
     # 4. Create lines
     for i, line in enumerate(result.lines):
@@ -119,4 +177,31 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
     db.add(fx_link)
     db.flush()
     
+    # Split the same cash receipt between principal and adjustment, once.
+    if mode == "FISCAL":
+        difference = Decimal(str(result.total_ars))
+        if new_doc.doc_type == models.DocumentType.DEBIT_NOTE:
+            app.amount_applied_ars = float(cash - difference)
+            settlement = models.Application(
+                from_document_id=receipt.id, to_document_id=new_doc.id,
+                amount_applied=float(difference), amount_applied_ars=float(difference),
+                exchange_rate=1.0, cost_center=to_doc.cost_center,
+            )
+        else:
+            # NC covers part of the invoice at its historical rate. Together with
+            # the receipt it cancels exactly the originally requested USD amount.
+            credit_usd = difference / tc_invoice
+            app.amount_applied = float(amount - credit_usd)
+            app.amount_applied_ars = float(cash)
+            settlement = models.Application(
+                from_document_id=new_doc.id, to_document_id=to_doc.id,
+                amount_applied=float(credit_usd), amount_applied_ars=float(difference),
+                exchange_rate=float(tc_invoice), cost_center=to_doc.cost_center,
+            )
+        db.add(settlement)
+        db.flush()
+        for document in (receipt, to_doc, new_doc):
+            recalc_document_status(document, db)
+    from app.modules.accounting.document_guards import require_accounting
+    require_accounting(db, new_doc)
     return fx_link

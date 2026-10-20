@@ -1,0 +1,13 @@
+.page { padding: 24px; overflow: auto; height: 100%; color: var(--text-primary); background: var(--bg-page); }
+.panel { padding: 20px; border: 1px solid var(--border-color); border-radius: 12px; background: var(--panel); margin: 16px 0; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px; margin: 16px 0; }
+.page label { display: flex; flex-direction: column; gap: 6px; }
+.page input, .page select { padding: 10px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-page); color: var(--text-primary); max-width: 100%; }
+.page button { padding: 10px 16px; border: 1px solid var(--border-color); border-radius: 6px; cursor: pointer; color: var(--text-primary); background: var(--panel); }
+.page button:disabled { opacity: .5; cursor: default; }
+.scroll { overflow-x: auto; }
+.page table { border-collapse: collapse; width: 100%; }
+.page td, .page th { padding: 10px; text-align: left; border-bottom: 1px solid var(--border-color); }
+.notice { padding: 14px; border: 1px solid var(--primary); border-radius: 8px; }
+.claims { min-height: 400px; }
+@media (max-width: 640px) { .page { padding: 12px; } .panel { padding: 12px; } }

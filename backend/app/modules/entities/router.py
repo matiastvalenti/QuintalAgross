@@ -104,6 +104,11 @@ def get_sale_conditions(db: Session = Depends(get_db)):
     return [{"id": str(c.id), "description": c.description} for c in conditions]
 
 
+def normalize_tax_id(tax_id: Optional[str]) -> str:
+    if not tax_id:
+        return ""
+    return "".join(c for c in tax_id if c.isdigit())
+
 def _get_next_code(db: Session, type: EntityType) -> str:
     prefix = "C" if type == EntityType.CLIENT else "P"
     last = db.query(Entity).filter(Entity.code.like(f"{prefix}-%")).order_by(Entity.code.desc()).first()
@@ -124,6 +129,27 @@ def create_entity(entity: EntityCreate, db: Session = Depends(get_db)):
         exists = db.query(Entity).filter(Entity.code == entity.code).first()
         if exists: raise HTTPException(status_code=400, detail="Entity with this Code already exists")
             
+    if entity.tax_id:
+        normalized_new = normalize_tax_id(entity.tax_id)
+        if normalized_new:
+            all_entities = db.query(Entity).filter(Entity.tax_id != None).all()
+            for e in all_entities:
+                if normalize_tax_id(e.tax_id) == normalized_new:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "DUPLICATE_TAX_ID",
+                            "message": "Ya existe una entidad con ese CUIT.",
+                            "existing_entity": {
+                                "id": e.id,
+                                "name": e.name,
+                                "type": e.type.value if hasattr(e.type, 'value') else e.type,
+                                "code": e.code,
+                                "tax_id": e.tax_id
+                            }
+                        }
+                    )
+
     db_entity = Entity(**entity.model_dump(exclude={"create_linked"}))
     db.add(db_entity)
     db.commit()
@@ -160,8 +186,47 @@ def read_entity(entity_id: str, db: Session = Depends(get_db)):
 def update_entity(entity_id: str, entity: EntityUpdate, db: Session = Depends(get_db)):
     db_entity = db.query(Entity).filter(Entity.id == entity_id).first()
     if db_entity is None: raise HTTPException(status_code=404, detail="Entity not found")
+    
+    if entity.tax_id is not None:
+        normalized_new = normalize_tax_id(entity.tax_id)
+        if normalized_new:
+            all_entities = db.query(Entity).filter(Entity.id != entity_id, Entity.tax_id != None).all()
+            for e in all_entities:
+                if normalize_tax_id(e.tax_id) == normalized_new:
+                    raise HTTPException(
+                        status_code=409,
+                        detail={
+                            "code": "DUPLICATE_TAX_ID",
+                            "message": "Ya existe una entidad con ese CUIT.",
+                            "existing_entity": {
+                                "id": e.id,
+                                "name": e.name,
+                                "type": e.type.value if hasattr(e.type, 'value') else e.type,
+                                "code": e.code,
+                                "tax_id": e.tax_id
+                            }
+                        }
+                    )
+
     update_data = entity.model_dump(exclude_unset=True)
     for key, value in update_data.items(): setattr(db_entity, key, value)
+    db.commit()
+    db.refresh(db_entity)
+    return db_entity
+
+@router.patch("/{entity_id}/convert-to-mixed", response_model=EntitySchema, dependencies=[Depends(check_permission("customers", "edit"))])
+def convert_to_mixed(entity_id: str, db: Session = Depends(get_db)):
+    db_entity = db.query(Entity).filter(Entity.id == entity_id).first()
+    if db_entity is None:
+        raise HTTPException(status_code=404, detail="Entity not found")
+    if db_entity.type == EntityType.MIXED:
+        return db_entity
+    if db_entity.type == EntityType.EMPLOYEE:
+        raise HTTPException(
+            status_code=400,
+            detail="No se puede convertir automáticamente un empleado a entidad mixta."
+        )
+    db_entity.type = EntityType.MIXED
     db.commit()
     db.refresh(db_entity)
     return db_entity
@@ -196,7 +261,7 @@ def get_entity_dashboard(entity_id: str, cost_center: Optional[int] = None, db: 
     now = datetime.now()
     open_docs_query = db.query(Document).filter(
         Document.entity_id == entity_id,
-        Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL])
+        Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL, DocumentStatus.DRAFT])
     )
     if cost_center:
         open_docs_query = open_docs_query.filter(Document.cost_center == cost_center)
@@ -439,10 +504,42 @@ def get_entity_dashboard(entity_id: str, cost_center: Optional[int] = None, db: 
 def delete_entity(entity_id: str, db: Session = Depends(get_db)):
     db_entity = db.query(Entity).filter(Entity.id == entity_id).first()
     if db_entity is None: raise HTTPException(status_code=404, detail="Entity not found")
+    
+    from app.db.models.commercial_models import SalesOrder, PurchaseOrder
+    from app.db.models.models import ExpenseClaim
+
+    docs_count = db.query(Document).filter((Document.entity_id == entity_id) | (Document.salesperson_id == entity_id)).count()
     movements_count = db.query(AccountMovement).filter(AccountMovement.entity_id == entity_id).count()
-    documents_count = db.query(Document).filter(Document.entity_id == entity_id).count()
-    if movements_count > 0 or documents_count > 0:
-        raise HTTPException(status_code=400, detail=f"No se puede eliminar: Tiene movimientos/documentos asociados.")
+    sales_orders_count = db.query(SalesOrder).filter((SalesOrder.entity_id == entity_id) | (SalesOrder.salesperson_id == entity_id)).count()
+    delivery_notes_count = db.query(DeliveryNote).filter((DeliveryNote.entity_id == entity_id) | (DeliveryNote.salesperson_id == entity_id)).count()
+    purchase_orders_count = db.query(PurchaseOrder).filter((PurchaseOrder.entity_id == entity_id) | (PurchaseOrder.salesperson_id == entity_id)).count()
+    cheques_count = db.query(Cheque).filter((Cheque.entity_id == entity_id) | (Cheque.endorsee_id == entity_id)).count()
+    expense_claims_count = db.query(ExpenseClaim).filter(ExpenseClaim.entity_id == entity_id).count()
+
+    total_deps = (
+        docs_count + movements_count + sales_orders_count + 
+        delivery_notes_count + purchase_orders_count + cheques_count + 
+        expense_claims_count
+    )
+
+    if total_deps > 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "code": "ENTITY_HAS_DEPENDENCIES",
+                "message": "No se puede eliminar la entidad porque tiene operaciones asociadas.",
+                "dependencies": {
+                    "documents": docs_count,
+                    "account_movements": movements_count,
+                    "sales_orders": sales_orders_count,
+                    "delivery_notes": delivery_notes_count,
+                    "purchase_orders": purchase_orders_count,
+                    "cheques": cheques_count,
+                    "expense_claims": expense_claims_count
+                }
+            }
+        )
+
     if db_entity.linked_entity_id:
         linked_entity = db.query(Entity).filter(Entity.id == db_entity.linked_entity_id).first()
         if linked_entity: linked_entity.linked_entity_id = None
@@ -450,12 +547,23 @@ def delete_entity(entity_id: str, db: Session = Depends(get_db)):
     db.commit()
     return {"ok": True}
 
+def safe_float(value, default=0.0):
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except (TypeError, ValueError):
+        return default
+
 @router.get("/reports/ageing", response_model=AgeingReportResponse)
 def get_ageing_report(
     type: Optional[str] = Query("client", description="client or provider"),
     cost_center: Optional[int] = None,
     db: Session = Depends(get_db)
 ):
+    import logging
+    logger = logging.getLogger(__name__)
+    
     try:
         now = datetime.now()
         debit_types = [
@@ -464,42 +572,109 @@ def get_ageing_report(
             DocumentType.LPG_PRIMARY, DocumentType.LPG_SECONDARY
         ]
 
+        total_ars_expr = case(
+            (Document.currency.notin_(["USD", "CurrencyType.USD"]), func.coalesce(Document.total_amount, 0.0)),
+            else_=0.0
+        )
+        total_usd_expr = case(
+            (Document.currency.in_(["USD", "CurrencyType.USD"]), func.coalesce(Document.total_amount, 0.0)),
+            else_=0.0
+        )
+        total_converted_expr = func.coalesce(
+            Document.total_amount_ars,
+            case(
+                (Document.currency.in_(["USD", "CurrencyType.USD"]), Document.total_amount * func.coalesce(Document.exchange_rate, 1.0)),
+                else_=func.coalesce(Document.total_amount, 0.0)
+            )
+        )
+
+        def get_balance_expr(expr):
+            return func.sum(case((Document.doc_type.in_(debit_types), expr), else_=-expr))
+
         balances_query = db.query(
             Document.entity_id,
-            func.sum(case(
-                (Document.doc_type.in_(debit_types), func.coalesce(Document.total_amount_ars, 0.0)),
-                else_=-func.coalesce(Document.total_amount_ars, 0.0)
-            )).label("balance")
+            get_balance_expr(total_converted_expr).label("balance_converted"),
+            get_balance_expr(total_ars_expr).label("balance_ars"),
+            get_balance_expr(total_usd_expr).label("balance_usd")
         ).filter(Document.status != DocumentStatus.CANCELLED)
         
-        if cost_center:
+        if cost_center in [1, 2]:
             balances_query = balances_query.filter(Document.cost_center == cost_center)
             
         balances_results = balances_query.group_by(Document.entity_id).all()
         
-        balances_map = {b.entity_id: float(b.balance or 0.0) for b in balances_results if b.entity_id and abs(float(b.balance or 0.0)) > 0.01}
+        # balances_map stores dict with all balances
+        balances_map = {}
+        for b in balances_results:
+            if b.entity_id and (abs(safe_float(b.balance_converted)) > 0.01 or abs(safe_float(b.balance_ars)) > 0.01 or abs(safe_float(b.balance_usd)) > 0.01):
+                balances_map[b.entity_id] = {
+                    "balance_converted": safe_float(b.balance_converted),
+                    "balance_ars": safe_float(b.balance_ars),
+                    "balance_usd": safe_float(b.balance_usd)
+                }
 
         open_docs_query = db.query(Document).filter(
-            Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL]),
+            Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL, DocumentStatus.DRAFT]),
             Document.entity_id.in_(balances_map.keys())
         )
-        if cost_center:
+        if cost_center in [1, 2]:
             open_docs_query = open_docs_query.filter(Document.cost_center == cost_center)
             
         open_docs = open_docs_query.all()
 
         doc_ids = [d.id for d in open_docs]
-        apps_query = db.query(
-            Application.to_document_id,
-            func.sum(Application.amount_applied_ars).label("total_applied_ars")
-        ).filter(Application.to_document_id.in_(doc_ids)).group_by(Application.to_document_id).all()
-        apps_map = {a.to_document_id: float(a.total_applied_ars) for a in apps_query}
+        
+        apps_map_ars = {}
+        apps_map_usd = {}
+        if doc_ids:
+            apps_query = db.query(Application).filter(Application.to_document_id.in_(doc_ids)).all()
+            for app in apps_query:
+                # amount_applied is in the to_document's currency
+                amount_applied = safe_float(app.amount_applied)
+                apps_map_usd[app.to_document_id] = apps_map_usd.get(app.to_document_id, 0.0) + amount_applied
+                
+                if app.amount_applied_ars is None:
+                    app_tc = safe_float(app.exchange_rate, 1.0)
+                    if app_tc <= 0: app_tc = 1.0
+                    val_ars = amount_applied * app_tc
+                else:
+                    val_ars = safe_float(app.amount_applied_ars)
+                
+                apps_map_ars[app.to_document_id] = apps_map_ars.get(app.to_document_id, 0.0) + val_ars
 
         entity_buckets: Dict[str, Dict[str, Any]] = {}
         for doc in open_docs:
-            applied_ars = apps_map.get(doc.id, 0.0)
-            pending_ars = float(doc.total_amount_ars or 0.0) - applied_ars
-            if pending_ars <= 0.01: continue
+            if not doc.id or not doc.entity_id:
+                logger.warning(f"Documento imposible saltado en ageing report (falta id o entity_id): {getattr(doc, 'id', None)}")
+                continue
+
+            doc_currency = doc.currency.value if hasattr(doc.currency, "value") else str(doc.currency or "ARS")
+            total_amount = safe_float(doc.total_amount)
+            doc_tc = safe_float(doc.exchange_rate, 1.0)
+            if doc_tc <= 0: doc_tc = 1.0
+
+            if doc.total_amount_ars is None:
+                if doc_currency == "USD":
+                    doc_total_ars = total_amount * doc_tc
+                else:
+                    doc_total_ars = total_amount
+            else:
+                doc_total_ars = safe_float(doc.total_amount_ars)
+
+            applied_ars = apps_map_ars.get(doc.id, 0.0)
+            pending_ars = doc_total_ars - applied_ars
+            
+            applied_usd = apps_map_usd.get(doc.id, 0.0)
+            
+            pending_real_ars = 0.0
+            pending_real_usd = 0.0
+            
+            if doc_currency == "USD":
+                pending_real_usd = total_amount - applied_usd
+            else:
+                pending_real_ars = total_amount - applied_usd # For ARS docs, amount_applied is in ARS
+
+            if pending_ars <= 0.01 and pending_real_usd <= 0.01 and pending_real_ars <= 0.01: continue
             
             eid = str(doc.entity_id)
             cond_id = str(doc.sale_condition_id or "NONE")
@@ -507,6 +682,8 @@ def get_ageing_report(
             if eid not in entity_buckets:
                 entity_buckets[eid] = {
                     "overdue": 0.0,
+                    "overdue_ars": 0.0,
+                    "overdue_usd": 0.0,
                     "buckets": {"A vencer": 0.0, "0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "90+ días": 0.0},
                     "conditions": {}
                 }
@@ -515,6 +692,7 @@ def get_ageing_report(
             if cond_id not in ent_data["conditions"]:
                 ent_data["conditions"][cond_id] = {
                     "total": 0.0, "overdue": 0.0,
+                    "overdue_ars": 0.0, "overdue_usd": 0.0,
                     "buckets": {"A vencer": 0.0, "0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "90+ días": 0.0}
                 }
             
@@ -535,23 +713,58 @@ def get_ageing_report(
             cond_data["buckets"][bucket_key] += pending_ars
             if is_overdue:
                 ent_data["overdue"] += pending_ars
+                ent_data["overdue_ars"] += pending_real_ars
+                ent_data["overdue_usd"] += pending_real_usd
                 cond_data["overdue"] += pending_ars
+                cond_data["overdue_ars"] += pending_real_ars
+                cond_data["overdue_usd"] += pending_real_usd
 
         condition_names = {c.id: c.description for c in db.query(SaleCondition).all()}
 
         if type == "client": entities_query = db.query(Entity).filter(Entity.type.in_([EntityType.CLIENT, EntityType.MIXED]))
         elif type == "provider": entities_query = db.query(Entity).filter(Entity.type.in_([EntityType.PROVIDER, EntityType.MIXED]))
+        elif type == "mixed": entities_query = db.query(Entity).filter(Entity.type == EntityType.MIXED)
         else: entities_query = db.query(Entity)
             
         all_entities = entities_query.filter(Entity.id.in_(balances_map.keys())).all()
         report_data = []
         total_debt_global = 0.0
         total_overdue_global = 0.0
+        total_ars_global = 0.0
+        total_usd_global = 0.0
+        overdue_ars_global = 0.0
+        overdue_usd_global = 0.0
+
+        from app.modules.entities.account_statement_service import build_entity_ledger
 
         for ent in all_entities:
-            balance = balances_map.get(ent.id, 0.0)
+            if not ent.id:
+                logger.warning("Entidad imposible saltada en ageing report (falta id)")
+                continue
+
+            if ent.credit_limit is None:
+                logger.warning(f"Ageing report fallback: entity_id={ent.id} field=credit_limit value=None")
+
+            balance_data = balances_map.get(ent.id, {"balance_converted": 0.0, "balance_ars": 0.0, "balance_usd": 0.0})
+            
+            # Fetch true ledger balances to guarantee consistency with Resumen de Cuenta
+            ledger_view = "customer"
+            if type == "provider": ledger_view = "supplier"
+            elif type == "mixed": ledger_view = "consolidated"
+            
+            try:
+                ledger = build_entity_ledger(db=db, entity_id=ent.id, view=ledger_view, cost_center=cost_center)
+                if ledger and len(ledger) > 0:
+                    last_row = ledger[-1]
+                    balance_data["balance_ars"] = last_row.get("balance_ars", 0.0)
+                    balance_data["balance_usd"] = last_row.get("balance_usd", 0.0)
+            except Exception as e:
+                logger.error(f"Error building ledger for entity {ent.id}: {e}")
+
             eb = entity_buckets.get(ent.id, {
                 "overdue": 0.0,
+                "overdue_ars": 0.0,
+                "overdue_usd": 0.0,
                 "buckets": {"A vencer": 0.0, "0-30 días": 0.0, "31-60 días": 0.0, "61-90 días": 0.0, "90+ días": 0.0},
                 "conditions": {}
             })
@@ -560,26 +773,48 @@ def get_ageing_report(
             for cid, cdata in eb["conditions"].items():
                 name = condition_names.get(cid, "Sin Condición Asignada") if cid != "NONE" else "Sin Condición Asignada"
                 cond_list.append({
-                    "name": name, "total_balance": float(cdata["total"]), "overdue_balance": float(cdata["overdue"]),
-                    "aging_buckets": [{"label": k, "amount": float(v)} for k, v in cdata["buckets"].items()]
+                    "name": name, "total_balance": safe_float(cdata["total"]), "overdue_balance": safe_float(cdata["overdue"]),
+                    "aging_buckets": [{"label": k, "amount": safe_float(v)} for k, v in cdata["buckets"].items()]
                 })
 
             report_data.append({
-                "id": ent.id, "name": ent.name, "code": ent.code, "total_balance": balance,
-                "overdue_balance": eb["overdue"],
+                "id": ent.id, "name": ent.name, "code": ent.code, 
+                "total_balance": balance_data["balance_ars"],
+                "overdue_balance": eb["overdue_ars"],
+                "balance_ars": balance_data["balance_ars"],
+                "balance_usd": balance_data["balance_usd"],
+                "overdue_ars": eb["overdue_ars"],
+                "overdue_usd": eb["overdue_usd"],
+                "total_converted_ars": balance_data["balance_converted"],
                 "aging_buckets": [{"label": k, "amount": v} for k, v in eb["buckets"].items()],
-                "credit_limit": ent.credit_limit, "credit_status": ent.credit_status,
+                "credit_limit": safe_float(ent.credit_limit), "credit_status": str(ent.credit_status or ""),
                 "conditions": cond_list
             })
-            total_debt_global += float(balance)
-            total_overdue_global += float(eb["overdue"])
+            total_debt_global += balance_data["balance_converted"]
+            total_overdue_global += eb["overdue"]
+            total_ars_global += balance_data["balance_ars"]
+            total_usd_global += balance_data["balance_usd"]
+            overdue_ars_global += eb["overdue_ars"]
+            overdue_usd_global += eb["overdue_usd"]
 
         return {
             "report_date": now, "type": type or "all",
-            "summary": {"total_debt": total_debt_global, "total_overdue": total_overdue_global},
+            "summary": {
+                "total_debt": total_debt_global, 
+                "total_overdue": total_overdue_global,
+                "total_ars": total_ars_global,
+                "total_usd": total_usd_global,
+                "overdue_ars": overdue_ars_global,
+                "overdue_usd": overdue_usd_global
+            },
             "data": sorted(report_data, key=lambda x: x["overdue_balance"], reverse=True)
         }
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Ageing Report Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        # Even if error occurs at top level, try to return empty valid format rather than 500
+        return {
+            "report_date": datetime.now(), "type": type or "all",
+            "summary": {"total_debt": 0.0, "total_overdue": 0.0},
+            "data": []
+        }

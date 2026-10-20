@@ -139,6 +139,8 @@ def export_document_to_pdf(doc, db=None) -> BytesIO:
         ('BOX', (1,0), (1,0), 1, PRIMARY_BLUE),
     ]))
     elements.append(header_table)
+    if getattr(doc, "is_draft", False):
+        elements.append(Paragraph("<b>BORRADOR — PENDIENTE DE REGISTRO FISCAL</b>", styles["Heading2"]))
 
     company = get_company_info(db)
     empresa_info = [

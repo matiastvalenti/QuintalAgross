@@ -14,7 +14,7 @@ from app.modules.sales import numbering_service
 from app.modules.auth.auth_router import check_permission, get_current_user
 from fastapi.responses import Response
 from app.modules.finance.pdf_export import export_document_to_pdf
-from app.modules.sales.sales_utils import recalc_purchase_order_status
+from app.modules.sales.sales_utils import recalc_purchase_order_status, recalc_purchase_order_traceability_strict
 from app.modules.sales import delivery_note_schemas as dn_schemas
 import traceback
 from app.modules.finance.mailer import send_email
@@ -307,3 +307,32 @@ def send_purchase_order_email(order_id: str, payload: EmailPayload, db: Session 
     res = send_email(payload.subject or f"OC {order.number}", payload.body or "Adjunto OC", attachments=[{"filename": f"OC_{order.number}.pdf", "content": pdf_output}], to_email=payload.to_email)
     if not res.get("sent"): raise HTTPException(status_code=500, detail="Error enviando mail")
     return {"message": "Correo enviado con éxito"}
+
+# ═══════════════════════════════════════════
+# RECALCULATE TRACEABILITY
+# ═══════════════════════════════════════════
+@router.post("/{order_id}/recalculate-traceability")
+def recalculate_purchase_order_traceability(
+    order_id: str, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(check_permission("purchase_orders", "edit"))
+):
+    """Recalcula estrictamente trazabilidad y estado de la OC"""
+    order = db.query(PurchaseOrder).filter(PurchaseOrder.id == order_id).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="OC no encontrada")
+    
+    old_status = order.status.value if order.status else None
+    
+    recalculated_lines = recalc_purchase_order_traceability_strict(db, order)
+    
+    db.commit()
+    db.refresh(order)
+    
+    return {
+        "order_id": order.id,
+        "number": order.number,
+        "old_status": old_status,
+        "new_status": order.status.value if order.status else None,
+        "recalculated_lines": recalculated_lines
+    }

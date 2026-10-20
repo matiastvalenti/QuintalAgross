@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown, X } from 'lucide-react';
 import s from './Autocomplete.module.css';
 
@@ -38,6 +39,7 @@ export default function Autocomplete({
     const [selectedItem, setSelectedItem] = useState(initialValue);
     
     const wrapperRef = useRef(null);
+    const dropdownRef = useRef(null);
 
     useEffect(() => {
         if (initialValue) {
@@ -51,7 +53,10 @@ export default function Autocomplete({
 
     useEffect(() => {
         const handleClickOutside = (event) => {
-            if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+            const clickedInWrapper = wrapperRef.current && wrapperRef.current.contains(event.target);
+            const clickedInDropdown = dropdownRef.current && dropdownRef.current.contains(event.target);
+            
+            if (!clickedInWrapper && !clickedInDropdown) {
                 setIsOpen(false);
             }
         };
@@ -115,6 +120,31 @@ export default function Autocomplete({
         }
     };
 
+    const [dropdownStyle, setDropdownStyle] = useState({});
+
+    const updatePosition = () => {
+        if (isOpen && wrapperRef.current) {
+            const rect = wrapperRef.current.getBoundingClientRect();
+            setDropdownStyle({
+                position: 'fixed',
+                top: rect.bottom + 4,
+                left: rect.left,
+                width: rect.width,
+                zIndex: 9999
+            });
+        }
+    };
+
+    useEffect(() => {
+        updatePosition();
+        window.addEventListener('scroll', updatePosition, true);
+        window.addEventListener('resize', updatePosition);
+        return () => {
+            window.removeEventListener('scroll', updatePosition, true);
+            window.removeEventListener('resize', updatePosition);
+        };
+    }, [isOpen]);
+
     return (
         <div className={s.wrapper} ref={wrapperRef}>
             {label && <label className={s.label}>{label}</label>}
@@ -127,8 +157,10 @@ export default function Autocomplete({
                     value={query}
                     onChange={(e) => handleSearch(e.target.value)}
                     onFocus={() => {
-                        // Always search on focus if minChars is 0
-                        if (query.length >= minChars) {
+                        // Always search on focus if empty or hasn't loaded
+                        if (results.length === 0 && query.length < minChars) {
+                            handleSearch("", true);
+                        } else if (query.length >= minChars) {
                             handleSearch(query, true);
                         } else {
                             setIsOpen(true);
@@ -153,24 +185,27 @@ export default function Autocomplete({
                 {loading && <div className={s.spinner} />}
             </div>
 
-            <div className={`${s.dropdown} ${isOpen ? s.open : ''}`}>
-                {results.length > 0 ? (
-                    results.map((item, index) => (
-                        <div
-                            key={item.id || index}
-                            className={`${s.item} ${index === highlightIndex ? s.highlighted : ''}`}
-                            onClick={() => handleSelect(item)}
-                            onMouseEnter={() => setHighlightIndex(index)}
-                        >
-                            {renderItem(item)}
-                        </div>
-                    ))
-                ) : loading ? (
-                    <div className={s.empty}>Cargando...</div>
-                ) : (
-                    <div className={s.empty}>No se encontraron resultados</div>
-                )}
-            </div>
+            {isOpen && createPortal(
+                <div ref={dropdownRef} className={`${s.dropdown} ${s.open}`} style={dropdownStyle}>
+                    {results.length > 0 ? (
+                        results.map((item, index) => (
+                            <div
+                                key={item.id || index}
+                                className={`${s.item} ${index === highlightIndex ? s.highlighted : ''}`}
+                                onClick={(e) => { e.stopPropagation(); handleSelect(item); }}
+                                onMouseEnter={() => setHighlightIndex(index)}
+                            >
+                                {renderItem(item)}
+                            </div>
+                        ))
+                    ) : loading ? (
+                        <div className={s.empty}>Cargando...</div>
+                    ) : (
+                        <div className={s.empty}>No se encontraron resultados</div>
+                    )}
+                </div>,
+                document.body
+            )}
         </div>
     );
 }

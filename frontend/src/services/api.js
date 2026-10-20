@@ -37,7 +37,13 @@ const api = {
                 ...options.headers
             }
         });
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        if (!res.ok) {
+            const errorBody = await res.json().catch(() => null);
+            const error = new Error(errorBody?.detail || `HTTP error ${res.status}`);
+            error.status = res.status;
+            error.data = errorBody;
+            throw error;
+        }
         const data = await res.json();
         return data;
     },
@@ -63,7 +69,13 @@ const api = {
             },
             body: body instanceof FormData ? body : JSON.stringify(parsedBody)
         });
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        if (!res.ok) {
+            const errorBody = await res.json().catch(() => null);
+            const error = new Error(errorBody?.detail || `HTTP error ${res.status}`);
+            error.status = res.status;
+            error.data = errorBody;
+            throw error;
+        }
         const data = await res.json();
         return data;
     },
@@ -90,7 +102,13 @@ const api = {
             },
             body: body instanceof FormData ? body : JSON.stringify(parsedBody)
         });
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        if (!res.ok) {
+            const errorBody = await res.json().catch(() => null);
+            const error = new Error(errorBody?.detail || `HTTP error ${res.status}`);
+            error.status = res.status;
+            error.data = errorBody;
+            throw error;
+        }
         const data = await res.json();
         return data;
     },
@@ -103,7 +121,13 @@ const api = {
                 ...options.headers
             }
         });
-        if (!res.ok) throw new Error(`HTTP error ${res.status}`);
+        if (!res.ok) {
+            const errorBody = await res.json().catch(() => null);
+            const error = new Error(errorBody?.detail || `HTTP error ${res.status}`);
+            error.status = res.status;
+            error.data = errorBody;
+            throw error;
+        }
         const data = await res.json();
         return data;
     }

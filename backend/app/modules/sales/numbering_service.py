@@ -35,11 +35,29 @@ def _get_max_from_db(db: Session, pv_code: str, doc_type: str) -> int:
     # Filter by prefix and type if it's Document
     q = db.query(model).filter(model.number.like(f"{pv_code}-%"))
     
-    # We NO LONGER filter by doc_type/line here. 
-    # Since the 'documents' table has a UNIQUE constraint on the 'number' column, 
-    # we must ensure the generated number is unique across ALL document types 
-    # (FA, FB, RECIBO, PAGO, etc.) for this PV.
-        
+    if model == Document:
+        from app.db.models.models import DocumentType
+        if doc_type.startswith('FA') or doc_type.startswith('FB') or doc_type.startswith('FC') or doc_type.startswith('FM') or doc_type.startswith('FCE'):
+            q = q.filter(model.doc_type == DocumentType.INVOICE)
+        elif doc_type.startswith('NC'):
+            q = q.filter(model.doc_type == DocumentType.CREDIT_NOTE)
+        elif doc_type.startswith('ND'):
+            q = q.filter(model.doc_type == DocumentType.DEBIT_NOTE)
+        elif doc_type == 'RECIBO':
+            q = q.filter(model.doc_type == DocumentType.RECEIPT)
+        elif doc_type == 'PAGO' or doc_type == 'ORDEN_PAGO':
+            q = q.filter(model.doc_type == DocumentType.PAYMENT)
+            
+        if len(doc_type) >= 3 and doc_type[:2] in ('FA', 'NC', 'ND', 'FC', 'FB'):
+            # It's NCA, NDB, etc. The last letter is usually the line.
+            line = doc_type[-1]
+            if line in ['A', 'B', 'C', 'M']:
+                q = q.filter(model.line == line)
+        elif len(doc_type) >= 2 and doc_type[:2] in ('FA', 'FB', 'FC', 'FM'):
+            line = doc_type[-1]
+            if line in ['A', 'B', 'C', 'M']:
+                q = q.filter(model.line == line)
+
     last = q.order_by(model.number.desc()).first()
     if last:
         try:

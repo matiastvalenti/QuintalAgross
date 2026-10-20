@@ -1,0 +1,958 @@
+.container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: var(--bg-body);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  background-color: var(--bg-page);
+  border-bottom: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  flex-shrink: 0;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.iconWrap {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  background: var(--primary-light);
+  color: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.headerTitle {
+  display: flex;
+  flex-direction: column;
+}
+
+.headerTitle h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: var(--font-bold);
+  color: var(--text);
+  line-height: 1.2;
+}
+
+.headerTitle span {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.headerRight {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+}
+
+.headerStat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.headerStat span {
+  font-size: 11px;
+  color: var(--text-secondary);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.headerStat strong {
+  font-size: 16px;
+  color: var(--text);
+  font-weight: var(--font-bold);
+}
+
+.collectionBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 24px;
+  align-items: start;
+  height: auto;
+  overflow: visible;
+  padding: 20px 24px;
+}
+
+.leftColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 0;
+}
+
+.topLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.summaryPanel {
+  min-width: 0;
+  background: white;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+}
+
+.paymentListArea {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.paymentsCard {
+  background: white;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+  max-height: 380px;
+}
+
+.paymentsListBody {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.emptyPaymentsState {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: var(--text-secondary);
+  padding: 20px;
+}
+
+.sectionBox {
+  background: white;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-sm);
+  overflow: visible;
+  height: auto;
+}
+
+.sectionHeader {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-page);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sectionHeader h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.sectionBody {
+  padding: 10px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.parametersBody {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 16px;
+  overflow: visible;
+}
+
+.flexRow {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.flexRow>* {
+  flex: 1;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.field input,
+.field select {
+  height: 36px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--r-sm);
+  padding: 0 10px;
+  font-size: 13px;
+  color: var(--text);
+  background: white;
+  transition: all 0.2s;
+}
+
+.field input:focus,
+.field select:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px var(--primary-light);
+}
+
+.field input:disabled {
+  background: var(--bg-page);
+  color: var(--text-muted);
+}
+
+.btnPrimary {
+  background: var(--primary);
+  color: white;
+  border: none;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+}
+
+.btnPrimary:hover {
+  background: var(--primary-dark);
+}
+
+.btnSecondary {
+  background: white;
+  color: var(--text);
+  border: 1px solid var(--border-color);
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.btnSecondary:hover {
+  background: var(--bg-page);
+  border-color: #d1d5db;
+}
+
+.btnSecondary[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Payment Table */
+.paymentTable {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-color);
+  border-radius: var(--r-md);
+  background: white;
+  overflow: hidden;
+  height: 100%;
+}
+
+.paymentTableHeader {
+  display: grid;
+  grid-template-columns: 120px minmax(200px, 1fr) 100px 140px 80px;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--bg-page);
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+}
+
+.paymentTableRow {
+  display: grid;
+  grid-template-columns: 120px minmax(200px, 1fr) 100px 140px 80px;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 13px;
+  color: var(--text);
+  min-height: 48px;
+}
+
+.paymentTableRow:last-child {
+  border-bottom: none;
+}
+
+.paymentTableRow .type {
+  font-weight: 600;
+}
+
+.paymentTableRow .desc {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.paymentTableRow .amount {
+  font-weight: 700;
+}
+
+.paymentTableRow .actions {
+  display: flex;
+  gap: 4px;
+}
+
+.paymentTypeLabel {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text);
+  width: 90px;
+  flex-shrink: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.paymentList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 4px;
+}
+
+.paymentToolbar {
+  display: flex;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: var(--bg-body);
+  flex-wrap: wrap;
+}
+
+.paymentLineCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.paymentLineMain {
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+}
+
+.paymentLineSub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.paymentLineAmount {
+  font-weight: 700;
+  white-space: nowrap;
+  color: var(--text);
+  font-size: 15px;
+  padding-right: 8px;
+}
+
+.paymentLineActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.emptyState {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-style: italic;
+  padding: 4px 0;
+  background: transparent;
+  border: none;
+  min-height: 0;
+}
+
+.btnIcon {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btnIcon:hover {
+  background: var(--bg-page);
+  color: var(--text);
+}
+
+.btnIconDelete:hover {
+  background: #fee2e2;
+  color: #ef4444;
+}
+
+/* Right Col Summary */
+.summaryBlock {
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  height: auto;
+  min-height: 0;
+}
+
+.summaryContent {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.summaryFooter {
+  margin-top: 12px;
+  flex-shrink: 0;
+}
+
+.summaryBlock h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 14px;
+}
+
+.summaryRow.total {
+  font-weight: 700;
+  font-size: 16px;
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-color);
+}
+
+.summaryRow.saldo {
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--primary);
+  padding: 16px;
+  background: var(--primary-light);
+  border-radius: var(--r-md);
+  margin-top: 8px;
+}
+
+.summaryRow.saldo.success {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.summaryRow.saldo.warning {
+  color: #c2410c;
+  background: #ffedd5;
+}
+
+/* Toggle */
+.toggleWrap {
+  display: flex;
+  background: var(--bg-page);
+  border-radius: var(--r-md);
+  padding: 4px;
+  border: 1px solid var(--border-color);
+}
+
+.toggleBtn,
+.toggleActive {
+  flex: 1;
+  border: none;
+  background: transparent;
+  padding: 8px 16px;
+  border-radius: var(--r-sm);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.toggleActive {
+  background: white;
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+/* DDC */
+.ddcBox {
+  background: #fefce8;
+  border: 1px solid #fef08a;
+  border-radius: var(--r-md);
+  padding: 12px 16px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  margin-top: 8px;
+}
+
+.ddcBoxIcon {
+  color: #ca8a04;
+  margin-top: 2px;
+  flex-shrink: 0;
+}
+
+.ddcBoxContent {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #854d0e;
+  flex: 1;
+}
+
+.btnLink {
+  background: none;
+  border: none;
+  color: #a16207;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.btnLink:hover {
+  color: #713f12;
+}
+
+/* Confirm */
+.confirmBtn {
+  background: #10b981;
+  color: white;
+  border: none;
+  height: 44px;
+  border-radius: var(--r-md);
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s;
+  width: 100%;
+}
+
+.confirmBtn:hover {
+  background: #059669;
+}
+
+.confirmBtn:disabled {
+  background: #d1d5db;
+  cursor: not-allowed;
+}
+
+/* Errors */
+.errorText {
+  color: #ef4444;
+  font-size: 12px;
+  font-weight: 500;
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Card Payment Check (Deprecated in favor of paymentLineCard but kept for backward compat if needed) */
+.checkCard {
+  border: 1px solid var(--border-color);
+  border-radius: 10px;
+  padding: 12px 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  background: white;
+  gap: 12px;
+  min-height: 58px;
+}
+
+.checkCardLeft {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  overflow: hidden;
+}
+
+.checkCardTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkCardSub {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.checkCardRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.checkAmount {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+/* SubModal (Cheque) */
+.subModalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.subModal {
+  background: white;
+  width: 100%;
+  max-width: 500px;
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-modal);
+  display: flex;
+  flex-direction: column;
+  animation: scaleIn 0.2s ease-out;
+}
+
+.subModalForm {
+  padding: 16px 20px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.subModalForm .field.full {
+  grid-column: 1 / -1;
+}
+
+.subModalFooter {
+  padding: 12px 20px;
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: var(--bg-page);
+  border-radius: 0 0 var(--r-md) var(--r-md);
+}
+
+.segmentedControl {
+  display: flex;
+  background: var(--bg-page);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 2px;
+  height: 32px;
+}
+
+.segBtn,
+.segActive {
+  flex: 1;
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all 0.2s;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.segActive {
+  background: white;
+  color: var(--text);
+  box-shadow: var(--shadow-sm);
+}
+
+@keyframes scaleIn {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* ==========================================
+   NUEVOS ESTILOS PARA ACCIONES (VIEW / EDIT)
+========================================== */
+.actionsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.primaryButton {
+  grid-column: span 2;
+  background: #07122f;
+  color: #ffffff;
+  border: 1px solid #07122f;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.primaryButton:hover {
+  background: #111c3f;
+  border-color: #111c3f;
+  color: #ffffff;
+  box-shadow: 0 6px 14px rgba(7, 18, 47, 0.22);
+  transform: translateY(-1px);
+}
+
+.secondaryButton {
+  background: #ffffff;
+  color: #07122f;
+  border: 1px solid #d8e0ea;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.secondaryButton:hover {
+  background: #f5f7fb;
+  border-color: #b8c4d4;
+}
+
+.dangerButton {
+  grid-column: span 2;
+  background: #ffffff;
+  color: #e11d48;
+  border: 1px solid #fecdd3;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+.dangerButton:hover {
+  background: #fff1f2;
+  border-color: #fb7185;
+  color: #be123c;
+}
+
+.lockedEditAlert {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid #fed7aa;
+  background: #fff7ed;
+  color: #9a3412;
+  border-radius: 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  margin-bottom: 16px;
+}
+
+/* ==========================================
+   MODAL DE ANULACIÓN
+========================================== */
+.modalOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modalCard {
+  width: min(520px, calc(100vw - 32px));
+  background: #ffffff;
+  border-radius: 18px;
+  box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+  border: 1px solid #e2e8f0;
+  overflow: hidden;
+  animation: scaleIn 0.2s ease-out;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 22px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modalHeader h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.modalHeader button {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: all 0.2s;
+}
+
+.modalHeader button:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.modalBody {
+  padding: 20px 22px;
+  color: #334155;
+  line-height: 1.45;
+  font-size: 14px;
+}
+
+.modalBody ul {
+  margin-top: 10px;
+  margin-bottom: 10px;
+  padding-left: 20px;
+}
+
+.modalBody li {
+  margin-bottom: 4px;
+}
+
+.warningBox {
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  color: #9a3412;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 14px;
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+}
+
+.modalFooter {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 22px;
+  border-top: 1px solid #e5e7eb;
+  background: #f8fafc;
+}
+
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modalCard {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}

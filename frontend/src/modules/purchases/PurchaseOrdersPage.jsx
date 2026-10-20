@@ -1,17 +1,40 @@
 import { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import ContentHeader from '../../components/layout/ContentHeader';
+import DocumentListPage from '../../components/layout/DocumentListPage';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Input from '../../components/ui/Input';
 import t from '../../components/ui/Table.module.css';
 import s from '../../components/layout/DocumentListPage.module.css';
+import { openNuevaOrdenCompra, openEditOrdenCompra } from '../../utils/openStandaloneWindow';
+import { useToast } from '../../context/ToastContext';
+import { TraceabilityProgress } from '../../components/ui/TraceabilityStatusBadge';
+import StatusBadge from '../../components/ui/StatusBadge';
+import api from '../../services/api';
 import { TableRowSkeleton } from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
-import { useWindow } from '../../context/WindowContext';
-import { useToast } from '../../context/ToastContext';
-import api from '../../services/api';
-import { Edit, Trash2, Search, ChevronUp, ChevronDown, X, Filter, Plus, Eye, Paperclip, TrendingUp, Clock, PackageOpen, CheckCircle } from 'lucide-react';
+import { 
+  Edit, 
+  Trash2, 
+  Search, 
+  ChevronUp, 
+  ChevronDown, 
+  X, 
+  Filter, 
+  Plus, 
+  PlusCircle,
+  Eye, 
+  Paperclip, 
+  TrendingUp, 
+  Clock, 
+  PackageOpen, 
+  CheckCircle,
+  FileText,
+  ArrowUpRight,
+  Layers
+} from 'lucide-react';
 
 export default function PurchaseOrdersPage() {
   const [orders, setOrders] = useState([]);
@@ -39,7 +62,6 @@ export default function PurchaseOrdersPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 12;
   
-  const { openWindow } = useWindow(); 
   const { showToast } = useToast();
 
   useEffect(() => { fetchAll(); }, []);
@@ -60,7 +82,7 @@ export default function PurchaseOrdersPage() {
     try {
       const [orderData, entityData, warehouseData] = await Promise.all([
         api.get('/purchases/purchase-orders/'),
-        api.get('/entities/', { params: { type: 'provider' } }),
+        api.get('/entities/', { params: { type: 'supplier' } }),
         api.get('/inventory/warehouses/'),
       ]);
       
@@ -76,25 +98,30 @@ export default function PurchaseOrdersPage() {
   };
 
   const handleOpenNew = () => {
-      openWindow('purchase-order', { mode: 'new' }, { 
-          title: 'Nueva Orden de Compra', 
-          width: 1100, 
-          height: 700, 
-          singletonKey: 'purchase-order-new' 
-      });
+    openNuevaOrdenCompra();
   };
 
-  const handleOpenDetail = (id, number) => {
-      openWindow('purchase-order', { mode: 'edit', id }, { 
-          title: `Orden de Compra ${number}`, 
-          width: 1100, 
-          height: 700, 
-          singletonKey: `purchase-order-edit-${id}`
-      });
+  const handleOpenDetail = (id) => {
+    openEditOrdenCompra(id);
+  };
+
+  const handleDelete = async (id, number) => {
+    if (!window.confirm(`¿Está seguro de que desea eliminar la Orden de Compra ${number}?`)) {
+      return;
+    }
+
+    try {
+      await api.delete(`/purchases/purchase-orders/${id}`);
+      showToast("Orden de Compra eliminada correctamente", "success");
+      fetchAll();
+    } catch (e) {
+      console.error(e);
+      showToast(e.message || 'Error al eliminar', "error");
+    }
   };
 
   const filtered = useMemo(() => {
-    return orders.filter((o) => {
+    return (orders || []).filter((o) => {
       if (hideCancelled && o.status === "CANCELLED") return false;
       if (selectedEntityId && String(o.entity_id) !== String(selectedEntityId)) return false;
       if (selectedStatus && String(o.status) !== String(selectedStatus)) return false;
@@ -179,278 +206,198 @@ export default function PurchaseOrdersPage() {
     return new Intl.NumberFormat('es-AR', { 
         style: 'currency', 
         currency: cur === 'USD' ? 'USD' : 'ARS',
-        minimumFractionDigits: 2 
+        minimumFractionDigits: 0 
     }).format(val || 0);
   };
 
-  const totalPages = Math.ceil(filtered.length / pageSize);
-  const hasActiveFilters = search.trim() || selectedEntityId || selectedStatus || selectedWarehouseId || dateFrom || dateTo;
+  const entityName = (id) => entities.find(e => e.id === id)?.name || id?.slice(0, 8);
+  const warehouseName = (id) => warehouses.find(w => String(w.id) === String(id))?.name || "-";
+
+  const kpis = [
+    { label: "Compras del Mes", value: fmt(stats.totalMonth, 'ARS'), sub: `${stats.countMonth} comprobantes`, type: "Primary" },
+    { label: "A Confirmar", value: stats.toConfirm, sub: "Órdenes en borrador", type: "Warning" },
+    { label: "Pdte. Recibir", value: stats.pendingReceipt, sub: "Ingresos pendientes", type: "Info" },
+    { label: "Completadas", value: orders.filter(o => o.status === 'RECEIVED').length, sub: "Histórico recepciones", type: "Success" },
+    { label: "Total Histórico", value: orders.length, sub: "Registros totales", type: "Default" }
+  ];
+
+  const toolbar = {
+    searchWrap: (
+      <div className={s.searchWrap}>
+        <Search className={s.searchIcon} size={20} />
+        <input
+          type="text"
+          placeholder="Filtrar por número, proveedor o descripción..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && <button className={s.inputClear} style={{ right: 16, top: '50%', transform: 'translateY(-50%)', position: 'absolute', background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8' }} onClick={() => setSearch("")}><X size={16} /></button>}
+      </div>
+    ),
+    filtersToggle: (
+      <button 
+        type="button" 
+        className={`${s.filterToggle} ${showFilters || (search && !orders.length) ? s.active : ""}`}
+        onClick={() => setShowFilters(!showFilters)}
+      >
+        <Filter size={18} />
+        Filtros
+      </button>
+    ),
+    actions: (
+      <>
+        <button className={s.ghostBtn} title="Próximamente">Exportar</button>
+        <button className={s.ghostBtn} title="Próximamente">Columnas</button>
+        <button className={s.ghostBtn} style={{ color: '#ef4444' }} title="Próximamente">Limpiar</button>
+        <button className={s.primaryCta} onClick={handleOpenNew}>
+            <PlusCircle size={16} />
+            Nueva Orden
+        </button>
+      </>
+    ),
+    filtersArea: showFilters && (
+      <div className={s.compactFiltersRow}>
+          <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className={s.filterSelect}>
+            <option value="">Estado: Todos</option>
+            <option value="DRAFT">Borrador</option>
+            <option value="CONFIRMED">Confirmada</option>
+            <option value="PARTIALLY_RECEIVED">Recibida Parcial</option>
+            <option value="RECEIVED">Recibida Total</option>
+            <option value="CANCELLED">Anulada</option>
+          </select>
+          <select value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value)} className={s.filterSelect}>
+            <option value="">Proveedor: Todos</option>
+            {entities.map((e) => (
+              <option key={e.id} value={e.id}>{e.name}</option>
+            ))}
+          </select>
+          <select value={selectedWarehouseId} onChange={(e) => setSelectedWarehouseId(e.target.value)} className={s.filterSelect}>
+            <option value="">Depósito: Todos</option>
+            {warehouses.map((w) => (
+              <option key={w.id} value={w.id}>{w.name}</option>
+            ))}
+          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Desde</span>
+              <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={s.dateInput} />
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ fontSize: '11px', color: 'var(--muted)', fontWeight: 600 }}>Hasta</span>
+              <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={s.dateInput} />
+          </div>
+          <label className={s.toggleLabel} style={{ marginLeft: 'auto', whiteSpace: 'nowrap' }}>
+              <div className={`${s.switch} ${!hideCancelled ? s.active : ""}`}>
+                  <input type="checkbox" checked={!hideCancelled} onChange={() => setHideCancelled(!hideCancelled)} />
+                  <div className={s.slider} />
+              </div>
+              <span className={s.toggleText} style={{ fontSize: '10px' }}>Incluir Anuladas</span>
+          </label>
+      </div>
+    )
+  };
+
+  const table = {
+    columns: (
+      <>
+        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>NUMERAL</th>
+        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>REGISTRO</th>
+        <th className={s.th} onClick={() => toggleSort('provider')} style={{ cursor: 'pointer' }}>TITULAR DE CUENTA</th>
+        <th className={s.th} style={{ textAlign: 'right' }} onClick={() => toggleSort('total')}>IMPORTE NETO</th>
+        <th className={s.th}>BASE</th>
+        <th className={s.th} style={{ textAlign: 'center' }}>ESTADO</th>
+        <th className={s.th} style={{ textAlign: 'center' }}>USUARIO</th>
+        <th className={s.th} style={{ textAlign: 'right' }}>DILIGENCIAS</th>
+      </>
+    ),
+    body: loading ? (
+        <TableRowSkeleton rows={10} cols={8} />
+    ) : error ? (
+        <tr><td colSpan="8"><ErrorState message={error} onRetry={fetchAll} /></td></tr>
+    ) : sorted.length === 0 ? (
+      <tr>
+        <td colSpan="8">
+          <EmptyState 
+              icon={Layers} 
+              title="Sin Registros Coincidentes"
+              description="Ajustá los parámetros del ledger o registrá una nueva operación de compra."
+              actionLabel="Nueva Orden"
+              onAction={handleOpenNew}
+          />
+        </td>
+      </tr>
+    ) : (
+      paginatedData.map((o) => (
+        <tr key={o.id} className={s.row} onClick={() => handleOpenDetail(o.id, o.number)}>
+          <td className={`${s.td} ${s.numberCell}`}>{o.number}</td>
+          <td className={s.td} style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>
+            {new Date(o.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
+          </td>
+          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{o.entity_name || entityName(o.entity_id)}</td>
+          <td className={`${s.td} ${s.totalCell}`}>
+            <span className={s.currencyLabel}>{o.currency}</span>
+            {Number(o.total_amount)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
+          </td>
+          <td className={s.td} style={{ fontSize: 13, color: '#64748b' }}>{warehouseName(o.warehouse_id)}</td>
+          <td className={s.td} style={{ textAlign: 'center', width: 220 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+              <StatusBadge status={o.status} />
+              {o.status !== 'DRAFT' && o.status !== 'CANCELLED' && (
+                <div style={{ width: '100%', padding: '0 4px', marginTop: 4 }}>
+                  <TraceabilityProgress 
+                      delivered={o.delivery_progress || 0} 
+                      invoiced={o.invoice_progress || 0} 
+                      paid={o.paid_progress || 0}
+                  />
+                </div>
+              )}
+            </div>
+          </td>
+          <td className={s.td} style={{ verticalAlign: 'middle' }}>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                  <div className={s.userBadge}>
+                      {(o.created_by || 'AD').substring(0, 2).toUpperCase()}
+                  </div>
+              </div>
+          </td>
+          <td className={s.td} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+              {['DRAFT', 'CONFIRMED'].includes(o.status) && (
+                <button onClick={() => handleDelete(o.id, o.number)} style={{ all: 'unset', cursor: 'pointer', color: '#ef4444', opacity: 0.7 }} title="Eliminar Orden">
+                  <Trash2 size={18} />
+                </button>
+              )}
+              {o.attachment_url && (
+                <button onClick={() => setPreviewUrl(o.attachment_url)} style={{ all: 'unset', cursor: 'pointer', opacity: 0.4 }} title="Ver Adjunto">
+                  <Paperclip size={18} />
+                </button>
+              )}
+              <button onClick={() => handleOpenDetail(o.id, o.number)} style={{ all: 'unset', cursor: 'pointer', color: 'var(--accent-indigo)' }} title="Consultar Registro">
+                <ArrowUpRight size={18} />
+              </button>
+            </div>
+          </td>
+        </tr>
+      ))
+    )
+  };
+
+  const pagination = {
+    infoText: `REPORTE: ${filtered.length} ÓRDENES LOCALIZADAS`,
+    totalPages: Math.ceil(filtered.length / pageSize),
+    currentPage: currentPage,
+    onPageChange: setCurrentPage
+  };
 
   return (
-    <div className={s.pageLayout}>
-      <ContentHeader
-        breadcrumbs={[{ label: 'Compras' }, { label: 'Órdenes de Compra' }]}
-        title="Órdenes de Compra"
-        actions={
-            <Button variant="primary" className={s.primaryCta} onClick={handleOpenNew} style={{ height: 44, padding: '0 24px' }}>
-                <Plus size={18} />
-                Nueva Orden
-            </Button>
-        }
+    <>
+      <DocumentListPage 
+        title="Libro de Compras"
+        breadcrumbs={[{ label: 'Suite de Compras' }, { label: 'Órdenes de Compra' }]}
+        kpis={kpis}
+        toolbar={toolbar}
+        table={table}
+        pagination={pagination}
       />
-
-      <div className={s.dashboard}>
-          <div className={`${s.bentoCard} ${s.cardPrimary}`}>
-              <div className={s.bentoHeader}>
-                  <TrendingUp size={14} color="#3b82f6" />
-                  <span>Compras del Mes</span>
-              </div>
-              <div className={s.bentoValue}>{fmt(stats.totalMonth, 'ARS')}</div>
-              <div className={s.bentoSubtext}>{stats.countMonth} órdenes registradas</div>
-          </div>
-          <div className={`${s.bentoCard} ${s.cardWarning}`}>
-              <div className={s.bentoHeader}>
-                  <Clock size={14} color="#f59e0b" />
-                  <span>A Confirmar</span>
-              </div>
-              <div className={s.bentoValue}>{stats.toConfirm}</div>
-              <div className={s.bentoSubtext}>Pedidos en borrador</div>
-          </div>
-          <div className={`${s.bentoCard} ${s.cardInfo}`}>
-              <div className={s.bentoHeader}>
-                  <PackageOpen size={14} color="#6366f1" />
-                  <span>Pdte. Recibir</span>
-              </div>
-              <div className={s.bentoValue}>{stats.pendingReceipt}</div>
-              <div className={s.bentoSubtext}>Ingresos pendientes</div>
-          </div>
-          <div className={`${s.bentoCard} ${s.cardSuccess}`}>
-              <div className={s.bentoHeader}>
-                  <CheckCircle size={14} color="#10b981" />
-                  <span>Completadas</span>
-              </div>
-              <div className={s.bentoValue}>{orders.filter(o => o.status === 'RECEIVED').length}</div>
-              <div className={s.bentoSubtext}>Histórico de recepciones</div>
-          </div>
-          <div className={s.bentoCard}>
-              <div className={s.bentoHeader}>
-                  <Paperclip size={14} color="#64748b" />
-                  <span>Total Histórico</span>
-              </div>
-              <div className={s.bentoValue}>{orders.length}</div>
-              <div className={s.bentoSubtext}>Filtros activos: {filtered.length}</div>
-          </div>
-      </div>
-
-      <div className={s.toolbar}>
-        <div className={s.toolbarRow}>
-          <div className={s.toolbarMain}>
-            <div className={s.searchWrap}>
-              <Search className={s.searchIcon} size={18} />
-              <input
-                type="text"
-                placeholder="Buscar por número o proveedor..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-              {search && <button className={s.inputClear} style={{ right: 10, top: '50%', transform: 'translateY(-50%)', position: 'absolute', background: 'none', border: 'none', cursor: 'pointer' }} onClick={() => setSearch("")}><X size={14} /></button>}
-            </div>
-            
-            <button 
-              type="button" 
-              className={`${s.filterToggle} ${showFilters || hasActiveFilters ? s.active : ""}`}
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              <Filter size={16} />
-              Filtros Avanzados
-              {hasActiveFilters && <span className={s.filterDot} style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, background: '#ef4444', borderRadius: '50%', border: '2px solid white' }} />}
-            </button>
-
-            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 12 }}>
-                <label className={s.verCanceladosLabel} style={{ fontSize: 12, fontWeight: 600 }}>
-                    <input
-                        type="checkbox"
-                        checked={hideCancelled}
-                        onChange={(e) => setHideCancelled(e.target.checked)}
-                        style={{ width: 16, height: 16, accentColor: '#3b82f6' }}
-                    />
-                    Ocultar Anuladas
-                </label>
-            </div>
-          </div>
-        </div>
-
-        {showFilters && (
-          <div className={s.expandedFilters}>
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Estado</span>
-                <select value={selectedStatus} onChange={(e) => setSelectedStatus(e.target.value)} className={s.filterSelect}>
-                  <option value="">Todos los estados</option>
-                  <option value="DRAFT">Borrador</option>
-                  <option value="CONFIRMED">Confirmada</option>
-                  <option value="RECEIVED">Recibida</option>
-                  <option value="CANCELLED">Anulada</option>
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Proveedor</span>
-                <select value={selectedEntityId} onChange={(e) => setSelectedEntityId(e.target.value)} className={s.filterSelect}>
-                  <option value="">Todos los proveedores</option>
-                  {entities.map((e) => (
-                    <option key={e.id} value={e.id}>{e.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Depósito</span>
-                <select value={selectedWarehouseId} onChange={(e) => setSelectedWarehouseId(e.target.value)} className={s.filterSelect}>
-                  <option value="">Todos los depósitos</option>
-                  {warehouses.map((w) => (
-                    <option key={w.id} value={w.id}>{w.name}</option>
-                  ))}
-                </select>
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Desde</span>
-                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} className={s.dateInput} />
-              </div>
-
-              <div className={s.filterGroup}>
-                <span className={s.filterLabel}>Hasta</span>
-                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} className={s.dateInput} />
-              </div>
-              
-              <div className={s.filterGroup} style={{ justifyContent: 'flex-end', gridColumn: 'span 2' }}>
-                  <Button variant="ghost" size="sm" onClick={() => {
-                     setSelectedEntityId("");
-                     setSelectedStatus("");
-                     setSelectedWarehouseId("");
-                     setDateFrom("");
-                     setDateTo("");
-                     setSearch("");
-                  }} style={{ color: '#ef4444', fontWeight: 700 }}>
-                      Limpiar Filtros
-                  </Button>
-              </div>
-          </div>
-        )}
-      </div>
-
-      <div className={s.cardTable}>
-        <div className={s.tableWrap}>
-          <table className={t.table}>
-            <thead>
-              <tr>
-                <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>
-                  Nro Orden {sortBy === 'number' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>
-                  Fecha {sortBy === 'date' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th className={s.th} onClick={() => toggleSort('provider')} style={{ cursor: 'pointer' }}>
-                  Proveedor {sortBy === 'provider' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th className={s.th} style={{ textAlign: 'right' }} onClick={() => toggleSort('total')}>
-                  Total {sortBy === 'total' && (sortDir === 'asc' ? '↑' : '↓')}
-                </th>
-                <th className={s.th} style={{ textAlign: 'center' }}>Estado</th>
-                <th className={s.th} style={{ textAlign: 'right' }}>Acciones</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                 <TableRowSkeleton rows={8} cols={6} />
-              ) : error ? (
-                <tr>
-                   <td colSpan="6">
-                       <ErrorState message={error} onRetry={fetchAll} style={{ margin: 24 }} />
-                   </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                   <td colSpan="6">
-                      <EmptyState 
-                          icon={Search} 
-                          title={hasActiveFilters ? "Sin resultados" : "Sin órdenes registradas"}
-                          description={hasActiveFilters ? "Ajustá los filtros para encontrar lo que buscás." : "Comenzá creando tu primera orden de compra."}
-                          actionLabel={!hasActiveFilters ? "Nueva Orden" : null}
-                          onAction={!hasActiveFilters ? handleOpenNew : null}
-                      />
-                   </td>
-                </tr>
-              ) : (
-                paginatedData.map((o) => (
-                  <tr key={o.id} className={s.row} onClick={() => handleOpenDetail(o.id, o.number)}>
-                    <td className={`${s.td} ${s.numberCell}`}>{o.number}</td>
-                    <td className={s.td} style={{ color: '#64748b' }}>
-                      {new Date(o.date).toLocaleDateString('es-AR')}
-                    </td>
-                    <td className={s.td} style={{ fontWeight: 600 }}>{o.entity_name}</td>
-                    <td className={`${s.td} ${s.totalCell}`}>
-                      <span className={s.currencyLabel}>{o.currency}</span>
-                      {o.total_amount?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className={s.td} style={{ textAlign: 'center' }}>
-                      <Badge variant={o.status}>{o.status}</Badge>
-                    </td>
-                    <td className={s.td} onClick={(e) => e.stopPropagation()}>
-                      <div className={s.actions}>
-                        {o.attachment_url && (
-                          <Button variant="ghost" size="sm" onClick={() => setPreviewUrl(o.attachment_url)} title="Ver Adjunto">
-                            <Eye size={16} style={{ color: 'var(--primary)' }} />
-                          </Button>
-                        )}
-                        <Button variant="ghost" size="sm" onClick={() => handleOpenDetail(o.id, o.number)} title="Ver / Editar">
-                          <Edit size={16} />
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {totalPages > 1 && (
-        <div className={s.paginationBar}>
-          <div className={s.paginationInfo}>
-            Mostrando <strong>{((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filtered.length)}</strong> de <strong>{filtered.length}</strong> órdenes
-          </div>
-          <div className={s.paginationControls}>
-            <button 
-              className={s.pageBtn} 
-              disabled={currentPage === 1} 
-              onClick={() => setCurrentPage(p => p - 1)}
-            >
-              Anterior
-            </button>
-            <div className={s.pageNumbers}>
-              {[...Array(totalPages)].map((_, i) => (
-                <button 
-                  key={i + 1}
-                  className={`${s.pageNum} ${currentPage === i + 1 ? s.active : ""}`}
-                  onClick={() => setCurrentPage(i + 1)}
-                >
-                  {i + 1}
-                </button>
-              ))}
-            </div>
-            <button 
-              className={s.pageBtn} 
-              disabled={currentPage === totalPages} 
-              onClick={() => setCurrentPage(p => p + 1)}
-            >
-              Siguiente
-            </button>
-          </div>
-        </div>
-      )}
-
       {previewUrl && (
           <div className={s.previewOverlay} onClick={() => setPreviewUrl(null)}>
               <div className={s.previewContent} onClick={e => e.stopPropagation()}>
@@ -468,7 +415,6 @@ export default function PurchaseOrdersPage() {
               </div>
           </div>
       )}
-    </div>
+    </>
   );
 }
-

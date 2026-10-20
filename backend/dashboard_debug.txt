@@ -500,3 +500,100 @@ AttributeError: type object 'CashPosition' has no attribute 'cost_center'
 [2026-06-16 18:26:34.949116] Starting dashboard summary (Refreshed) - CostCenter: 1
 [2026-06-16 18:26:35.359832] Error in critical stock: type object 'Product' has no attribute 'track_stock'
 [2026-06-16 18:26:38.143614] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-17 09:49:52.844603] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-17 09:49:53.267644] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-17 09:49:55.836547] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-17 17:44:20.884912] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-17 17:44:21.112049] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-17 17:44:23.982046] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-18 09:43:01.248002] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-18 09:43:01.498086] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-18 09:43:03.989917] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-18 11:45:30.036668] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-18 11:45:30.041099] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-18 11:45:32.415775] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-22 11:08:41.393417] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-22 11:08:41.776091] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-22 11:08:44.915463] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-22 12:22:51.913914] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-22 12:22:51.921061] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-22 12:22:54.225504] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-22 12:36:07.697103] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-22 12:36:07.994331] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-22 12:36:11.210287] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-22 14:14:19.807537] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-22 14:14:20.061511] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-22 14:14:22.770535] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-22 20:55:16.483388] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-22 20:55:16.777384] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-22 20:55:19.995129] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-22 23:46:30.940589] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-22 23:46:31.314714] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-22 23:46:34.075598] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-23 08:45:30.850827] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-23 08:45:31.278413] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-23 08:45:33.309377] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-24 08:35:05.361161] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-24 08:35:05.684454] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-24 08:35:08.372395] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-24 12:42:31.953548] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-24 12:42:31.964996] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-24 12:42:34.250414] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-25 10:10:02.927447] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-25 10:10:03.222844] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-25 10:10:05.914336] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-26 00:34:14.308881] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-26 00:34:14.660994] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-26 00:34:16.574264] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-26 08:31:57.457490] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-26 08:31:57.806875] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-26 08:32:00.398716] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-26 15:12:43.343746] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-26 15:12:43.591217] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-26 15:12:45.268421] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-27 19:21:02.792346] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-27 19:21:03.094849] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-27 19:21:05.088699] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-29 09:17:59.907558] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-29 09:18:00.292027] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-29 09:18:03.111422] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-29 17:35:59.728368] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-29 17:36:00.072919] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-29 17:36:02.850211] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-29 17:36:43.542104] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-29 17:36:43.585759] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-29 17:36:45.945256] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-30 10:05:33.585158] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-30 10:05:33.828627] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-30 10:05:36.624147] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-06-30 17:22:53.661050] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-06-30 17:22:54.071344] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-06-30 17:22:56.433352] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-01 08:27:21.865982] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-01 08:27:22.232608] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-01 08:27:24.974151] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-01 23:20:31.639012] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-01 23:20:31.996414] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-01 23:20:34.698254] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-02 00:13:10.382942] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-02 00:13:10.404539] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-02 00:13:12.640148] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-02 08:21:53.751575] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-02 08:21:54.038718] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-02 08:21:56.420872] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-02 16:05:51.579708] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-02 16:05:52.180534] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-02 16:05:52.237726] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-02 16:05:52.241576] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-02 16:05:52.454466] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-02 16:05:52.459569] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-02 16:05:55.867111] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-02 16:05:55.892655] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-02 16:05:55.916902] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-02 16:05:55.996563] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-03 08:39:05.459486] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-03 08:39:05.840798] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-03 08:39:08.744264] Error in funnel: type object 'Application' has no attribute 'date'
+[2026-07-05 16:39:18.740913] Starting dashboard summary (Refreshed) - CostCenter: 1
+[2026-07-05 16:39:19.039459] Error in critical stock: type object 'Product' has no attribute 'track_stock'
+[2026-07-05 16:39:21.904663] Error in funnel: type object 'Application' has no attribute 'date'

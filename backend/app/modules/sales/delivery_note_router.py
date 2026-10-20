@@ -58,8 +58,6 @@ def _get_or_create_stock_item(db: Session, product_id: str, warehouse_id: str) -
     return goci(db, product_id, warehouse_id)
 
 def _calculate_line(line_data: dict, db: Session = None):
-    from app.utils.pricing import calculate_line_totals
-    
     qty = float(line_data.get("qty", 0.0))
     unit_price = float(line_data.get("unit_price", 0.0))
     discount_pct = float(line_data.get("discount_pct", 0.0))
@@ -68,30 +66,24 @@ def _calculate_line(line_data: dict, db: Session = None):
     qty_packages = line_data.get("qty_packages")
     package_size = line_data.get("package_size")
     
-    if db and line_data.get("product_id"):
-        product = db.query(Product).filter(Product.id == line_data["product_id"]).first()
-        if product:
-             if product.quantity_per_container and float(product.quantity_per_container) > 1:
-                 package_size = float(product.quantity_per_container)
+    # En remitos, la cantidad "qty" enviada ya está calculada correctamente en base (unidades).
+    # No buscamos en DB ni usamos pricing.py para evitar doble multiplicación de envases.
+    gross_amount = qty * unit_price
+    discount_amount = gross_amount * (discount_pct / 100.0)
+    net_amount = gross_amount - discount_amount
+    vat_amount = net_amount * vat_rate
+    total_amount = net_amount + vat_amount
 
-    totals = calculate_line_totals(
-        qty_packages=qty_packages,
-        package_size=package_size,
-        fallback_qty=qty,
-        unit_price=unit_price,
-        discount_pct=discount_pct,
-        vat_rate=vat_rate
-    )
     return {
-        "qty_packages": totals["qty_packages"],
-        "package_size": totals["package_size"],
-        "qty": totals["qty"],
-        "unit_price": totals["unit_price"],
-        "discount_pct": totals["discount_pct"],
-        "vat_rate": totals["vat_rate"],
-        "net_amount": totals["net_amount"],
-        "vat_amount": totals["vat_amount"],
-        "total_amount": totals["total_amount"]
+        "qty_packages": qty_packages,
+        "package_size": package_size,
+        "qty": round(qty, 2),
+        "unit_price": round(unit_price, 2),
+        "discount_pct": round(discount_pct, 2),
+        "vat_rate": round(vat_rate, 4),
+        "net_amount": round(net_amount, 2),
+        "vat_amount": round(vat_amount, 2),
+        "total_amount": round(total_amount, 2)
     }
 
 def _get_next_ov_number(db: Session) -> str:
@@ -181,7 +173,7 @@ def list_pending_link_delivery_notes(
 
 def _recalc_dn_commission(dn: DeliveryNote, db: Session):
     if not dn.salesperson_id:
-        dn.commission_amount = Decimal("0.0")
+        dn.commission_amount = 0.0
         return
     
     from app.db.models.models import Entity
@@ -189,9 +181,9 @@ def _recalc_dn_commission(dn: DeliveryNote, db: Session):
     if not sp: return
 
     if sp.commission_type == 'fixed':
-        total_net = sum((l.net_amount or Decimal("0")) for l in dn.lines)
+        total_net = sum((Decimal(str(l.net_amount or 0))) for l in dn.lines)
         pct = Decimal(str(sp.commission_pct or 0.0)) / Decimal("100")
-        dn.commission_amount = (total_net * pct).quantize(Decimal("0.01"))
+        dn.commission_amount = float((total_net * pct).quantize(Decimal("0.01")))
     elif sp.commission_type == 'markup':
         total_markup = Decimal("0.0")
         for l in dn.lines:
@@ -203,20 +195,20 @@ def _recalc_dn_commission(dn: DeliveryNote, db: Session):
                 p = db.query(Product).filter(Product.id == l.product_id).first()
                 if p: cost = Decimal(str(p.cost_price or 0))
             
-            line_net = l.net_amount or Decimal("0")
+            line_net = Decimal(str(l.net_amount or 0))
             line_qty = Decimal(str(l.qty or 0))
             total_markup += line_net - (cost * line_qty)
             
         pct = Decimal(str(sp.commission_pct or 0.0)) / Decimal("100")
-        dn.commission_amount = (total_markup * pct).quantize(Decimal("0.01"))
+        dn.commission_amount = float((total_markup * pct).quantize(Decimal("0.01")))
     else:
         # Default: if costs are present, use 100% margin (net - cost)
-        total_net = sum(((l.net_amount or Decimal("0.0")) for l in dn.lines), Decimal("0.0"))
-        total_cost = sum(((l.total_cost or Decimal("0.0")) for l in dn.lines), Decimal("0.0"))
+        total_net = sum((Decimal(str(l.net_amount or 0))) for l in dn.lines)
+        total_cost = sum((Decimal(str(l.total_cost or 0))) for l in dn.lines)
         if total_cost > 0:
-            dn.commission_amount = (total_net - total_cost).quantize(Decimal("0.01"))
+            dn.commission_amount = float((total_net - total_cost).quantize(Decimal("0.01")))
         else:
-            dn.commission_amount = Decimal("0.0")
+            dn.commission_amount = 0.0
 
 def _update_order_status(db: Session, dn: DeliveryNote):
     """Llama a las utilidades centralizadas para actualizar el estado de la Orden vinculada."""
@@ -592,11 +584,14 @@ def create_delivery_note_from_ov(
         raise HTTPException(status_code=404, detail="OV no encontrada")
     
     # Estados permitidos: CONFIRMED o PARTIALLY_DELIVERED
-    if order.status not in (OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.DRAFT): 
+    if order.status not in (OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.DRAFT,
+                            OrderStatus.INVOICED, OrderStatus.PARTIALLY_INVOICED,
+                            OrderStatus.REMITIDO_PARCIAL_FACTURADO_TOTAL,
+                            OrderStatus.REMITIDO_PARCIAL_FACTURADO_PARCIAL): 
         # Mantengo OPEN por retrocompatibilidad si quedara alguna data vieja, pero idealmente solo CONFIRMED/PARTIAL
         raise HTTPException(
             status_code=409,
-            detail=f"Solo se pueden crear remitos desde OV en estado CONFIRMED o PARTIALLY_DELIVERED (actual: {order.status.value})"
+            detail=f"La OV no admite nuevas entregas en su estado actual (actual: {order.status.value})"
         )
 
     # Validar warehouse
@@ -647,6 +642,7 @@ def create_delivery_note_from_ov(
     db.flush()
     _log_history(db, dn.id, "CREACION", f"Remito creado desde OV {order.number}", current_user=current_user)
 
+    requested_quantities = {}
     for i, line_data in enumerate(data.lines):
         if not line_data.source_sales_line_id:
             raise HTTPException(status_code=400, detail=f"Línea {i}: falta source_sales_line_id")
@@ -663,7 +659,8 @@ def create_delivery_note_from_ov(
         qty_delivered = Decimal(str(ov_line.qty_delivered))
         remaining = qty_ov - qty_delivered
         
-        if qty > remaining:
+        requested_quantities[ov_line.id] = requested_quantities.get(ov_line.id, Decimal(0)) + qty
+        if requested_quantities[ov_line.id] > remaining:
             raise HTTPException(
                 status_code=409,
                 detail=f"Línea '{ov_line.description}': qty {qty} > remaining {remaining}"
@@ -710,6 +707,9 @@ def create_delivery_note_from_ov(
         dn.status = DeliveryNoteStatus.DISPATCHED
         _update_order_status(db, dn)
         _log_history(db, dn.id, "CONFIRMACION", "Remito autoconfirmado al crear desde OV", current_user=current_user)
+    # ── RECONCILIACION ESTRICTA DE OV/REMITO/FACTURA ──
+    from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+    reconcile_sales_order_invoice_delivery_links(db, order.id)
 
     db.commit()
     db.refresh(dn)
@@ -951,8 +951,11 @@ def confirm_delivery_note(dn_id: str, db: Session = Depends(get_db), current_use
 
     dn.status = DeliveryNoteStatus.DISPATCHED
 
-    # Recalcular OV/OC status
+    # Recalcular OV/OC status y vínculos con facturas emitidas antes de entregar.
     _update_order_status(db, dn)
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     _log_history(db, dn.id, "CONFIRMACION", f"Remito confirmado (DISPATCHED)", current_user=current_user)
 
@@ -980,8 +983,11 @@ def cancel_delivery_note(dn_id: str, db: Session = Depends(get_db), current_user
 
     dn.status = DeliveryNoteStatus.CANCELLED
 
-    # Recalcular OV/OC status
+    # Recalcular OV/OC status y vínculos con facturas emitidas antes de entregar.
     _update_order_status(db, dn)
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     _log_history(db, dn.id, "ANULACION", f"Remito anulado", current_user=current_user)
 
@@ -1041,41 +1047,25 @@ def list_delivery_notes(
         # with open(r"c:\Users\matia\Cosas\Escritorio\Programacion\Otro\QuintalAgross_Back\backend\debug_dn_fixed.log", "a") as dbg:
         #     dbg.write(f"DN: {dn.number} | SO: {so.number if so else 'no'} | SO_REF: {dn.origin_reference} | SO_STATUS: {so_status_val}\n")
 
-        if invs:
-            dn.invoice_progress = 100.0
-            if dn.status == DeliveryNoteStatus.DISPATCHED:
-                dn.status = DeliveryNoteStatus.INVOICED
-        elif so and any(k in so_upper for k in ["INVOICED", "COMPLETED", "FACTURADO_TOTAL", "FULLY_DELIVERED"]):
-            dn.invoice_progress = 100.0
-            if dn.status == DeliveryNoteStatus.DISPATCHED:
-                dn.status = DeliveryNoteStatus.INVOICED
+        total_qty = sum(float(l.qty or 0) for l in dn.lines)
+        total_invoiced = sum(float(l.qty_invoiced or 0) for l in dn.lines)
+        if total_qty > 0:
+            dn.invoice_progress = min(round((total_invoiced / total_qty) * 100, 2), 100.0)
         else:
-            # Traditional calculation as fallback or for partial scenarios
-            total_qty = sum(float(l.qty or 0) for l in dn.lines)
-            total_invoiced = sum(float(l.qty_invoiced or 0) for l in dn.lines)
-            if total_qty > 0:
-                dn.invoice_progress = min(round((total_invoiced / total_qty) * 100, 2), 100.0)
-            else:
-                dn.invoice_progress = 0.0
+            dn.invoice_progress = 0.0
 
-        # Update status if progress is full
         if dn.invoice_progress >= 99.9 and dn.status == DeliveryNoteStatus.DISPATCHED:
              dn.status = DeliveryNoteStatus.INVOICED
+        elif dn.invoice_progress > 0 and dn.status == DeliveryNoteStatus.DISPATCHED:
+             dn.status = DeliveryNoteStatus.PARTIAL
 
         # 2. Paid Progress (Based on linked invoice status)
         if invs:
             if all(inv.status == DocumentStatus.CLOSED for inv in invs):
                 dn.paid_progress = 100.0
             else:
-                total_inv_val = sum(float(inv.total_amount_ars or inv.total_amount or 0) for inv in invs)
-                if total_inv_val > 0:
-                    total_allocated = sum(float(inv.allocated_amount_ars or inv.allocated_amount or 0) for inv in invs)
-                    dn.paid_progress = min(round((total_allocated / total_inv_val) * 100, 2), 100.0)
-                else:
-                    paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
-                    dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
-        elif so and any(k in so_upper for k in ["COMPLETED", "FACTURADO_TOTAL", "FULLY_DELIVERED"]):
-            dn.paid_progress = 100.0
+                paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
+                dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
         else:
             dn.paid_progress = 0.0
 
@@ -1109,66 +1099,43 @@ def get_delivery_note(dn_id: str, db: Session = Depends(get_db)):
             InvoiceDeliveryNoteLink.delivery_note_id == dn.id
         ).all()
         invs = [link.document for link in links if link.document and link.document.status != DocumentStatus.CANCELLED]
-        so = dn.sales_order
-        if not so and dn.origin_reference:
-            from app.db.models.commercial_models import SalesOrder
-            clean_ref = dn.origin_reference.strip().replace("OV ", "").replace("OV-", "")
-            so = db.query(SalesOrder).filter(SalesOrder.number.contains(clean_ref[-10:])).first()
-        so_status = getattr(so, 'status', None)
-        so_status_val = so_status.name if hasattr(so_status, 'name') else str(so_status) if so_status else ""
-        so_upper = so_status_val.upper()
         
         total_qty_dn = sum(float(l.qty or 0) for l in dn.lines)
         total_invoiced_dn = sum(float(l.qty_invoiced or 0) for l in dn.lines)
         
         if total_qty_dn > 0:
             dn.invoice_progress = min(round((total_invoiced_dn / total_qty_dn) * 100, 2), 100.0)
-            if dn.invoice_progress < 1.0 and invs:
-                dn.invoice_progress = 100.0
         else:
             dn.invoice_progress = 0.0
-            
-        if not invs and so and any(k in so_upper for k in ["INVOICED", "COMPLETED", "FACTURADO_TOTAL", "FULLY_DELIVERED"]):
-            dn.invoice_progress = 100.0
 
-        if dn.invoice_progress >= 99.9:
+        if dn.invoice_progress >= 99.9 and dn.status == DeliveryNoteStatus.DISPATCHED:
             dn.status = DeliveryNoteStatus.INVOICED
-        elif dn.invoice_progress > 0:
+        elif dn.invoice_progress > 0 and dn.status == DeliveryNoteStatus.DISPATCHED:
             dn.status = DeliveryNoteStatus.PARTIAL
             
         if invs:
-            total_inv_val = sum(float(inv.total_amount or 0) for inv in invs)
-            if total_inv_val > 0:
-                total_allocated = sum(float(inv.allocated_amount or 0) for inv in invs)
-                dn.paid_progress = min(round((total_allocated / total_inv_val) * 100, 2), 100.0)
-            else:
-                paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
-                dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
-        elif so and any(k in so_upper for k in ["COMPLETED", "FACTURADO_TOTAL", "FULLY_DELIVERED"]):
-            dn.paid_progress = 100.0
-        else:
-            dn.paid_progress = 0.0
-
+            paid_count = sum(1 for inv in invs if inv.status == DocumentStatus.CLOSED)
+            dn.paid_progress = round((paid_count / len(invs)) * 100, 2)
     # 2. Poblar traza de facturas
-    dn.invoices = []
+    invoices_list = []
     # Usando tabla puente M:N
     invoice_links = db.query(InvoiceDeliveryNoteLink).options(joinedload(InvoiceDeliveryNoteLink.document)).filter(
         InvoiceDeliveryNoteLink.delivery_note_id == dn.id
     ).all()
     for link in invoice_links:
         inv = link.document
-        dn.invoices.append({
+        invoices_list.append({
             "id": inv.id,
             "number": inv.number,
             "date": inv.date.isoformat() if inv.date else None,
-            "status": inv.status.value if hasattr(inv.status, 'value') else str(inv.status),
-            "doc_type": inv.doc_type,
+            "status": inv.status.name if hasattr(inv.status, 'name') else str(inv.status),
+            "doc_type": inv.doc_type.name if hasattr(inv.doc_type, 'name') else str(inv.doc_type),
             "total_amount": float(inv.total_amount),
-            "currency": inv.currency
+            "currency": inv.currency.name if hasattr(inv.currency, 'name') else str(inv.currency)
         })
     
     # 3. Poblar remitos relacionados (del mismo pedido)
-    dn.related_delivery_notes = []
+    related_delivery_notes_list = []
     if dn.sales_order_id:
         others = db.query(DeliveryNote).filter(
             DeliveryNote.sales_order_id == dn.sales_order_id,
@@ -1176,18 +1143,67 @@ def get_delivery_note(dn_id: str, db: Session = Depends(get_db)):
             DeliveryNote.status != DeliveryNoteStatus.CANCELLED
         ).all()
         for o in others:
-            dn.related_delivery_notes.append({
+            related_delivery_notes_list.append({
                 "id": o.id,
                 "number": o.number,
                 "date": o.date.isoformat() if o.date else None,
-                "status": o.status.value if hasattr(o.status, 'value') else str(o.status)
+                "status": o.status.name if hasattr(o.status, 'name') else str(o.status)
             })
 
-    # Asegurar compatibilidad...
+    # Construir dict para Pydantic manualmente para evitar ValidationError
+    dn_dict = {
+        "id": dn.id,
+        "entity_id": dn.entity_id,
+        "warehouse_id": dn.warehouse_id,
+        "number": dn.number,
+        "date": dn.date,
+        "note_type": dn.note_type,
+        "delivery_type": dn.delivery_type,
+        "sales_order_id": dn.sales_order_id,
+        "purchase_order_id": dn.purchase_order_id,
+        "return_source_id": dn.return_source_id,
+        "status": dn.status.name if hasattr(dn.status, 'name') else str(dn.status),
+        "origin_reference": dn.origin_reference,
+        "notes": dn.notes,
+        "currency": dn.currency.name if hasattr(dn.currency, 'name') else str(dn.currency),
+        "exchange_rate": getattr(dn, "exchange_rate", 1.0),
+        "vendedor": dn.vendedor,
+        "sale_condition_id": dn.sale_condition_id,
+        "due_date": dn.due_date,
+        "vehicle_id": getattr(dn, "vehicle_id", None),
+        "vehicle_driver": getattr(dn, "vehicle_driver", None),
+        "attachment_url": dn.attachment_url,
+        "created_at": dn.created_at,
+        "updated_at": dn.updated_at,
+        "created_by": dn.created_by,
+        "updated_by": dn.updated_by,
+        "invoice_progress": getattr(dn, "invoice_progress", 0.0),
+        "paid_progress": getattr(dn, "paid_progress", 0.0),
+        "invoices": invoices_list,
+        "related_delivery_notes": related_delivery_notes_list,
+        "history": [],
+        "lines": []
+    }
+
+    # Lines
     for line in dn.lines:
-        if getattr(line, "description", None) is None:
-            line.description = ""
-    return dn
+        line_dict = {c.name: getattr(line, c.name) for c in line.__table__.columns}
+        line_dict["description"] = getattr(line, "description", "") or ""
+        line_dict["product"] = line.product
+        dn_dict["lines"].append(line_dict)
+
+    # History
+    for hist in getattr(dn, "history", []):
+        dn_dict["history"].append({
+            "id": hist.id,
+            "user": hist.user,
+            "date": hist.date,
+            "action": hist.action,
+            "details": hist.details
+        })
+
+    response = dn_schemas.DeliveryNoteResponse(**dn_dict)
+    return response
 
 
 @router.get("/by-ov/{order_id}",
@@ -1300,6 +1316,9 @@ def confirm_return_delivery_note(dn_id: str, db: Session = Depends(get_db)):
     
     # Recalcular OV/OC
     _update_order_status(db, dn)
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     db.commit()
     db.refresh(dn)
@@ -1343,7 +1362,15 @@ def update_delivery_note(dn_id: str, data: dn_schemas.DeliveryNoteUpdate, db: Se
             
             for i, line_data in enumerate(lines_data):
                 old_line = dn.lines[i]
-                new_qty = float(line_data.qty)
+                
+                # line_data can be a dict (from model_dump or raw) or a Pydantic object
+                if isinstance(line_data, dict):
+                    new_qty = float(line_data.get("qty", 0))
+                    new_prod = str(line_data.get("product_id")) if line_data.get("product_id") else None
+                else:
+                    new_qty = float(getattr(line_data, "qty", 0))
+                    new_prod = str(getattr(line_data, "product_id")) if getattr(line_data, "product_id", None) else None
+                
                 old_qty = float(old_line.qty)
                 
                 # Tolerancia mínima para flotantes
@@ -1354,7 +1381,6 @@ def update_delivery_note(dn_id: str, data: dn_schemas.DeliveryNoteUpdate, db: Se
                     )
                 
                 # Bloquear cambio de producto
-                new_prod = str(line_data.product_id) if line_data.product_id else None
                 old_prod = str(old_line.product_id) if old_line.product_id else None
                 if new_prod != old_prod:
                     raise HTTPException(status_code=409, detail=f"Línea {i+1}: No se puede cambiar el producto de un remito vinculado.")
@@ -1442,6 +1468,11 @@ def update_delivery_note(dn_id: str, data: dn_schemas.DeliveryNoteUpdate, db: Se
                     source_purchase_line_id=src_purchase,
                 )
                 db.add(db_line)
+
+        # ── RECONCILIACION ESTRICTA DE OV/REMITO/FACTURA ──
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     db.commit()
     db.refresh(dn)
@@ -1615,8 +1646,6 @@ def get_delivery_note_traceability(dn_id: str, db: Session = Depends(get_db)):
     invoice_progress = float((total_invoiced / total_qty * 100)) if total_qty > 0 else 0
     if dn.status == DeliveryNoteStatus.INVOICED: 
         invoice_progress = 100.0
-    elif not invoices and so and any(k in so_upper for k in ["INVOICED", "COMPLETED", "FACTURADO_TOTAL", "FULLY_DELIVERED"]):
-        invoice_progress = 100.0
 
     # Calculate payment progress based on linked invoices
     paid_amount_ars = 0.0
@@ -1630,8 +1659,6 @@ def get_delivery_note_traceability(dn_id: str, db: Session = Depends(get_db)):
 
     paid_progress = (paid_amount_ars / total_invoiced_ars * 100) if total_invoiced_ars > 0 else 0
     if dn.status == DeliveryNoteStatus.INVOICED and paid_progress > 98: 
-        paid_progress = 100.0
-    elif not invoices and so and any(k in so_upper for k in ["COMPLETED", "FACTURADO_TOTAL", "FULLY_DELIVERED"]):
         paid_progress = 100.0
 
     return {
@@ -1649,7 +1676,8 @@ def get_delivery_note_traceability(dn_id: str, db: Session = Depends(get_db)):
                 "total_amount_ars": float(inv.total_amount_ars),
                 "currency": inv.currency,
                 "status": inv.status,
-                "paid_amount_ars": sum(float(a.amount_applied_ars or 0) for a in db.query(db_models.Application).filter(db_models.Application.to_document_id == inv.id).all())
+                "paid_amount_ars": sum(float(a.amount_applied_ars or 0) for a in db.query(db_models.Application).filter(db_models.Application.to_document_id == inv.id).all()),
+                "qty_from_this_delivery_note": float(sum(l.qty for l in inv.lines if str(getattr(l, 'source_dn_line_id', '')) in [str(dl.id) for dl in dn.lines]))
             } for inv in invoices
         ]
     }
