@@ -118,3 +118,8 @@ _Esta fase depende críticamente de que el Core de la Fase 2 sea sólido._
 
 - [x] **T11.2.1** Cotización BNA divisas verificable, sin valores ficticios; aviso y carga manual si falla.
 - [x] **T11.2.2** Imputar factura y ND/NC con el mismo recibo sin duplicar saldo; pruebas aisladas de pagos totales, parciales y anulaciones aprobadas.
+
+- [x] **T11.3.1** Facturar desde OV antes de entregar y controlar remitos parciales sin duplicar stock (pruebas aisladas aprobadas).
+
+- [ ] **T11.3.2** Validar facturas directas sin OV vinculadas con varios remitos.
+- [ ] **T11.3.3** Corregir generación de asientos: referencia a DocumentLine.account_code inexistente.

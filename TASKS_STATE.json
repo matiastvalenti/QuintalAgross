@@ -450,6 +450,45 @@
         "frontend/src/tests/modules/ReceiptCollectionForm.test.jsx"
       ],
       "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.1",
+      "title": "Facturar desde OV antes de entregar y controlar remitos parciales sin duplicar stock",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        "backend/app/modules/accounting/document_router.py",
+        "backend/app/modules/accounting/document_schemas.py",
+        "backend/app/modules/sales/delivery_allocation.py",
+        "backend/app/modules/sales/sales_utils.py",
+        "backend/app/modules/sales/delivery_note_router.py",
+        "backend/app/modules/sales/sales_order_router.py",
+        "frontend/src/modules/sales/InvoicesPage.jsx",
+        "frontend/src/modules/sales/DeliveryNotesPage.jsx",
+        "checks/test_invoice_delivery.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.2",
+      "title": "Validar vínculo de facturas directas sin OV con varios remitos",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.3.1"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.3",
+      "title": "Corregir generación de asientos que referencia DocumentLine.account_code inexistente",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [],
+      "files": [],
+      "updated_at": "2026-10-20"
     }
   ]
 }

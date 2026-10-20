@@ -260,6 +260,9 @@ class DocumentResponse(DocumentBase):
     retentions: List[DocumentRetentionResponse] = []
     history: List[DocumentHistoryResponse] = []
     
+    delivery_status: str = "NOT_REQUIRED"
+    delivery_quantities: List[Dict[str, Any]] = []
+
     # Traceability progress (0 to 100)
     delivered_pct: float = 0.0
     invoiced_pct: float = 0.0

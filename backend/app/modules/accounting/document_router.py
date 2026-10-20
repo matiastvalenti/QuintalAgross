@@ -159,6 +159,10 @@ def _sanitize_document_for_response(doc, db: Session = None):
     else:
         doc.pending_amount = max(float(getattr(doc, "total_amount", 0) or 0) - total_applied, 0.0)
     
+    if db is not None:
+        from app.modules.sales.delivery_allocation import invoice_delivery_progress
+        doc.delivery_status, doc.delivery_quantities = invoice_delivery_progress(db, doc)
+
     # Inyectar info de entidad
     if getattr(doc, "entity", None):
         # entity_name es una property en el modelo, no se puede setear
@@ -991,6 +995,12 @@ def create_document(
                     if prod_tmp and prod_tmp.quantity_per_container and float(prod_tmp.quantity_per_container) > 1:
                         package_size = float(prod_tmp.quantity_per_container)
 
+                # Sales qty is expressed in LT/KG; missing packaging must not
+                # multiply that quantity a second time by the container size.
+                if (doc.doc_type in (models.DocumentType.INVOICE, models.DocumentType.FCE_MIPYME, models.DocumentType.TIQUET_FACTURA)
+                        and qty_packages is None and package_size and float(package_size) > 1):
+                    qty_packages = qty / float(package_size)
+
                 from app.utils.pricing import calculate_line_totals
                 totals = calculate_line_totals(
                     qty_packages=qty_packages,
@@ -1004,6 +1014,7 @@ def create_document(
                 line_data["qty_packages"] = totals["qty_packages"]
                 line_data["package_size"] = totals["package_size"]
                 line_data["qty"] = totals["qty"]
+                qty = totals["qty"] if doc.doc_type in (models.DocumentType.INVOICE, models.DocumentType.FCE_MIPYME, models.DocumentType.TIQUET_FACTURA) else line.qty
                 line_data["net_amount"] = totals["net_amount"]
                 line_data["vat_amount"] = totals["vat_amount"]
                 line_data["total_amount"] = totals["total_amount"]
@@ -1044,8 +1055,8 @@ def create_document(
                 db.add(db_line)
                 db.flush()
                 
-                # Generar movimiento de stock para facturas directas (sin remito)
-                if db_doc.status != models.DocumentStatus.DRAFT and db_doc.warehouse_id and not source_dn_line_id and line_data.get("product_id") and not doc.is_exchange_difference:
+                # Sales invoices do not dispatch goods: stock moves with the confirmed delivery note.
+                if db_doc.doc_type not in (models.DocumentType.INVOICE, models.DocumentType.FCE_MIPYME, models.DocumentType.TIQUET_FACTURA) and db_doc.status != models.DocumentStatus.DRAFT and db_doc.warehouse_id and not source_dn_line_id and line_data.get("product_id") and not doc.is_exchange_difference:
                     prod = db.query(Product).filter(Product.id == line_data.get("product_id")).first()
                     if prod and getattr(prod, 'is_service', False) == False:
                         from app.db.models.commercial_models import StockMovement, StockMovementType
@@ -1090,11 +1101,11 @@ def create_document(
                     dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == source_dn_line_id).first()
                     if dn_line:
                         from decimal import Decimal
-                        pending_dn = Decimal(str(dn_line.qty)) - Decimal(str(dn_line.qty_invoiced or 0))
-                        if Decimal(str(line.qty)) > (pending_dn + Decimal('0.001')):
-                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en el remito ({pending_dn}).")
+                        pending_dn = Decimal(str(dn_qty)) - Decimal(str(dn_qty_invoiced or 0))
+                        if Decimal(str(qty)) > (pending_dn + Decimal('0.001')):
+                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({qty}) supera lo pendiente en el remito ({pending_dn}).")
                             
-                        dn_line.qty_invoiced = Decimal(str(dn_line.qty_invoiced or 0)) + Decimal(str(line.qty))
+                        dn_qty_invoiced = Decimal(str(dn_qty_invoiced or 0)) + Decimal(str(qty))
                         # Also update the origin Order Line (OV or OC)
                         if dn_line.source_sales_line_id:
                             from app.db.models.commercial_models import SalesOrderLine
@@ -1102,16 +1113,16 @@ def create_document(
                             if ovl:
                                 # Data Integrity: Check for over-invoicing
                                 pending_ov = Decimal(str(ovl.qty)) - Decimal(str(ovl.qty_invoiced or 0))
-                                if Decimal(str(line.qty)) > (pending_ov + Decimal('0.001')):
-                                    raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en la Orden de Venta ({pending_ov}).")
-                                ovl.qty_invoiced = Decimal(str(ovl.qty_invoiced or 0)) + Decimal(str(line.qty))
+                                if Decimal(str(qty)) > (pending_ov + Decimal('0.001')):
+                                    raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({qty}) supera lo pendiente en la Orden de Venta ({pending_ov}).")
+                                ovl.qty_invoiced = Decimal(str(ovl.qty_invoiced or 0)) + Decimal(str(qty))
                                 db.flush()
                                 recalc_sales_order_status(db, ovl.order_id)
                         elif dn_line.source_purchase_line_id:
                             from app.db.models.commercial_models import PurchaseOrderLine
                             ocl = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == dn_line.source_purchase_line_id).first()
                             if ocl:
-                                ocl.qty_invoiced = Decimal(str(ocl.qty_invoiced or 0)) + Decimal(str(line.qty))
+                                ocl.qty_invoiced = Decimal(str(ocl.qty_invoiced or 0)) + Decimal(str(qty))
                                 db.flush()
                                 recalc_purchase_order_status(db, ocl.order_id)
 
@@ -1129,10 +1140,10 @@ def create_document(
                     ovl = db.query(SalesOrderLine).filter(SalesOrderLine.id == source_sales_line_id).first()
                     if ovl:
                         pending_ov = Decimal(str(ovl.qty)) - Decimal(str(ovl.qty_invoiced or 0))
-                        if Decimal(str(line.qty)) > (pending_ov + Decimal('0.001')):
-                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en la Orden de Venta ({pending_ov}).")
+                        if Decimal(str(qty)) > (pending_ov + Decimal('0.001')):
+                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({qty}) supera lo pendiente en la Orden de Venta ({pending_ov}).")
                         
-                        ovl.qty_invoiced = Decimal(str(ovl.qty_invoiced or 0)) + Decimal(str(line.qty))
+                        ovl.qty_invoiced = Decimal(str(ovl.qty_invoiced or 0)) + Decimal(str(qty))
                         
                         # --- PRICE SYNC LOGIC ---
                         new_price = Decimal(str(line_data.get('unit_price', 0)))
@@ -1182,9 +1193,9 @@ def create_document(
                     ocl = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == source_purchase_line_id).first()
                     if ocl:
                         pending_oc = Decimal(str(ocl.qty)) - Decimal(str(ocl.qty_invoiced or 0))
-                        if Decimal(str(line.qty)) > (pending_oc + Decimal('0.001')):
-                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({line.qty}) supera lo pendiente en la Orden de Compra ({pending_oc}).")
-                        ocl.qty_invoiced = Decimal(str(ocl.qty_invoiced or 0)) + Decimal(str(line.qty))
+                        if Decimal(str(qty)) > (pending_oc + Decimal('0.001')):
+                            raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({qty}) supera lo pendiente en la Orden de Compra ({pending_oc}).")
+                        ocl.qty_invoiced = Decimal(str(ocl.qty_invoiced or 0)) + Decimal(str(qty))
                         db.flush()
                         recalc_purchase_order_status(db, ocl.order_id)
 

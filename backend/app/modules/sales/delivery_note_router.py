@@ -584,11 +584,14 @@ def create_delivery_note_from_ov(
         raise HTTPException(status_code=404, detail="OV no encontrada")
     
     # Estados permitidos: CONFIRMED o PARTIALLY_DELIVERED
-    if order.status not in (OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.DRAFT): 
+    if order.status not in (OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.DRAFT,
+                            OrderStatus.INVOICED, OrderStatus.PARTIALLY_INVOICED,
+                            OrderStatus.REMITIDO_PARCIAL_FACTURADO_TOTAL,
+                            OrderStatus.REMITIDO_PARCIAL_FACTURADO_PARCIAL): 
         # Mantengo OPEN por retrocompatibilidad si quedara alguna data vieja, pero idealmente solo CONFIRMED/PARTIAL
         raise HTTPException(
             status_code=409,
-            detail=f"Solo se pueden crear remitos desde OV en estado CONFIRMED o PARTIALLY_DELIVERED (actual: {order.status.value})"
+            detail=f"La OV no admite nuevas entregas en su estado actual (actual: {order.status.value})"
         )
 
     # Validar warehouse
@@ -639,6 +642,7 @@ def create_delivery_note_from_ov(
     db.flush()
     _log_history(db, dn.id, "CREACION", f"Remito creado desde OV {order.number}", current_user=current_user)
 
+    requested_quantities = {}
     for i, line_data in enumerate(data.lines):
         if not line_data.source_sales_line_id:
             raise HTTPException(status_code=400, detail=f"Línea {i}: falta source_sales_line_id")
@@ -655,7 +659,8 @@ def create_delivery_note_from_ov(
         qty_delivered = Decimal(str(ov_line.qty_delivered))
         remaining = qty_ov - qty_delivered
         
-        if qty > remaining:
+        requested_quantities[ov_line.id] = requested_quantities.get(ov_line.id, Decimal(0)) + qty
+        if requested_quantities[ov_line.id] > remaining:
             raise HTTPException(
                 status_code=409,
                 detail=f"Línea '{ov_line.description}': qty {qty} > remaining {remaining}"
@@ -946,8 +951,11 @@ def confirm_delivery_note(dn_id: str, db: Session = Depends(get_db), current_use
 
     dn.status = DeliveryNoteStatus.DISPATCHED
 
-    # Recalcular OV/OC status
+    # Recalcular OV/OC status y vínculos con facturas emitidas antes de entregar.
     _update_order_status(db, dn)
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     _log_history(db, dn.id, "CONFIRMACION", f"Remito confirmado (DISPATCHED)", current_user=current_user)
 
@@ -975,8 +983,11 @@ def cancel_delivery_note(dn_id: str, db: Session = Depends(get_db), current_user
 
     dn.status = DeliveryNoteStatus.CANCELLED
 
-    # Recalcular OV/OC status
+    # Recalcular OV/OC status y vínculos con facturas emitidas antes de entregar.
     _update_order_status(db, dn)
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     _log_history(db, dn.id, "ANULACION", f"Remito anulado", current_user=current_user)
 
@@ -1305,6 +1316,9 @@ def confirm_return_delivery_note(dn_id: str, db: Session = Depends(get_db)):
     
     # Recalcular OV/OC
     _update_order_status(db, dn)
+    if dn.sales_order_id:
+        from app.modules.sales.sales_utils import reconcile_sales_order_invoice_delivery_links
+        reconcile_sales_order_invoice_delivery_links(db, dn.sales_order_id)
 
     db.commit()
     db.refresh(dn)
