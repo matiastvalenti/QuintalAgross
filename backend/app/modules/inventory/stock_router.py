@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
 from typing import List, Optional
 from datetime import datetime
+from decimal import Decimal
 import uuid
 
 from app.db.session import get_db
@@ -18,6 +19,20 @@ router = APIRouter(prefix="/stock", tags=["Stock Actions"])
 
 def _get_or_create_stock_item(db: Session, product_id: str, warehouse_id: str) -> StockItem:
     return get_or_create_stock_item(db, product_id, warehouse_id)
+
+def _negative_stock_warnings(items):
+    """Report final negative balances without rejecting a permitted movement."""
+    return [
+        {
+            "product_id": item.product_id,
+            "warehouse_id": item.warehouse_id,
+            "product_name": item.product.name if item.product else item.product_id,
+            "warehouse_name": item.warehouse.name if item.warehouse else item.warehouse_id,
+            "resulting_qty": float(item.qty_on_hand),
+        }
+        for item in items if item.qty_on_hand < 0
+    ]
+
 
 @router.post("/movements", status_code=201)
 def create_stock_movement(data: stock_schemas.StockMovementHeaderCreate, db: Session = Depends(get_db)):
@@ -38,6 +53,7 @@ def create_stock_movement(data: stock_schemas.StockMovementHeaderCreate, db: Ses
     db.flush()
     
     revision_id = str(uuid.uuid4())
+    affected_items = {}
     
     for line_data in data.lines:
         line = StockMovementLine(
@@ -56,13 +72,15 @@ def create_stock_movement(data: stock_schemas.StockMovementHeaderCreate, db: Ses
         # 1. Source Impact (OUT or ADJUSTMENT)
         if data.from_warehouse_id:
             from_item = _get_or_create_stock_item(db, line.product_id, data.from_warehouse_id)
-            from_item.qty_on_hand = float(from_item.qty_on_hand) - float(line.qty)
+            from_item.qty_on_hand = Decimal(str(from_item.qty_on_hand)) - line_data.qty
+            affected_items[from_item.id] = from_item
             
             # Movement record
             db.add(StockMovement(
                 stock_item_id=from_item.id,
                 movement_type=StockMovementType.OUT if data.to_warehouse_id else StockMovementType.ADJUSTMENT,
                 qty=-line.qty,
+                stock_negative=from_item.qty_on_hand < 0,
                 reference_type="STOCK_MOVEMENT",
                 reference_id=header.id,
                 revision_id=revision_id,
@@ -72,7 +90,8 @@ def create_stock_movement(data: stock_schemas.StockMovementHeaderCreate, db: Ses
         # 2. Destination Impact (IN)
         if data.to_warehouse_id:
             to_item = _get_or_create_stock_item(db, line.product_id, data.to_warehouse_id)
-            to_item.qty_on_hand = float(to_item.qty_on_hand) + float(line.qty)
+            to_item.qty_on_hand = Decimal(str(to_item.qty_on_hand)) + line_data.qty
+            affected_items[to_item.id] = to_item
             
             # Movement record
             db.add(StockMovement(
@@ -87,7 +106,8 @@ def create_stock_movement(data: stock_schemas.StockMovementHeaderCreate, db: Ses
             
     db.commit()
     db.refresh(header)
-    return {"id": header.id, "number": header.number}
+    return {"id": header.id, "number": header.number,
+            "warnings": _negative_stock_warnings(affected_items.values())}
 
 @router.get("/movements", response_model=List[dict])
 def list_stock_movements(
@@ -212,18 +232,19 @@ def void_stock_movement(header_id: str, db: Session = Depends(get_db)):
 def adjust_stock(data: stock_schemas.StockAdjustmentCreate, db: Session = Depends(get_db)):
     """Legacy endpoint for single product adjust."""
     item = _get_or_create_stock_item(db, data.product_id, data.warehouse_id)
-    item.qty_on_hand = float(item.qty_on_hand) + float(data.qty)
+    item.qty_on_hand = Decimal(str(item.qty_on_hand)) + data.qty
     mov = StockMovement(
         stock_item_id=item.id,
         movement_type=StockMovementType.ADJUSTMENT,
         qty=data.qty,
         reference_type="MANUAL_ADJUSTMENT",
+        stock_negative=item.qty_on_hand < 0,
         notes=data.notes,
         created_at=data.date or datetime.utcnow()
     )
     db.add(mov)
     db.commit()
-    return {"status": "ok"}
+    return {"status": "ok", "warnings": _negative_stock_warnings([item])}
 
 @router.get("/history", response_model=List[dict])
 def get_stock_history(

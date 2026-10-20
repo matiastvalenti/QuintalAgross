@@ -22,7 +22,7 @@ class WarehouseCreate(BaseModel):
     active: bool = True
     ownership: WarehouseOwnership = WarehouseOwnership.PROPIO
     low_stock_control: StockControlMode = StockControlMode.WARNING
-    no_stock_control: StockControlMode = StockControlMode.STRICT
+    no_stock_control: StockControlMode = StockControlMode.WARNING
     account_code: Optional[str] = None
 
     @field_validator("name")

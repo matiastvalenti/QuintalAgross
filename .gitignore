@@ -11,3 +11,7 @@ logs/
 *.log 
 .env 
 .env.* 
+
+# Plantillas públicas de configuración y entornos locales
+!.env.example
+.venv/

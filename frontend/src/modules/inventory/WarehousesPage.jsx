@@ -25,7 +25,7 @@ export default function WarehousesPage() {
         active: true,
         ownership: 'PROPIO',
         low_stock_control: 'WARNING',
-        no_stock_control: 'STRICT',
+        no_stock_control: 'WARNING',
         account_code: ''
     });
     
@@ -59,7 +59,7 @@ export default function WarehousesPage() {
                 active: wh.active,
                 ownership: wh.ownership || 'PROPIO',
                 low_stock_control: wh.low_stock_control || 'WARNING',
-                no_stock_control: wh.no_stock_control || 'STRICT',
+                no_stock_control: wh.no_stock_control || 'WARNING',
                 account_code: wh.account_code || ''
             });
         } else {
@@ -71,7 +71,7 @@ export default function WarehousesPage() {
                 active: true,
                 ownership: 'PROPIO',
                 low_stock_control: 'WARNING',
-                no_stock_control: 'STRICT',
+                no_stock_control: 'WARNING',
                 account_code: ''
             });
         }

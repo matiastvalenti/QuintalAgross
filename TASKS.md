@@ -105,3 +105,13 @@ _Esta fase depende críticamente de que el Core de la Fase 2 sea sólido._
 - [x] **T7.1.1** Gestión de Lotes y Campañas
 - [x] **T7.1.2** Módulo de Maquinaria y Consumos (Gasoil/Semillas)
 - [x] **T7.1.3** Dashboard de Rentabilidad por Hectárea
+
+### Fase 11 — Estabilización y cierre
+
+- [x] **T11.0.1** Estabilizar instalación, configuración y arranque portable (verificación acotada; no certifica el ERP completo).
+- [ ] **T11.0.2** Aislar las pruebas históricas del backend y desactivar efectos externos en pruebas.
+- [ ] **T11.0.3** Validar entidades mixtas y cuentas corrientes ARS/USD.
+- [ ] **T11.0.4** Validar ventas y compras de punta a punta.
+- [ ] **T11.0.5** Refactorizar gradualmente formularios grandes y revisar errores/permisos antes de publicar.
+
+- [x] **T11.1.1** Permitir fracciones y avisar sobre stock negativo en inventario (pruebas aisladas aprobadas).

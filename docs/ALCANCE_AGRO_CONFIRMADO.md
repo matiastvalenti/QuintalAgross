@@ -21,7 +21,8 @@ Estado: relevamiento del 20/10/2026. Requisitos confirmados; no implica funciona
 - Conservar tipo de envase, contenido por envase y unidad del contenido.
 - Mostrar cantidad de envases y equivalencia en unidad base; evitar confundir precio por envase con precio por litro/kilo.
 - Lotes y vencimientos no son necesarios en esta etapa; no volverlos obligatorios.
-- Pendiente: confirmar fraccionamiento y política de salida sin stock.
+- Se permite fraccionar envases.
+- Se permiten salidas con stock insuficiente, mostrando una advertencia; no bloquear por saldo negativo.
 
 ## Líquido producto
 El ejemplo privado aportado identifica el comprobante como Cuenta de Venta y Líquido Producto, letra A y código 60. Incluye:
@@ -48,3 +49,4 @@ Reutilizar estos modelos y validar sus flujos; no crear catálogos duplicados.
 - La factura vinculada a un remito no duplica el movimiento de mercadería.
 - No se duplica una deuda al vincular una liquidación con otros comprobantes.
 - Cuenta de cliente y proveedor separadas para entidades mixtas; consolidado informativo.
+

@@ -212,7 +212,7 @@ class Warehouse(Base):
     
     # ── Controles de Stock ──
     low_stock_control = Column(Enum(StockControlMode), default=StockControlMode.WARNING)
-    no_stock_control = Column(Enum(StockControlMode), default=StockControlMode.STRICT)
+    no_stock_control = Column(Enum(StockControlMode), default=StockControlMode.WARNING)
     account_code = Column(String, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
