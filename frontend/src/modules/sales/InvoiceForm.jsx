@@ -697,6 +697,13 @@ export default function InvoiceForm(props) {
     if (currency === "USD" && exchangeRate <= 1) {
         return showToast("Para moneda USD el Tipo de Cambio debe ser mayor a 1", "error");
     }
+    if (['INVOICE', 'FCE_MIPYME', 'TIQUET_FACTURA'].includes(docType)) {
+      const missingOrder = items.find(item => {
+        const product = findProductById(products, item.product_id);
+        return product && !product.is_service && !item.source_sales_line_id && !item.source_dn_line_id;
+      });
+      if (missingOrder) return showToast('Los productos deben facturarse desde una OV o su remito. La factura directa admite servicios y conceptos sin stock.', 'error');
+    }
     const hasOriginInvoice = sourceInvoiceId || fullInvoiceData?.source_invoice_id;
     if (reasonType === 'EXCHANGE_DIFFERENCE' && !hasOriginInvoice) {
         return showToast("Seleccioná una factura origen para generar una nota por diferencia de cambio.", "error");

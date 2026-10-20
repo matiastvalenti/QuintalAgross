@@ -1,3 +1,4 @@
+from app.modules.sales.invoice_origin import validate_invoice_origins
 from fastapi import APIRouter, Depends, HTTPException, Response
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session, joinedload
@@ -724,6 +725,8 @@ def create_document(
     entity = db.query(models.Entity).filter(models.Entity.id == doc.entity_id).first()
     if not entity:
         raise HTTPException(status_code=404, detail="La entidad especificada no existe")
+
+    validate_invoice_origins(db, doc.doc_type, doc.entity_id, doc.lines)
 
     # 0.0 Validar Diferencia de Cambio
     if doc.reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE:
@@ -1511,6 +1514,9 @@ def bulk_invoice_delivery_notes(
 
     entity_id = list(entity_ids)[0]
     
+    for delivery in dns:
+        validate_invoice_origins(db, req.doc_type, entity_id, delivery.lines)
+
     # 2. Generar Número de Documento
     full_number = numbering_service.get_next_number(db, req.pv, req.doc_type.value if hasattr(req.doc_type, 'value') else str(req.doc_type))
     
@@ -2106,6 +2112,9 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         
         update_data = data.model_dump(exclude_unset=True)
+        validate_invoice_origins(db, doc.doc_type, update_data.get("entity_id", doc.entity_id),
+                                 data.lines if data.lines is not None else doc.lines)
+
 
         # Solo permitir editar si no tiene aplicaciones (pagos/cobros) vinculadas o si solo se editan campos permitidos
         has_apps = db.query(models.Application).filter(
@@ -2993,6 +3002,13 @@ def adjust_link(req: LinkAdjustmentRequest, db: Session = Depends(get_db)):
     if not doc_line:
         raise HTTPException(status_code=404, detail="Línea de factura no encontrada")
     
+    from app.modules.sales.delivery_allocation import SALES_INVOICE_TYPES
+    if doc_line.document.doc_type in SALES_INVOICE_TYPES and doc_line.product and not doc_line.product.is_service:
+        if float(req.new_qty) != float(doc_line.qty) or req.source_sales_line_id != doc_line.source_sales_line_id:
+            raise HTTPException(400, "No se puede dejar un producto facturado sin OV. Corrija la operación conservando su orden de origen.")
+        validate_invoice_origins(db, doc_line.document.doc_type, doc_line.document.entity_id, [doc_line])
+        return {"status": "no_change"}
+
     # 2. Buscar línea de OV
     from app.db.models.commercial_models import SalesOrderLine
     ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == req.source_sales_line_id).first()

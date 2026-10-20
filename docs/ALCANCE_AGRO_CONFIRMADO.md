@@ -65,3 +65,9 @@ Reutilizar estos modelos y validar sus flujos; no crear catálogos duplicados.
 - Ejemplo: factura USD 1.000 a TC 1.000, cobro ARS 1.100.000 a TC 1.100. El mismo recibo cancela ARS 1.000.000 de factura y ARS 100.000 de ND por diferencia de cambio. No deja deuda adicional.
 - Si baja el TC, la NC cubre la diferencia sobre la parte cancelada de la factura; recibo y NC cancelan juntos esa porción.
 - Los pagos parciales ajustan únicamente su porción aplicada. Los USD pendientes conservan el TC original para calcular ajustes futuros.
+
+## OV obligatoria para productos
+- Toda factura de productos físicos requiere una línea de OV del mismo cliente y producto; puede tomarla mediante un remito confirmado que conserve ese origen.
+- Servicios del catálogo y otros conceptos sin stock admiten factura directa, sin OV ni remito de mercadería.
+- Una factura mixta debe conservar OV en cada renglón de producto; los servicios pueden no tenerla.
+- No se requiere desarrollar facturas directas de productos ni vincularlas posteriormente con varios remitos. Esa propuesta se descartó al aclarar la operatoria.

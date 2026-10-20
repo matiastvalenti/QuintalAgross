@@ -121,5 +121,5 @@ _Esta fase depende críticamente de que el Core de la Fase 2 sea sólido._
 
 - [x] **T11.3.1** Facturar desde OV antes de entregar y controlar remitos parciales sin duplicar stock (pruebas aisladas aprobadas).
 
-- [ ] **T11.3.2** Validar facturas directas sin OV vinculadas con varios remitos.
+- [x] **T11.3.2** Exigir OV para productos; permitir servicios directos (creación, edición y desvinculación verificadas).
 - [ ] **T11.3.3** Corregir generación de asientos: referencia a DocumentLine.account_code inexistente.

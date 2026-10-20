@@ -96,14 +96,16 @@ assert invoice_delivery_progress(db,f)[1][0]['pending_qty'] == 75
 ''')
 
 
-def test_direct_invoice_does_not_dispatch_stock(isolated_backend, tmp_path):
+def test_direct_product_invoice_requires_order(isolated_backend, tmp_path):
     run_python(isolated_backend, tmp_path, SETUP + '''
-f=invoice(use_order=False)
+try:
+    invoice(use_order=False)
+    raise AssertionError('Product invoice accepted without order')
+except HTTPException as exc:
+    assert exc.status_code == 400
+    assert 'OV' in exc.detail
 assert balance() == 200
-assert db.query(StockMovement).count() == 0
-_sanitize_document_for_response(f, db)
-assert f.delivery_status == 'PENDING'
-assert f.delivery_quantities[0]['pending_qty'] == 100
+assert db.query(models.Document).count() == 0
 ''')
 
 
@@ -149,4 +151,66 @@ f=invoice()
 assert balance() == 100
 assert db.query(StockMovement).count() == 1
 assert invoice_delivery_progress(db,f)[0] == 'DELIVERED'
+''')
+
+
+def test_service_invoice_without_order(isolated_backend, tmp_path):
+    run_python(isolated_backend, tmp_path, SETUP + '''
+db.get(Product,'p').is_service=True
+db.commit()
+f=invoice(use_order=False)
+assert f.id
+assert balance() == 200
+assert db.query(StockMovement).count() == 0
+assert invoice_delivery_progress(db,f)[0] == 'NOT_REQUIRED'
+''')
+
+
+def test_wrong_order_and_edit_cannot_bypass_rule(isolated_backend, tmp_path):
+    run_python(isolated_backend, tmp_path, SETUP + '''
+from app.modules.sales.invoice_origin import validate_invoice_origins
+for changes in [dict(source_sales_line_id=None), dict(source_sales_line_id='missing')]:
+    try:
+        validate_invoice_origins(db, models.DocumentType.INVOICE, 'client',
+            [SimpleNamespace(product_id='p', **changes)])
+        raise AssertionError('Invalid order accepted')
+    except HTTPException as exc:
+        assert exc.status_code == 400
+try:
+    validate_invoice_origins(db, models.DocumentType.INVOICE, 'other-client',
+        [SimpleNamespace(product_id='p',source_sales_line_id='ol')])
+    raise AssertionError('Other client order accepted')
+except HTTPException as exc:
+    assert exc.status_code == 400
+f=invoice()
+from app.modules.accounting.document_router import update_document, adjust_link, LinkAdjustmentRequest
+from app.modules.accounting.document_schemas import DocumentUpdate
+try:
+    update_document(f.id, DocumentUpdate(lines=[dict(product_id='p',qty=100,unit_price=10)]),db,user)
+    raise AssertionError('Order removed through edit')
+except HTTPException as exc:
+    assert exc.status_code == 400
+try:
+    adjust_link(LinkAdjustmentRequest(line_id=f.lines[0].id,source_sales_line_id='ol',new_qty=0),db)
+    raise AssertionError('Order removed through unlink')
+except HTTPException as exc:
+    assert exc.status_code == 400
+assert db.get(models.DocumentLine,f.lines[0].id).source_sales_line_id == 'ol'
+''')
+
+
+def test_confirmed_order_delivery_is_valid_origin(isolated_backend, tmp_path):
+    run_python(isolated_backend, tmp_path, SETUP + '''
+from app.modules.sales.invoice_origin import validate_invoice_origins
+note=deliver(25,'0001-00000001')
+validate_invoice_origins(db,models.DocumentType.INVOICE,'client',
+    [SimpleNamespace(product_id='p',source_dn_line_id=note.lines[0].id)])
+note.status=DeliveryNoteStatus.CANCELLED
+db.flush()
+try:
+    validate_invoice_origins(db,models.DocumentType.INVOICE,'client',
+        [SimpleNamespace(product_id='p',source_dn_line_id=note.lines[0].id)])
+    raise AssertionError('Cancelled delivery accepted')
+except HTTPException as exc:
+    assert exc.status_code == 400
 ''')
