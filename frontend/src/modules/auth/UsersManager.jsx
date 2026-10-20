@@ -26,6 +26,7 @@ const PERMISSION_GROUPS = [
             { id: "sales_orders", label: "Orden de Ventas" },
             { id: "sales_delivery", label: "Remitos (Venta)" },
             { id: "sales_invoices", label: "Facturas" },
+            { id: "service_works", label: "Servicios y trabajos (incluye costos)" },
             { id: "sales_notes", label: "Notas de Débito/Crédito" },
             { id: "customers", label: "Clientes / Entidades" }
         ]

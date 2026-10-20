@@ -528,6 +528,24 @@
       ],
       "files": [],
       "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.1",
+      "title": "Trabajos de servicios, costos por empleado/equipo y facturación agrupada parcial; propuesta de cuentas por actividad",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.3.4"
+      ],
+      "files": [
+        "backend/app/db/models/service_models.py",
+        "backend/app/modules/services/router.py",
+        "backend/app/modules/services/service.py",
+        "frontend/src/modules/services/ServiceWorksPage.jsx",
+        "checks/test_service_works.py",
+        "docs/PLAN_CUENTAS_PROPUESTA.md"
+      ],
+      "updated_at": "2026-10-20"
     }
   ]
 }

@@ -2077,6 +2077,12 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
         
         require_unapplied_draft(db, doc)
         update_data = data.model_dump(exclude_unset=True)
+        from app.db.models.service_models import ServiceWorkBilling
+        service_link = db.query(ServiceWorkBilling).join(models.DocumentLine,
+            ServiceWorkBilling.document_line_id == models.DocumentLine.id).filter(models.DocumentLine.document_id == id).first()
+        if service_link and set(update_data) & {"lines", "total_amount", "entity_id", "currency", "exchange_rate", "cost_center"}:
+            raise HTTPException(409, "Factura vinculada a trabajos. Para cambiar cantidades o importes, desaplique y anule el borrador, y vuelva a facturar desde Servicios y trabajos")
+
         validate_invoice_origins(db, doc.doc_type, update_data.get("entity_id", doc.entity_id),
                                  data.lines if data.lines is not None else doc.lines)
 
@@ -2937,6 +2943,8 @@ def adjust_link(req: LinkAdjustmentRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Línea de factura no encontrada")
     
     require_unapplied_draft(db, doc_line.document)
+    if doc_line.service_billings:
+        raise HTTPException(409, "El vínculo pertenece a un trabajo de servicios; corrija desde su factura de origen")
     from app.modules.sales.delivery_allocation import SALES_INVOICE_TYPES
     if doc_line.document.doc_type in SALES_INVOICE_TYPES and doc_line.product and not doc_line.product.is_service:
         if float(req.new_qty) != float(doc_line.qty) or req.source_sales_line_id != doc_line.source_sales_line_id:

@@ -1,0 +1,25 @@
+.page { padding: var(--s-6); color: var(--text); background: var(--bg-page); }
+.header { display:flex; justify-content:space-between; align-items:center; gap:var(--s-4); flex-wrap:wrap; }
+.page h1 { margin:0; font-size:var(--text-2xl); }
+.page h2 { font-size:var(--text-xl); }
+.page p, .page small { color:var(--text-secondary); }
+.panel { background:var(--bg-card); border:var(--border); border-radius:var(--r-lg); padding:var(--s-5); margin-top:var(--s-5); }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:var(--s-4); }
+.page label { display:flex; flex-direction:column; gap:var(--s-2); font-size:var(--text-sm); margin-bottom:var(--s-3); }
+.page input, .page select, .page textarea { border:var(--border); border-radius:var(--r-sm); padding:var(--s-2); background:var(--bg-card); color:var(--text); font:inherit; min-width:0; }
+.page button { border:var(--border); padding:var(--s-2) var(--s-3); border-radius:var(--r-sm); background:var(--primary-light); color:var(--primary-text); cursor:pointer; font:inherit; }
+.page button:disabled { opacity:.5; cursor:not-allowed; }
+.page button:focus-visible, .page input:focus-visible, .page select:focus-visible { outline:2px solid var(--primary); outline-offset:2px; }
+.actions { display:flex; gap:var(--s-3); flex-wrap:wrap; margin-top:var(--s-3); }
+.scroll { overflow:auto; max-height:500px; }
+.page table { width:100%; border-collapse:collapse; font-size:var(--text-sm); }
+.page td, .page th { padding:var(--s-3); border-bottom:var(--border); text-align:left; vertical-align:top; }
+.page th { background:var(--panel-2); }
+.page td small { display:block; margin-top:var(--s-1); }
+.page td input[type=number] { width:110px; }
+.page td button { margin:var(--s-1); white-space:nowrap; }
+.error { background:var(--bad-bg); color:var(--bad-text) !important; padding:var(--s-3); border-radius:var(--r-sm); }
+.notice { background:var(--ok-bg); color:var(--ok-text) !important; padding:var(--s-3); border-radius:var(--r-sm); }
+.metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:var(--s-3); }
+.metrics div { background:var(--panel-2); padding:var(--s-4); border-radius:var(--r-md); }
+.metrics strong { display:block; font-size:var(--text-xl); margin-top:var(--s-2); }

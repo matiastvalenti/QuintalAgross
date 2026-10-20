@@ -21,6 +21,7 @@ const NAV_GROUPS = [
   {
     title: 'OPERACIONES',
     items: [
+      { label: 'Servicios y trabajos', to: '/servicios/trabajos', icon: Tractor, perm: 'service_works' },
       {
         label: 'Campo', icon: Sprout, perm: 'items',
         children: [

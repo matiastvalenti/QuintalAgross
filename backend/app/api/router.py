@@ -47,3 +47,6 @@ api_router.include_router(ai_router)
 
 from app.modules.accounting import commission_router
 api_router.include_router(commission_router.router)
+
+from app.modules.services.router import router as service_work_router
+api_router.include_router(service_work_router)

@@ -570,7 +570,7 @@ def ensure_system_roles(db: Session):
     def get_full_access():
         modules = ["sales_orders", "sales_delivery", "sales_invoices", "sales_quotes", "customers", 
                    "purchase_orders", "purchase_delivery", "purchase_invoices", "suppliers", 
-                   "products", "items", "stock_moves", 
+                   "products", "items", "stock_moves", "service_works", 
                    "warehouses", "cash", "banks", "cheques", "payments", "ledger", "journal", "accounting_reports", "users"]
         return {m: {"view": True, "create": True, "edit": True, "delete": True} for m in modules}
 
