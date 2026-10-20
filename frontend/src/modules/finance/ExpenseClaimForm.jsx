@@ -52,6 +52,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
     const { can } = useAuth();
     const [catalog, setCatalog] = useState({employees:[],providers:[],accounts:[]});
     const [previewType, setPreviewType] = useState('');
+    const [receiptExceptions, setReceiptExceptions] = useState({});
     const authFetch = (url, options = {}) => fetch(url, {...options, headers: {...options.headers, Authorization: `Bearer ${localStorage.getItem('token')}`}});
     const { openWindow } = useWindow();
     const { costCenter: globalCostCenter } = useCostCenter();
@@ -263,18 +264,23 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
         } catch (e) { showToast(e.message,'error'); }
     };
 
-    const updateStatus = async (newStatus) => {
+    const updateStatus = async (newStatus, authorizeWithoutReceipt = false) => {
         const reason = newStatus === 'REJECTED' ? window.prompt('Motivo de devolución para corregir:') : '';
         if (newStatus === 'REJECTED' && !reason?.trim()) return;
+        const withoutReceipts = authorizeWithoutReceipt ? Object.entries(receiptExceptions).map(([item_id, reason])=>({item_id,reason:reason.trim()})) : [];
+        if (authorizeWithoutReceipt && (!withoutReceipts.length || withoutReceipts.some(x=>x.reason.length<3))) {
+            showToast('Seleccioná los gastos sin comprobante y explicá el motivo de cada autorización.','warning'); return;
+        }
+        setSaving(true);
         try {
-            const res = await authFetch(`${API_URL}/expenses/claims/${claimId}/status?status=${newStatus}&reason=${encodeURIComponent(reason || '')}`, { method: 'PATCH' });
+            const res = await authFetch(`${API_URL}/expenses/claims/${claimId}/status?status=${newStatus}&reason=${encodeURIComponent(reason || '')}`, { method: 'PATCH', ...(authorizeWithoutReceipt ? {headers:{'Content-Type':'application/json'},body:JSON.stringify({without_receipts:withoutReceipts})} : {}) });
             if (!res.ok) { const err=await res.json(); throw new Error(typeof err.detail === 'string' ? err.detail : 'No se pudo actualizar'); }
             showToast(`Estado: ${newStatus}`, 'success');
             fetchClaim();
             if (onSave) onSave();
         } catch (err) {
             showToast(err.message, 'error');
-        }
+        } finally { setSaving(false); }
     };
 
     const totalRendicion = formData.items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
@@ -400,7 +406,8 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                                         </td>
                                         <td className={s.td} style={{ width: 120 }}>
                                             <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
-                                                {!item.attachment_url && <span title="Puede adjuntarlo después mientras la rendición sea editable">Adjunto pendiente</span>}
+                                                {item.authorization_reason && <span title={`${item.authorization_reason} · ${item.authorized_name || item.authorized_by} · ${item.authorized_at}`}>Sin comprobante autorizado</span>}
+                                                {!item.authorization_reason && !item.attachment_url && <span title="Puede adjuntarlo después mientras la rendición sea editable">Adjunto pendiente</span>}
                                                 {item.attachment_url && (
                                                     <button className={s.actionBtn} onClick={() => viewReceipt(item.attachment_url)} title="Ver Comprobante">
                                                         <Eye size={18} className={s.viewIcon} />
@@ -534,6 +541,17 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                 {claimId && ['DRAFT','REJECTED'].includes(formData.status) && can('employee_expenses','edit') &&
                     <Button onClick={()=>updateStatus('SUBMITTED')}>Presentar versión guardada para revisión</Button>}
             </div>
+            {formData.status==='SUBMITTED' && can('employee_review','create') && can('employee_expense_exceptions','create') && <section className={s.header}>
+                <h3>Autorización excepcional sin ticket/factura</h3>
+                <p>Marcá únicamente los gastos que administración autoriza sin comprobante. Se contabilizará su importe completo como gasto interno, sin IVA discriminado. Se conservan el proveedor, la cuenta y la identificación del autorizante.</p>
+                {formData.items.map(item=><div key={item.id}>
+                    <label><input type="checkbox" checked={receiptExceptions[item.id]!==undefined} disabled={saving} onChange={e=>setReceiptExceptions(prev=>{const next={...prev};if(e.target.checked)next[item.id]='';else delete next[item.id];return next;})}/>
+                        Autorizar sin comprobante: {item.description} ({formData.currency} {Number(item.amount||0).toLocaleString('es-AR')})</label>
+                    {receiptExceptions[item.id]!==undefined && <Input aria-label={`Motivo de autorización: ${item.description}`} label={`Motivo de autorización: ${item.description}`} value={receiptExceptions[item.id]} disabled={saving}
+                        onChange={e=>setReceiptExceptions({...receiptExceptions,[item.id]:e.target.value})}/>}
+                </div>)}
+                <Button disabled={saving || !Object.keys(receiptExceptions).length} onClick={()=>updateStatus('APPROVED',true)}>Autorizar excepciones y aprobar rendición</Button>
+            </section>}
             {/* Footer consistent with system aesthetics */}
             <div className={s.footer}>
                 <div className={s.totalsArea}>
@@ -556,10 +574,10 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                         <div style={{ display: 'flex', gap: 12 }}>
                             {formData.status === 'SUBMITTED' && (can('employee_review','create') || can('employee_review','edit')) && (
                                 <>
-                                    <Button disabled={!can('employee_review','create')} variant="success" onClick={() => updateStatus('APPROVED')} size="lg">
+                                    <Button disabled={saving || !can('employee_review','create')} variant="success" onClick={() => updateStatus('APPROVED')} size="lg">
                                         <CheckCircle2 size={20} style={{ marginRight: 10 }} /> Aprobar y Contabilizar
                                     </Button>
-                                    <Button disabled={!can('employee_review','edit')} variant="danger" onClick={() => updateStatus('REJECTED')} size="lg">
+                                    <Button disabled={saving || !can('employee_review','edit')} variant="danger" onClick={() => updateStatus('REJECTED')} size="lg">
                                         Devolver para corregir
                                     </Button>
                                 </>

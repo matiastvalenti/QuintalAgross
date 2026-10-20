@@ -5,7 +5,7 @@ import ExpenseClaimsPage from './ExpenseClaimsPage';
 import s from './EmployeeFundsPage.module.css';
 
 const kinds={ADVANCE:'Adelanto para gastos',RETURN:'Devolución del empleado',REIMBURSE:'Reintegro al empleado',FX:'Conversión de moneda',CLAIM:'Rendición aprobada'};
-const modules={employee_expenses:'Rendiciones',employee_expenses_all:'Acceso a otros empleados (Ver)',employee_review:'Revisión (Crear: aprobar; Editar: devolver)',employee_funds:'Movimientos de fondos (Crear)',employee_reconciliation:'Cortes (Crear: marcar; Editar: conciliar)'};
+const modules={employee_expenses:'Rendiciones',employee_expenses_all:'Acceso a otros empleados (Ver)',employee_review:'Revisión (Crear: aprobar; Editar: devolver)',employee_expense_exceptions:'Autorizar sin comprobante (Crear)',employee_funds:'Movimientos de fondos (Crear)',employee_reconciliation:'Cortes (Crear: marcar; Editar: conciliar)'};
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const empty=()=>({kind:'ADVANCE',currency:'ARS',amount:'',exchange_rate:1,date:today(),description:'',treasury_account:'',payment_method:'TRANSFER',cost_center:1});
 const errorText=e=>Array.isArray(e.data?.detail)?e.data.detail.map(x=>x.msg).join('; '):e.message;

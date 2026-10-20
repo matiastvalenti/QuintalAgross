@@ -12,7 +12,8 @@ from app.db.models.models import (
 )
 from app.modules.expenses import expense_schemas
 from app.modules.auth.auth_router import get_current_user
-from app.db.models.employee_fund_models import ClaimFunding
+from app.db.models.employee_fund_models import ClaimFunding, ExpenseReceiptAuthorization
+from app.db.models.auth_models import User
 from .access import scope, require, allowed, own_entity
 from .funds import approve_claim, audit
 
@@ -31,7 +32,14 @@ def decorate(db,claim):
     claim.exchange_rate=float(meta.exchange_rate) if meta else 1
     claim.review_note=meta.review_note if meta else None
     claim.employee_name=claim.employee.name if claim.employee else ''
-    for item in claim.items: item.vehicle_ids=[v.vehicle_id for v in item.vehicles]
+    for item in claim.items:
+        item.vehicle_ids=[v.vehicle_id for v in item.vehicles]
+        authorization=db.get(ExpenseReceiptAuthorization,item.id)
+        item.authorization_reason=authorization.reason if authorization else None
+        item.authorized_by=authorization.authorized_by if authorization else None
+        reviewer=db.get(User,authorization.authorized_by) if authorization else None
+        item.authorized_name=(reviewer.full_name or reviewer.username) if reviewer else None
+        item.authorized_at=authorization.authorized_at if authorization else None
     return claim
 
 
@@ -173,7 +181,7 @@ def update_expense_claim(claim_id: str, data: expense_schemas.ExpenseClaimCreate
     return decorate(db,db_claim)
 
 @router.patch("/claims/{claim_id}/status")
-def update_claim_status(claim_id: str, status: expense_schemas.ExpenseClaimStatus, db: Session = Depends(get_db), current_user=Depends(get_current_user), reason: str = ""):
+def update_claim_status(claim_id: str, status: expense_schemas.ExpenseClaimStatus, db: Session = Depends(get_db), current_user=Depends(get_current_user), reason: str = "", approval: Optional[expense_schemas.ExpenseApproval] = None):
     """Presentar bloquea; solo un revisor puede aprobar o devolver con motivo."""
     claim=db.get(ExpenseClaim,claim_id)
     if not claim: raise HTTPException(404,'Rendición no encontrada')
@@ -196,7 +204,7 @@ def update_claim_status(claim_id: str, status: expense_schemas.ExpenseClaimStatu
             meta.review_note=reason.strip(); claim.status=status
         elif status == expense_schemas.ExpenseClaimStatus.APPROVED:
             require(db,current_user,'employee_review','create')
-            approve_claim(db,claim,current_user)
+            approve_claim(db,claim,current_user,approval.without_receipts if approval else None)
         else:
             raise HTTPException(400,'Los reintegros se registran desde la cuenta del empleado con su movimiento de caja/banco.')
         audit(db,current_user,'ESTADO',claim_id,f'{status.value}: {reason}')

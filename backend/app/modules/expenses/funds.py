@@ -127,8 +127,19 @@ def audit(db,user,action,target,description):
     db.add(AuditLog(user_id=user.id,username=user.username,action=action,module='employee_expenses',target_id=target,description=description))
 
 
-def approve_claim(db,claim,user):
+def approve_claim(db,claim,user,without_receipts=None):
     """Approve once, settling each provider from employee funds; never calls ARCA."""
+    exceptions={}
+    if without_receipts:
+        from .access import require
+        require(db,user,'employee_expense_exceptions','create')
+        valid_items={item.id for item in claim.items}
+        for authorization in without_receipts:
+            if authorization.item_id not in valid_items or authorization.item_id in exceptions:
+                raise HTTPException(400,'La autorización contiene un gasto ajeno o repetido.')
+            if len(authorization.reason.strip())<3:
+                raise HTTPException(400,'Indique el motivo de la autorización sin comprobante.')
+            exceptions[authorization.item_id]=authorization.reason.strip()
     lock_employee(db,claim.entity_id)
     # Conditional transition serializes two reviewers without duplicate documents.
     updated=db.query(m.ExpenseClaim).filter_by(id=claim.id,status=m.ExpenseClaimStatus.SUBMITTED).update(
@@ -149,21 +160,35 @@ def approve_claim(db,claim,user):
         if not provider or provider.type not in (m.EntityType.PROVIDER,m.EntityType.MIXED):
             raise HTTPException(400,'Seleccione un proveedor registrado para cada ticket/factura.')
         expense_account=account(db,item.account_code or '')
-        amount=money(item.amount); net=money(item.net_amount); vat=money(item.vat_amount)
-        if amount<=0 or net<0 or vat<0 or net+vat!=amount:
-            raise HTTPException(400,'Revise neto, IVA y total. Las percepciones/impuestos adicionales requieren su imputación contable antes de aprobar.')
-        if any(money(getattr(item,key,0)) for key in ('iibb_perception','iva_perception','ganancias_perception','municipal_tax','other_taxes')):
-            raise HTTPException(400,'Esta rendición requiere imputar las cuentas de impuestos adicionales antes de aprobar.')
-        number=(item.invoice_number or '').strip()
-        if not number or number=='0000-00000000': raise HTTPException(400,'Ingrese el número real de cada ticket/factura.')
-        if db.query(m.Document).filter_by(entity_id=provider.id,doc_type=m.DocumentType.PURCHASE_INVOICE,number=number,line=item.line).filter(m.Document.status!=m.DocumentStatus.CANCELLED).first():
+        amount=money(item.amount)
+        exception=exceptions.get(item.id)
+        if exception:
+            # Internal expense support, with the whole approved amount charged as expense.
+            # No invented fiscal invoice number and no input VAT posting.
+            net=amount;vat=Decimal(0);vat_rate=0
+            number='INT-GASTO-'+item.id;letter='X'
+            from app.db.models.employee_fund_models import ExpenseReceiptAuthorization
+        else:
+            net=money(item.net_amount);vat=money(item.vat_amount);vat_rate=item.vat_rate;letter=item.line
+            if net<0 or vat<0 or net+vat!=amount:
+                raise HTTPException(400,'Revise neto, IVA y total. Las percepciones/impuestos adicionales requieren su imputación contable antes de aprobar.')
+            if any(money(getattr(item,key,0)) for key in ('iibb_perception','iva_perception','ganancias_perception','municipal_tax','other_taxes')):
+                raise HTTPException(400,'Esta rendición requiere imputar las cuentas de impuestos adicionales antes de aprobar.')
+            number=(item.invoice_number or '').strip()
+            if not number or number=='0000-00000000':
+                raise HTTPException(400,'Ingrese el número real del comprobante o autorice expresamente el gasto sin comprobante.')
+        if amount<=0:raise HTTPException(400,'El gasto autorizado debe tener un importe positivo.')
+        if db.query(m.Document).filter_by(entity_id=provider.id,doc_type=m.DocumentType.PURCHASE_INVOICE,number=number,line=letter).filter(m.Document.status!=m.DocumentStatus.CANCELLED).first():
             raise HTTPException(409,f'El comprobante {number} ya está registrado para ese proveedor.')
-        doc=m.Document(entity_id=provider.id,doc_type=m.DocumentType.PURCHASE_INVOICE,number=number,line=item.line,
+        doc=m.Document(entity_id=provider.id,doc_type=m.DocumentType.PURCHASE_INVOICE,number=number,line=letter,
             date=item.date,currency=currency,exchange_rate=float(rate),total_amount=float(amount),total_amount_ars=float(money(amount*rate)),
-            cost_center=claim.cost_center,status=m.DocumentStatus.CLOSED,notes=f'Rendición {claim.id}',attachment_url=item.attachment_url)
+            cost_center=claim.cost_center,status=m.DocumentStatus.CLOSED,notes=(f'GASTO INTERNO SIN COMPROBANTE. Autorizado por {user.username}: {exception}. Rendición {claim.id}' if exception else f'Rendición {claim.id}'),attachment_url=item.attachment_url)
         doc.lines=[m.DocumentLine(description=item.description,qty=1,unit_price=float(net),net_amount=float(net),
-            vat_rate=item.vat_rate,vat_amount=float(vat),total_amount=float(amount),accounting_account_id=expense_account.id)]
+            vat_rate=vat_rate,vat_amount=float(vat),total_amount=float(amount),accounting_account_id=expense_account.id)]
         db.add(doc); db.flush()
+        if exception:
+            db.add(ExpenseReceiptAuthorization(item_id=item.id,document_id=doc.id,reason=exception,authorized_by=user.id))
+            audit(db,user,'GASTO_SIN_COMPROBANTE',item.id,exception)
         create_journal_entry_for_document(db,doc)
         pay=m.Document(entity_id=provider.id,doc_type=m.DocumentType.PAYMENT,number='RND-'+doc.id[:12],date=item.date,
             currency=currency,exchange_rate=float(rate),total_amount=float(amount),total_amount_ars=float(money(amount*rate)),

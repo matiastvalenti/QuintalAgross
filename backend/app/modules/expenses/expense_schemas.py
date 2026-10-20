@@ -43,6 +43,10 @@ class ExpenseItemResponse(ExpenseItemBase):
     id: str
     claim_id: str
     generated_doc_id: Optional[str] = None
+    authorization_reason: Optional[str] = None
+    authorized_by: Optional[str] = None
+    authorized_name: Optional[str] = None
+    authorized_at: Optional[datetime] = None
     vehicle_ids: List[str] = []
     
     model_config = {
@@ -86,3 +90,11 @@ class ExpenseClaimResponse(ExpenseClaimBase):
     model_config = {
         "from_attributes": True
     }
+
+
+class ReceiptException(BaseModel):
+    item_id: str
+    reason: str = Field(min_length=3,max_length=1000)
+
+class ExpenseApproval(BaseModel):
+    without_receipts: List[ReceiptException] = Field(default_factory=list,max_length=100)

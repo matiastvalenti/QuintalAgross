@@ -636,6 +636,24 @@
         "checks/test_employee_reconciliation.py"
       ],
       "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.8",
+      "title": "Autorizar gastos sin comprobante con permiso, motivo y trazabilidad",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [
+        "backend/app/db/models/employee_fund_models.py",
+        "backend/app/modules/expenses/funds.py",
+        "backend/app/modules/expenses/expense_router.py",
+        "backend/app/modules/expenses/expense_schemas.py",
+        "frontend/src/modules/finance/ExpenseClaimForm.jsx",
+        "checks/test_expense_authorization.py"
+      ],
+      "updated_at": "2026-10-20"
     }
   ]
 }

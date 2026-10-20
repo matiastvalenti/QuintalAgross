@@ -26,3 +26,4 @@ from app.db.models.service_models import ServiceWork, ServiceWorkCost, ServiceWo
 from app.db.models.employee_fund_models import EmployeeAccess, ClaimFunding, EmployeeFundOperation
 from app.db.models.employee_fund_models import EmployeeReceiptUpload
 from app.db.models.employee_fund_models import EmployeeFundCut
+from app.db.models.employee_fund_models import ExpenseReceiptAuthorization

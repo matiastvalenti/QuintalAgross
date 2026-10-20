@@ -58,3 +58,12 @@ class EmployeeFundCut(Base):
     resolved_at = Column(DateTime)
     resolved_by = Column(String, ForeignKey('users.id'))
     resolution_note = Column(String)
+
+
+class ExpenseReceiptAuthorization(Base):
+    __tablename__ = 'expense_receipt_authorizations'
+    item_id = Column(String, ForeignKey('expense_items.id'), primary_key=True)
+    document_id = Column(String, ForeignKey('documents.id'), nullable=False)
+    reason = Column(String, nullable=False)
+    authorized_by = Column(String, ForeignKey('users.id'), nullable=False)
+    authorized_at = Column(DateTime, default=datetime.utcnow, nullable=False)
