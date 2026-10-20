@@ -65,7 +65,10 @@ def manual_journalize_doc(doc_id: str, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=404, detail="Doc not found")
         
-    entry = create_journal_entry_for_document(db, doc)
+    try:
+        entry = create_journal_entry_for_document(db, doc)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if not entry:
         raise HTTPException(status_code=400, detail="Document type not supported yet or missing entity")
         

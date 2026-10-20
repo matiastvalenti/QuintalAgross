@@ -1,23 +1,25 @@
 from sqlalchemy.orm import Session
 from app.db.models.models import Document, JournalEntry, JournalLine, DocumentType, CurrencyType, LedgerSetting
-from app.db.models.commercial_models import Product
+from app.db.models.commercial_models import Account
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
+import math
 
 def get_ledger_setting(db: Session, key: str, default: str) -> str:
     s = db.query(LedgerSetting).filter(LedgerSetting.key == key).first()
     return s.value if s else default
 
 def create_journal_entry_for_document(db: Session, doc: Document):
+    # A failed regeneration must preserve the previous journal and its lines.
+    with db.begin_nested():
+        return _build_journal_entry(db, doc)
+
+
+def _build_journal_entry(db: Session, doc: Document):
     """
     Genera (o regenera) el asiento contable para un documento comercial.
     Soporta: Ventas, Compras, Recibos, Pagos y Liquidaciones de Granos.
     """
-    # 1. Eliminar asiento previo si existe (para regeneración limpia)
-    existing_entry = db.query(JournalEntry).filter(JournalEntry.document_id == doc.id).first()
-    if existing_entry:
-        db.delete(existing_entry)
-        db.flush()
-        
     entity = doc.entity
     if not entity:
         return None
@@ -35,7 +37,8 @@ def create_journal_entry_for_document(db: Session, doc: Document):
         return get_setting("OTHER_PAYMENT", "1.1.1.099")
 
     # Determinar tipo de documento
-    is_sales = doc.doc_type in [DocumentType.INVOICE, DocumentType.DEBIT_NOTE, DocumentType.CREDIT_NOTE]
+    sales_debits = [DocumentType.INVOICE, DocumentType.FCE_MIPYME, DocumentType.TIQUET_FACTURA, DocumentType.DEBIT_NOTE]
+    is_sales = doc.doc_type in sales_debits + [DocumentType.CREDIT_NOTE]
     is_purchase = doc.doc_type in [DocumentType.PURCHASE_INVOICE, DocumentType.PURCHASE_DEBIT_NOTE, DocumentType.PURCHASE_CREDIT_NOTE]
     is_receipt = doc.doc_type == DocumentType.RECEIPT
     is_payment = doc.doc_type == DocumentType.PAYMENT
@@ -45,7 +48,9 @@ def create_journal_entry_for_document(db: Session, doc: Document):
         return None
 
     # Monto total en moneda base (ARS)
-    rate = doc.exchange_rate or 1.0
+    rate = float(doc.exchange_rate or 0) if doc.currency == CurrencyType.USD else 1.0
+    if not math.isfinite(rate) or rate <= 0:
+        raise ValueError("El asiento en USD requiere un tipo de cambio positivo y finito")
     total_doc_ars = float(doc.total_amount or 0.0) * rate
     
     # Crear Cabecera
@@ -56,8 +61,6 @@ def create_journal_entry_for_document(db: Session, doc: Document):
         total_amount=total_doc_ars,
         cost_center=doc.cost_center
     )
-    db.add(entry)
-    db.flush() 
     
     lines_to_add = []
 
@@ -68,7 +71,7 @@ def create_journal_entry_for_document(db: Session, doc: Document):
         entity_account = entity.account_code or (get_setting("CLIENTS", "1.1.2.001") if is_sales else get_setting("PROVIDERS", "2.1.1.001"))
         
         # A) Imputación a la Entidad (Deudores/Acreedores)
-        if doc.doc_type in [DocumentType.INVOICE, DocumentType.DEBIT_NOTE]:
+        if doc.doc_type in sales_debits:
             lines_to_add.append(JournalLine(entry_id=entry.id, account_code=entity_account, description=f"Cta. Cte. {entity.name}", debit=total_doc_ars, credit=0.0, entity_id=entity.id))
         elif doc.doc_type == DocumentType.CREDIT_NOTE:
             lines_to_add.append(JournalLine(entry_id=entry.id, account_code=entity_account, description=f"NC {entity.name}", debit=0.0, credit=total_doc_ars, entity_id=entity.id))
@@ -84,9 +87,12 @@ def create_journal_entry_for_document(db: Session, doc: Document):
             ln_vat = float(doc_line.vat_amount or 0.0) * rate
             total_vat += ln_vat
             
-            acc_code = doc_line.account_code or (get_setting("SALES_GENERIC", "4.1.1.001") if is_sales else get_setting("PURCHASES_GENERIC", "5.1.1.001"))
+            account = db.get(Account, doc_line.accounting_account_id) if doc_line.accounting_account_id else None
+            if doc_line.accounting_account_id and not account:
+                raise ValueError("La cuenta contable de la línea no existe")
+            acc_code = account.code if account else (get_setting("SALES_GENERIC", "4.1.1.001") if is_sales else get_setting("PURCHASES_GENERIC", "5.1.1.001"))
 
-            if doc.doc_type in [DocumentType.INVOICE, DocumentType.DEBIT_NOTE]:
+            if doc.doc_type in sales_debits:
                 lines_to_add.append(JournalLine(entry_id=entry.id, account_code=acc_code, description=doc_line.description, debit=0.0, credit=ln_net))
             elif doc.doc_type == DocumentType.CREDIT_NOTE:
                 lines_to_add.append(JournalLine(entry_id=entry.id, account_code=acc_code, description=f"Reversa: {doc_line.description}", debit=ln_net, credit=0.0))
@@ -173,6 +179,29 @@ def create_journal_entry_for_document(db: Session, doc: Document):
              lines_to_add.append(JournalLine(entry_id=entry.id, account_code=entity_account, description=f"Liq. Grano {doc.number}", debit=total_doc_ars, credit=0.0, entity_id=entity.id))
 
     # --- FINALIZACIÓN ---
-    db.add_all(lines_to_add)
+    # Round each posting to cents, then validate before replacing any stored entry.
+    def money(value):
+        amount = Decimal(str(value))
+        if not amount.is_finite() or amount < 0:
+            raise ValueError("El asiento contiene importes inválidos")
+        return amount.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+    debit = credit = Decimal("0")
+    for line in lines_to_add:
+        if not line.account_code or not line.account_code.strip():
+            raise ValueError("El asiento contiene una cuenta vacía")
+        d, c = money(line.debit), money(line.credit)
+        debit += d
+        credit += c
+        line.debit, line.credit = float(d), float(c)
+    if not lines_to_add or debit != credit:
+        raise ValueError(f"Asiento desbalanceado: debe {debit}, haber {credit}")
+    entry.total_amount = float(money(total_doc_ars))
+    existing_entry = db.query(JournalEntry).filter(JournalEntry.document_id == doc.id).first()
+    if existing_entry:
+        db.delete(existing_entry)
+        db.flush()
+    entry.lines = lines_to_add
+    db.add(entry)
     db.flush()
     return entry

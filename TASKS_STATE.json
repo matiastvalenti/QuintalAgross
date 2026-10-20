@@ -490,9 +490,13 @@
       "id": "T11.3.3",
       "title": "Corregir generación de asientos que referencia DocumentLine.account_code inexistente",
       "phase": 11,
-      "status": "TODO",
+      "status": "DONE",
       "dependencies": [],
-      "files": [],
+      "files": [
+        "backend/app/modules/accounting/ledger_engine.py",
+        "backend/app/modules/accounting/ledger_router.py",
+        "checks/test_ledger.py"
+      ],
       "updated_at": "2026-10-20"
     }
   ]
