@@ -49,6 +49,11 @@ export default function PurchaseInvoiceForm(props) {
   const [docType, setDocType] = useState(initialDocType);
   const [letter, setLetter] = useState("A");
   const [observations, setObservations] = useState("");
+  const [vehicles, setVehicles] = useState([]);
+  const [vehicleId, setVehicleId] = useState("");
+  const [expenseCategory, setExpenseCategory] = useState("Combustible");
+  const [legacyVehicleExpenses, setLegacyVehicleExpenses] = useState(null);
+  const [vehicleLoadError, setVehicleLoadError] = useState(false);
   const [selectedConditionId, setSelectedConditionId] = useState("");
   const [buyerId, setBuyerId] = useState(""); // Changed from salespersonId
   const [ctroCosto, setCtroCosto] = useState("1");
@@ -66,6 +71,9 @@ export default function PurchaseInvoiceForm(props) {
 
   useEffect(() => {
     fetchInitialData();
+    fetch(`${API_URL}/vehicles/`, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } })
+      .then(res => { if (!res.ok) throw new Error(); return res.json(); })
+      .then(setVehicles).catch(() => setVehicleLoadError(true));
     if (mode === "edit" && id) fetchInvoice();
     else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note") && initialSourceId) { // Changed sales-order
         fetchFromSource();
@@ -106,6 +114,13 @@ export default function PurchaseInvoiceForm(props) {
         setBuyerId(data.buyer_id || ""); // Changed salesperson_id
         setCtroCosto(data.cost_center || "1");
         setObservations(data.notes || "");
+        const allocations = data.vehicle_expenses || [];
+        if (allocations.length === 1 && Number(allocations[0].percentage) === 100) {
+          setVehicleId(allocations[0].vehicle_id);
+          setExpenseCategory(allocations[0].notes || "Otros");
+        } else if (allocations.length) {
+          setLegacyVehicleExpenses(allocations);
+        }
         setStatus(data.status || "DRAFT");
         setDocType(data.doc_type || "PURCHASE_INVOICE"); // Default to PURCHASE_INVOICE
         setLetter(data.line || "A");
@@ -306,7 +321,7 @@ export default function PurchaseInvoiceForm(props) {
         const sub = qty * (i.unit_price || 0);
         const bonif = sub * ((i.discount_pct || 0) / 100);
         const net = sub - bonif;
-        const vat = net * (i.vat_rate || 0.21);
+        const vat = net * (i.vat_rate ?? 0.21);
         acc.subtotal += sub;
         acc.net += net;
         acc.vat += vat;
@@ -340,6 +355,11 @@ export default function PurchaseInvoiceForm(props) {
         currency: currency,
         exchange_rate: exchangeRate,
         notes: observations,
+        cost_center: Number(ctroCosto),
+        ...(legacyVehicleExpenses ? {} : { vehicle_expenses: vehicleId ? [{
+          vehicle_id: vehicleId, percentage: 100, notes: expenseCategory,
+          amount: Math.round(totals.total * (currency === "USD" ? Number(exchangeRate) : 1) * 100) / 100
+        }] : [] }),
         subtotal: totals.subtotal,
         total_discount: 0,
         net_amount: totals.net,
@@ -796,6 +816,27 @@ export default function PurchaseInvoiceForm(props) {
                     </div>
                 </div>
 
+                <div className={s.sideBlock}>
+                    <div className={s.sideBlockTitle}><Truck size={12}/> GASTO DE FLOTA</div>
+                    <p>Asocia el total con impuestos al vehículo o equipo, sin repartirlo entre trabajos.</p>
+                    {legacyVehicleExpenses ? <p>Este comprobante tiene una distribución previa que se conserva sin cambios.</p> : <>
+                      <label htmlFor="expense-vehicle">Vehículo / equipo</label>
+                      <select id="expense-vehicle" className={s.sideInput} value={vehicleId}
+                        disabled={isReadOnly || vehicleLoadError} onChange={e => setVehicleId(e.target.value)}>
+                        <option value="">Sin asociación</option>
+                        {vehicleId && !vehicles.some(v => v.id === vehicleId) && <option value={vehicleId}>Equipo asociado</option>}
+                        {vehicles.filter(v => v.active || v.id === vehicleId).map(v => <option key={v.id} value={v.id}>{v.name}{v.plate ? ` · ${v.plate}` : ''}</option>)}
+                      </select>
+                      {vehicleLoadError && <p>No se pudo cargar la flota. Recargá la pantalla para cambiar la asociación.</p>}
+                      {vehicleId && <>
+                        <label htmlFor="expense-category">Concepto del gasto</label>
+                        <select id="expense-category" className={s.sideInput} value={expenseCategory}
+                          disabled={isReadOnly} onChange={e => setExpenseCategory(e.target.value)}>
+                          {Array.from(new Set(['Combustible', 'Reparaciones', 'Mantenimiento', 'Repuestos', 'Otros', expenseCategory])).map(c => <option key={c}>{c}</option>)}
+                        </select>
+                      </>}
+                    </>}
+                </div>
                 {/* Bloque Observaciones */}
                 <div className={s.sideBlock} style={{ flexShrink: 0, paddingBottom: 16 }}>
                     <div className={s.sideBlockTitle}><FileText size={12}/> OBSERVACIONES</div>

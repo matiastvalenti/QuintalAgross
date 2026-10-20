@@ -127,3 +127,5 @@ _Esta fase depende críticamente de que el Core de la Fase 2 sea sólido._
 - [x] **T11.3.4** Borradores fiscales con saldo e imputaciones, bloqueo de cambios aplicados y validación contable obligatoria.
 - [ ] **T11.3.5** Configurar integración ARCA real en homologación con revisión y registro manual.
 - [x] **T11.4.1** Trabajos de servicios, costos y facturación agrupada/parcial; cuentas por actividad.
+- [x] **T11.4.2** Gastos de flota vinculados a comprobantes, sin reparto a trabajos ni doble conteo.
+- [ ] **T11.4.3** Corregir aprobación de rendiciones de empleados: cuentas válidas, asientos e imputaciones sin duplicados.

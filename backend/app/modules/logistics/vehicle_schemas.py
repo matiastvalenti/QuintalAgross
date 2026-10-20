@@ -1,17 +1,7 @@
 from pydantic import BaseModel
 from typing import Optional, List
 from datetime import datetime
-from enum import Enum
-
-class VehicleType(str, Enum):
-    TRUCK = "TRUCK"
-    VAN = "VAN"
-    CAR = "CAR"
-    HARVESTER = "HARVESTER"
-    PULVERIZER = "PULVERIZER"
-    DRONE_AGRAS = "DRONE_AGRAS"
-    DRONE_MAVIC = "DRONE_MAVIC"
-    OTHER = "OTHER"
+from app.db.models.models import VehicleType
 
 class VehicleBase(BaseModel):
     name: str

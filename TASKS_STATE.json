@@ -546,6 +546,39 @@
         "docs/PLAN_CUENTAS_PROPUESTA.md"
       ],
       "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.2",
+      "title": "Gastos de flota vinculados a comprobantes, sin reparto a trabajos ni doble conteo",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.4.1"
+      ],
+      "files": [
+        "backend/app/modules/logistics/vehicle_expenses.py",
+        "backend/app/modules/logistics/vehicle_router.py",
+        "backend/app/modules/logistics/vehicle_schemas.py",
+        "backend/app/modules/accounting/document_router.py",
+        "frontend/src/modules/purchases/PurchaseInvoiceForm.jsx",
+        "frontend/src/modules/fleet/FleetPage.jsx",
+        "frontend/src/modules/finance/ExpenseClaimForm.jsx",
+        "checks/test_vehicle_expenses.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.3",
+      "title": "Corregir aprobación de rendiciones de empleados: cuentas válidas, asientos e imputaciones sin duplicados",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.4.2"
+      ],
+      "files": [
+        "backend/app/modules/expenses/expense_router.py"
+      ],
+      "updated_at": "2026-10-20"
     }
   ]
 }

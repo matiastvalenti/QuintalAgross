@@ -23,6 +23,8 @@ const CATEGORIES = [
     { name: "Comida", icon: Utensils, color: "#f59e0b" },
     { name: "Alojamiento", icon: Home, color: "#8b5cf6" },
     { name: "Peaje / Estacionamiento", icon: Navigation, color: "#10b981" },
+    { name: "Reparaciones", icon: Settings, color: "var(--text-secondary)" },
+    { name: "Mantenimiento", icon: Settings, color: "var(--text-secondary)" },
     { name: "Repuestos", icon: Settings, color: "#64748b" },
     { name: "Otros", icon: HelpCircle, color: "#94a3b8" }
 ];
@@ -454,7 +456,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                                                         <div className={s.vehicleSection}>
                                                             <div className={s.expandedHeader}>
                                                                 <Navigation size={18} color="#10b981" />
-                                                                <h4 className={s.expandedTitle}>Vehículos Asociados</h4>
+                                                                <h4 className={s.expandedTitle}>Vehículos / equipos asociados</h4>
                                                             </div>
                                                             <div className={s.vehicleGrid}>
                                                                 {vehicles.map(v => (

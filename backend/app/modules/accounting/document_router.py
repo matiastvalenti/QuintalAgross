@@ -1291,11 +1291,13 @@ def create_document(
 
         # 5. Guardar gastos por vehículo
         if doc.vehicle_expenses:
-            for ve in doc.vehicle_expenses:
+            from app.modules.logistics.vehicle_expenses import validate_vehicle_allocations
+            allocations = validate_vehicle_allocations(db, doc.vehicle_expenses, db_doc.total_amount_ars)
+            for ve in allocations:
                 db_ve = models.DocumentVehicleExpense(
                     id=generate_uuid(),
                     document_id=db_doc.id,
-                    **ve.model_dump()
+                    **ve
                 )
                 db.add(db_ve)
 
@@ -2322,6 +2324,8 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                 db.add(db_pay)
 
         if vehicle_expenses_data is not None:
+            from app.modules.logistics.vehicle_expenses import validate_vehicle_allocations
+            vehicle_expenses_data = validate_vehicle_allocations(db, vehicle_expenses_data, doc.total_amount_ars)
             # Borrar y crear
             db.query(models.DocumentVehicleExpense).filter(models.DocumentVehicleExpense.document_id == doc.id).delete()
             for ve_dict in vehicle_expenses_data:
