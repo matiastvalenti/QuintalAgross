@@ -202,4 +202,6 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
         db.flush()
         for document in (receipt, to_doc, new_doc):
             recalc_document_status(document, db)
+    from app.modules.accounting.document_guards import require_accounting
+    require_accounting(db, new_doc)
     return fx_link

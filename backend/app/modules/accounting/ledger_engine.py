@@ -88,8 +88,8 @@ def _build_journal_entry(db: Session, doc: Document):
             total_vat += ln_vat
             
             account = db.get(Account, doc_line.accounting_account_id) if doc_line.accounting_account_id else None
-            if doc_line.accounting_account_id and not account:
-                raise ValueError("La cuenta contable de la línea no existe")
+            if doc_line.accounting_account_id and (not account or not account.active):
+                raise ValueError("La cuenta contable de la línea no existe o está inactiva")
             acc_code = account.code if account else (get_setting("SALES_GENERIC", "4.1.1.001") if is_sales else get_setting("PURCHASES_GENERIC", "5.1.1.001"))
 
             if doc.doc_type in sales_debits:
@@ -190,6 +190,9 @@ def _build_journal_entry(db: Session, doc: Document):
     for line in lines_to_add:
         if not line.account_code or not line.account_code.strip():
             raise ValueError("El asiento contiene una cuenta vacía")
+        account = db.query(Account).filter(Account.code == line.account_code, Account.active == True).first()
+        if not account:
+            raise ValueError(f"Configure una cuenta contable activa para {line.account_code}")
         d, c = money(line.debit), money(line.credit)
         debit += d
         credit += c

@@ -20,6 +20,11 @@ from app.modules.accounting.application_service import void_sales_application
 engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 db = Session(engine)
+from app.db.models.commercial_models import Account
+for code in ['1.1.1.001','1.1.1.002','1.1.1.003','1.1.2.001','2.1.1.001','4.1.1.001','5.1.1.001','2.1.2.001','1.1.3.001']:
+    db.add(Account(id=code, code=code, name='Cuenta de prueba '+code))
+db.commit()
+
 db.add(models.Entity(id='client', name='Cliente de prueba'))
 invoice = models.Document(id='invoice', entity_id='client', doc_type=models.DocumentType.INVOICE,
     number='0001-00000001', currency=models.CurrencyType.USD, exchange_rate=1000,
@@ -42,7 +47,7 @@ def test_receipt_settles_adjustment_once(isolated_backend, tmp_path, rate, amoun
 if entry in ('receipt', 'void_receipt'):
     receipt = create_document(DocumentCreate(doc_type='RECEIPT', number='0001-00000001',
         entity_id='client', date=datetime.now(), currency='ARS', exchange_rate=rate,
-        total_amount=amount*rate, applications=[dict(to_document_id='invoice', amount_applied=amount, exchange_rate=rate)]), db, user)
+        total_amount=amount*rate, payments=[dict(type='CASH',amount=amount*rate)], applications=[dict(to_document_id='invoice', amount_applied=amount, exchange_rate=rate)]), db, user)
 else:
     receipt = models.Document(entity_id='client', doc_type=models.DocumentType.RECEIPT,
         number='0001-00000001', currency=models.CurrencyType.ARS, exchange_rate=rate,
@@ -105,7 +110,7 @@ invoice.total_amount=1000000
 invoice.exchange_rate=1000
 db.commit()
 receipt = create_document(DocumentCreate(doc_type='RECEIPT', number='0001-00000001', entity_id='client',
-    currency='ARS', exchange_rate=1100, total_amount=1000000,
+    currency='ARS', exchange_rate=1100, total_amount=1000000, payments=[dict(type='CASH',amount=1000000)],
     applications=[dict(to_document_id='invoice', amount_applied=1000000, exchange_rate=1100)]), db, user)
 check(receipt, 0); check(invoice, 0)
 assert db.query(models.FxAdjustmentLink).count() == 0
@@ -131,7 +136,7 @@ def test_successive_partial_collections_with_opposite_rates(isolated_backend, tm
     run_python(isolated_backend, tmp_path, SETUP + '''
 for index, (amount, rate) in enumerate([(400,1100), (600,900)], start=1):
     receipt = create_document(DocumentCreate(doc_type='RECEIPT', number=f'0001-{index:08d}', entity_id='client',
-        currency='ARS', exchange_rate=rate, total_amount=amount*rate,
+        currency='ARS', exchange_rate=rate, total_amount=amount*rate, payments=[dict(type='CASH',amount=amount*rate)],
         applications=[dict(to_document_id='invoice', amount_applied=amount, exchange_rate=rate)]), db, user)
     check(receipt, 0)
 check(invoice, 0)

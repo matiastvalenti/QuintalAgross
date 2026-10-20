@@ -135,6 +135,8 @@ def void_sales_application(db: Session, application_id: str, reason: str = None)
             
             recalc_document_status(original_fx_doc, db)
             recalc_document_status(rev_doc, db)
+            from app.modules.accounting.document_guards import require_accounting
+            require_accounting(db, rev_doc)
             
             fx_reversal = {
                 "original_fx_note_id": original_fx_doc.id,

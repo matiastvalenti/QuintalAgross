@@ -12,6 +12,11 @@ from app.modules.accounting.ledger_engine import create_journal_entry_for_docume
 engine = create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 db = Session(engine)
+from app.db.models.commercial_models import Account
+for code in ['1.1.1.001','1.1.1.002','1.1.1.003','1.1.2.001','2.1.1.001','4.1.1.001','5.1.1.001','2.1.2.001','1.1.3.001']:
+    db.add(Account(id=code, code=code, name='Cuenta de prueba '+code))
+db.commit()
+
 e = Entity(id='e', name='Prueba')
 a = Account(id='a', code='4.9.001', name='Servicios')
 db.add_all([e, a])

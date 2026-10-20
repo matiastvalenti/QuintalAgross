@@ -498,6 +498,36 @@
         "checks/test_ledger.py"
       ],
       "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.4",
+      "title": "Borradores fiscales con saldo e imputaciones y guardado contable obligatorio",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.3.3"
+      ],
+      "files": [
+        "backend/app/modules/accounting/document_guards.py",
+        "backend/app/modules/accounting/document_router.py",
+        "backend/app/modules/accounting/document_schemas.py",
+        "backend/app/modules/accounting/ledger_engine.py",
+        "backend/app/modules/entities/account_statement_service.py",
+        "frontend/src/modules/reports/StatementPage.jsx",
+        "checks/test_drafts.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.5",
+      "title": "Configurar integración ARCA real en homologación con registro manual y revisión previa",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.3.4"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
     }
   ]
 }

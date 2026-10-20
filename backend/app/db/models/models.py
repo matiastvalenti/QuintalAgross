@@ -283,6 +283,17 @@ class Document(Base):
         ),
     )
 
+    @property
+    def is_draft(self):
+        # Fiscal review is independent from the financial OPEN/PARTIAL/CLOSED state.
+        fiscal_types = {DocumentType.INVOICE, DocumentType.FCE_MIPYME,
+                        DocumentType.TIQUET_FACTURA, DocumentType.DEBIT_NOTE,
+                        DocumentType.CREDIT_NOTE}
+        return self.status == DocumentStatus.DRAFT or (
+            self.doc_type in fiscal_types and self.cost_center == 1
+            and not self.cae and not self.is_initial_load
+            and self.status != DocumentStatus.CANCELLED)
+
     id = Column(String, primary_key=True, default=generate_uuid)
     entity_id = Column(String, ForeignKey("entities.id"), index=True)
     doc_type = Column(Enum(DocumentType), index=True)

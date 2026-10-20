@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from app.db.models.models import DocumentType, CurrencyType, DocumentStatus, PaymentMethod, DocumentReasonType
 
 # ──────────────────────────────────────────────
@@ -195,6 +195,7 @@ class DocumentBase(BaseModel):
     return_stock: Optional[bool] = False
 
 class DocumentCreate(DocumentBase):
+    status: Literal[DocumentStatus.OPEN, DocumentStatus.DRAFT] = DocumentStatus.OPEN
     entity_id: str
     reimbursement_entity_id: Optional[str] = None
     lines: Optional[List[DocumentLineCreate]] = None
@@ -237,6 +238,10 @@ class DocumentResponse(DocumentBase):
     attachment_url: Optional[str] = None
     total_amount_ars: float
     status: DocumentStatus
+    is_draft: bool = False
+    cae: Optional[str] = None
+    cae_due_date: Optional[datetime] = None
+    afip_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[str] = None

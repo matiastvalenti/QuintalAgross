@@ -89,6 +89,9 @@ def recalc_document_status(doc: Document, db: Session):
     if not doc or is_cancelled_status(doc.status):
         return
 
+    if doc.status == DocumentStatus.DRAFT:
+        return
+
     usage = get_document_usage(doc, db)
     total_amount = float(doc.total_amount or 0)
     

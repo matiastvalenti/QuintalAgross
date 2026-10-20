@@ -1,3 +1,4 @@
+from app.modules.accounting.document_guards import require_unapplied_draft, require_accounting
 from app.modules.sales.invoice_origin import validate_invoice_origins
 from fastapi import APIRouter, Depends, HTTPException, Response
 from datetime import datetime, timedelta
@@ -647,6 +648,7 @@ def void_document(
                 
 
 
+            require_accounting(db, new_doc)
             fx_reversals_created.append({
                 "original_fx_note_id": fx.id,
                 "reverse_fx_note_id": new_doc.id,
@@ -920,38 +922,6 @@ def create_document(
         # Crear líneas si se proporcionan
         dn_ids_to_check = set()
         if doc.lines:
-            def _infer_account_code(description: str, db: Session, default_prefix: str = "6") -> str:
-                if not description:
-                    description = "Gasto varios"
-                txt = description.lower()
-                mapping = {
-                    "combustible": f"{default_prefix}.FUEL",
-                    "nafta": f"{default_prefix}.FUEL",
-                    "gasolina": f"{default_prefix}.FUEL",
-                    "estacion": f"{default_prefix}.FUEL",
-                    "comida": f"{default_prefix}.MEALS",
-                    "almuerzo": f"{default_prefix}.MEALS",
-                    "viatico": f"{default_prefix}.TRAVEL",
-                    "hotel": f"{default_prefix}.TRAVEL",
-                    "servicio": f"{default_prefix}.SERVICES",
-                    "honorario": f"{default_prefix}.SERVICES",
-                    "ticket": f"{default_prefix}.TICKET",
-                    "ticketera": f"{default_prefix}.TICKET",
-                }
-                for k, code in mapping.items():
-                    if k in txt:
-                        acc = db.query(Account).filter(Account.code == code).first()
-                        if not acc:
-                            acc = Account(id=generate_uuid(), code=code, name=code, active=True)
-                            db.add(acc); db.flush()
-                        return acc.id
-                gen_code = f"{default_prefix}.OTHER"
-                acc = db.query(Account).filter(Account.code == gen_code).first()
-                if not acc:
-                    acc = Account(id=generate_uuid(), code=gen_code, name="Gastos Varios", active=True)
-                    db.add(acc); db.flush()
-                return acc.id
-
             for i, line in enumerate(doc.lines):
                 line_data = line.model_dump()
                 source_dn_line_id = line_data.pop("source_dn_line_id", None)
@@ -968,12 +938,6 @@ def create_document(
                             line_data["accounting_account_id"] = prod.purchase_account_id
                         else:
                             line_data["accounting_account_id"] = prod.sales_account_id
-                if not line_data.get("accounting_account_id"):
-                    # Diferenciar prefijo según si es Proveedor (2. o 6.) o Cliente (4.)
-                    is_purchase = doc.doc_type == models.DocumentType.PURCHASE_INVOICE or entity.type == "supplier"
-                    default_pref = "2" if is_purchase else "4"
-                    line_data["accounting_account_id"] = _infer_account_code(line_data.get("description"), db, default_prefix=default_pref)
-                
                 if not line_data.get("accounting_account_id"):
                     # Si tiene product_id y no se pudo inferir, es porque el producto no la tiene
                     if line_data.get("product_id") and prod:
@@ -1429,14 +1393,7 @@ def create_document(
                     reconcile_sales_order_invoice_delivery_links(db, oid)
 
 
-        # ── GENERAR ASIENTO CONTABLE AUTOMÁTICO ──
-        try:
-            create_journal_entry_for_document(db, db_doc)
-        except Exception as ledger_err:
-            logger.error(f"Error generando asiento contable: {ledger_err}")
-            # No bloqueamos la creación del documento por un error en el asiento,
-            # pero lo ideal sería loguearlo.
-            pass
+        require_accounting(db, db_doc)
 
         db.commit()
     except HTTPException:
@@ -1613,7 +1570,13 @@ def bulk_invoice_delivery_notes(
 
     # 6. Recalcular Órdenes de Venta
     for ov_id in orders_to_recalc: recalc_sales_order_status(db, ov_id)
-    db.commit(); db.refresh(new_doc)
+    try:
+        require_accounting(db, new_doc)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    db.refresh(new_doc)
     return new_doc
 
 @router.post("/bulk-email")
@@ -1679,6 +1642,7 @@ def delete_document(id: str, db: Session = Depends(get_db), current_user: models
                 detail=f"No tiene permiso para eliminar en el módulo {module}"
             )
 
+    require_unapplied_draft(db, doc)
     if doc.cae:
         raise HTTPException(status_code=403, detail="No se puede eliminar un documento autorizado en ARCA (posee CAE)")
     
@@ -2111,6 +2075,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
         if not doc:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
         
+        require_unapplied_draft(db, doc)
         update_data = data.model_dump(exclude_unset=True)
         validate_invoice_origins(db, doc.doc_type, update_data.get("entity_id", doc.entity_id),
                                  data.lines if data.lines is not None else doc.lines)
@@ -2175,6 +2140,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                                     line.accounting_account_id = acc_id
                                 break
             
+            require_accounting(db, doc)
             db.commit()
             db.refresh(doc)
             return doc
@@ -2385,6 +2351,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
         else:
             doc.commission_amount = 0
 
+        require_accounting(db, doc)
         db.commit()
         db.refresh(doc)
         return doc
@@ -2411,6 +2378,9 @@ def annul_document(id: str, db: Session = Depends(get_db), current_user: models.
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     
+    require_unapplied_draft(db, doc)
+    was_draft = doc.is_draft
+
     # --- LÓGICA DE ANULACIÓN FISCAL INTELIGENTE (OPCIÓN 2) ---
     has_cae = bool(getattr(doc, "cae", None))
     is_invoice_type = doc.doc_type in [models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE, models.DocumentType.FCE_MIPYME]
@@ -2491,6 +2461,7 @@ def annul_document(id: str, db: Session = Depends(get_db), current_user: models.
         # 5. Incrementar contador y Logear
         numbering_service.increment_last_number(db, pv, "CREDITO")
         _log_history(db, doc.id, "ANULACION_FISCAL", f"Se generó automáticamente la NC {new_nc.number} para anulación fiscal.", current_user=current_user)
+        require_accounting(db, new_nc)
         generated_nc_msg = f". Se generó NC {new_nc.number} de anulación"
 
     # --- LÓGICA DE REVERSIÓN ESTÁNDAR ---
@@ -2551,6 +2522,9 @@ def annul_document(id: str, db: Session = Depends(get_db), current_user: models.
     db.query(InvoiceDeliveryNoteLink).filter(InvoiceDeliveryNoteLink.document_id == id).delete()
 
     # 3. Estado Final e Historia
+    if was_draft:
+        for entry in list(doc.journal_entries):
+            db.delete(entry)
     doc.status = models.DocumentStatus.CANCELLED
     _log_history(db, id, "ANULACION", "Documento anulado. Se revirtieron impactos comerciales" + generated_nc_msg, current_user=current_user)
     
@@ -2676,7 +2650,7 @@ def bulk_import_documents(batch: List[document_schemas.DocumentCreate], db: Sess
             total_amount_ars = doc.total_amount * doc.exchange_rate if doc.currency == models.CurrencyType.USD else doc.total_amount
             
             # 3. Crear cabecera
-            doc_data = doc.model_dump(exclude={"lines", "payments", "applications", "vehicle_expenses", "is_initial_load"})
+            doc_data = doc.model_dump(exclude={"lines", "payments", "applications", "vehicle_expenses", "is_initial_load", "perceptions", "retentions", "reimbursement_entity_id", "net_amount"})
             db_doc = models.Document(
                 **doc_data,
                 total_amount_ars=total_amount_ars,
@@ -2684,7 +2658,7 @@ def bulk_import_documents(batch: List[document_schemas.DocumentCreate], db: Sess
                 created_by="Migración"
             )
             # Marcar estado según se deba
-            db_doc.status = models.DocumentStatus.OPEN
+            db_doc.status = doc.status
             
             db.add(db_doc)
             db.flush()
@@ -2707,11 +2681,13 @@ def bulk_import_documents(batch: List[document_schemas.DocumentCreate], db: Sess
                 for idx, l in enumerate(doc.lines):
                     db_line = models.DocumentLine(
                         document_id=db_doc.id,
-                        **l.model_dump(),
+                        **l.model_dump(exclude={"cost_price", "line_order"}),
                         line_order=idx
                     )
                     db.add(db_line)
 
+            require_accounting(db, db_doc)
+            db.commit()
             results.append({"number": db_doc.number, "ok": True, "id": db_doc.id})
         except Exception as e:
             db.rollback()
@@ -2838,11 +2814,11 @@ def get_vat_ledger(
     
     return result
     
-@router.post("/{id}/register-afip")
+@router.post("/{id}/register-afip", dependencies=[Depends(check_permission("sales_invoices", "edit"))])
 def register_document_afip(id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
     Autoriza el comprobante ante AFIP/ARCA.
-    Por ahora es un simulador robusto que actualiza los campos del modelo.
+    Acción manual. No autoriza hasta disponer de una integración real validada.
     """
     doc = db.query(models.Document).filter(models.Document.id == id).first()
     if not doc:
@@ -2854,51 +2830,9 @@ def register_document_afip(id: str, db: Session = Depends(get_db), current_user 
     if doc.doc_type not in [models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE, models.DocumentType.CREDIT_NOTE]:
         raise HTTPException(status_code=400, detail="Este tipo de documento no requiere validación fiscal ARCA")
 
-    # Simulación de respuesta ARCA vía Service
-    from app.modules.accounting.afip_wsfe_service import AfipWsfeService
-    try:
-        # Prepare data for AFIP
-        afip_payload = {
-            "number": doc.number,
-            "tax_id": doc.entity.tax_id if doc.entity else None,
-            "total_amount": float(doc.total_amount),
-            "doc_type": doc.doc_type,
-            "perceptions": [
-                {
-                    "tax_name": p.tax_name,
-                    "jurisdiction": p.jurisdiction,
-                    "amount": float(p.amount)
-                } for p in (doc.perceptions or [])
-            ]
-        }
-        
-        # Call the service
-        afip_res = AfipWsfeService.authorize_invoice(afip_payload)
-        
-        if not afip_res["success"]:
-            doc.afip_status = "REJECTED"
-            doc.afip_xml_response = f"<Error>{afip_res.get('error')}</Error>"
-            db.commit()
-            raise HTTPException(status_code=400, detail=afip_res.get("error"))
-
-        # Update document with AFIP data
-        doc.cae = afip_res["cae"]
-        doc.cae_due_date = afip_res["cae_due_date"]
-        doc.afip_status = afip_res["status"]
-        doc.afip_xml_request = afip_res["afip_xml_request"]
-        doc.afip_xml_response = afip_res["afip_xml_response"]
-        
-        _log_history(db, doc.id, "AFIP_AUTH", f"Comprobante autorizado por ARCA. CAE: {doc.cae}", current_user=current_user)
-        
-        db.commit()
-        db.refresh(doc)
-        return {"ok": True, "cae": doc.cae, "vencimiento": doc.cae_due_date, "status": doc.afip_status}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        db.rollback()
-        raise HTTPException(status_code=500, detail=f"Error en comunicación con ARCA: {str(e)}")
+    if doc.status == models.DocumentStatus.CANCELLED:
+        raise HTTPException(status_code=400, detail="No se puede registrar un comprobante anulado")
+    raise HTTPException(status_code=503, detail="Registro ARCA no disponible: falta configurar y validar la integración real. El comprobante conserva su estado de borrador y sus imputaciones.")
 
 @router.get("/entities/{entity_id}/calculate-perceptions")
 def calculate_entity_perceptions(entity_id: str, net_amount: float, db: Session = Depends(get_db)):
@@ -3002,6 +2936,7 @@ def adjust_link(req: LinkAdjustmentRequest, db: Session = Depends(get_db)):
     if not doc_line:
         raise HTTPException(status_code=404, detail="Línea de factura no encontrada")
     
+    require_unapplied_draft(db, doc_line.document)
     from app.modules.sales.delivery_allocation import SALES_INVOICE_TYPES
     if doc_line.document.doc_type in SALES_INVOICE_TYPES and doc_line.product and not doc_line.product.is_service:
         if float(req.new_qty) != float(doc_line.qty) or req.source_sales_line_id != doc_line.source_sales_line_id:
@@ -3102,6 +3037,9 @@ def patch_document_line(
     if not line:
         raise HTTPException(status_code=404, detail="Línea de documento no encontrada")
 
+    require_unapplied_draft(db, line.document)
+    if data.unit_price is not None or data.discount_pct is not None:
+        raise HTTPException(status_code=400, detail="Modifique precios y descuentos desde el comprobante completo para recalcular sus importes y contabilidad")
     updated = False
     if data.unit_cost is not None:
         line.unit_cost = data.unit_cost

@@ -666,6 +666,7 @@ export default function InvoicesPage() {
               </div>
               <div className={s.invoiceMain} style={{ color: 'var(--primary)' }}>
                 {inv.number ? inv.number.split('-')[1] : inv.number}
+                {inv.is_draft && <strong title="Pendiente de registro fiscal"> · BORRADOR</strong>}
               </div>
             </div>
           </td>

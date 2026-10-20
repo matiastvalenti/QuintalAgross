@@ -781,6 +781,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                                         >
                                                             {getComprobanteName(m.doc_type)}
                                                         </button>
+                                                        {m.is_draft && <strong title="Incluido en el saldo; pendiente de registro fiscal">BORRADOR</strong>}
                                                     </div>
                                                 </td>
                                                 <td className={`${s.cell} ${s.numberCell}`}>

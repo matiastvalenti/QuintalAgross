@@ -20,9 +20,14 @@ from app.modules.sales.delivery_allocation import invoice_delivery_progress
 engine=create_engine('sqlite:///:memory:')
 Base.metadata.create_all(engine)
 db=Session(engine)
+from app.db.models.commercial_models import Account
+for code in ['1.1.1.001','1.1.1.002','1.1.1.003','1.1.2.001','2.1.1.001','4.1.1.001','5.1.1.001','2.1.2.001','1.1.3.001']:
+    db.add(Account(id=code, code=code, name='Cuenta de prueba '+code))
+db.commit()
+
 user=SimpleNamespace(id=None, username='test', roles=['admin'], email='test@example.invalid')
 db.add(models.Entity(id='client', name='Cliente prueba'))
-db.add(Product(id='p', name='Producto prueba', unit_of_measure='LT', quantity_per_container=20))
+db.add(Product(id='p', sales_account_id='4.1.1.001', name='Producto prueba', unit_of_measure='LT', quantity_per_container=20))
 db.add(Warehouse(id='w', name='Deposito'))
 db.add(SalesOrder(id='o', entity_id='client', number='OV-1', warehouse_id='w', status=OrderStatus.CONFIRMED))
 db.flush()
