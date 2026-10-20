@@ -5,7 +5,7 @@ import ExpenseClaimsPage from './ExpenseClaimsPage';
 import s from './EmployeeFundsPage.module.css';
 
 const kinds={ADVANCE:'Adelanto para gastos',RETURN:'Devolución del empleado',REIMBURSE:'Reintegro al empleado',FX:'Conversión de moneda',CLAIM:'Rendición aprobada'};
-const modules={employee_expenses:'Rendiciones',employee_expenses_all:'Acceso a otros empleados (Ver)',employee_review:'Revisión (Crear: aprobar; Editar: devolver)',employee_funds:'Movimientos de fondos (Crear)'};
+const modules={employee_expenses:'Rendiciones',employee_expenses_all:'Acceso a otros empleados (Ver)',employee_review:'Revisión (Crear: aprobar; Editar: devolver)',employee_funds:'Movimientos de fondos (Crear)',employee_reconciliation:'Cortes (Crear: marcar; Editar: conciliar)'};
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const empty=()=>({kind:'ADVANCE',currency:'ARS',amount:'',exchange_rate:1,date:today(),description:'',treasury_account:'',payment_method:'TRANSFER',cost_center:1});
 const errorText=e=>Array.isArray(e.data?.detail)?e.data.detail.map(x=>x.msg).join('; '):e.message;
@@ -17,6 +17,7 @@ export default function EmployeeFundsPage(){
   const [statement,setStatement]=useState(null),[form,setForm]=useState(empty),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
   const [users,setUsers]=useState([]),[selectedUser,setSelectedUser]=useState(''),[employeeLink,setEmployeeLink]=useState(''),[overrides,setOverrides]=useState({});
   const request=useRef(null),generation=useRef(0);
+  const [cutForm,setCutForm]=useState({cutoff_date:today(),reason:''}),[resolution,setResolution]=useState('');
   useEffect(()=>{api.get('/employee-funds/catalogs').then(data=>{setCatalog(data);if(data.employees.length===1)setEntity(data.employees[0].id);}).catch(e=>setMessage(errorText(e)));
     if(can('users','view'))api.get('/employee-funds/access').then(setUsers).catch(e=>setMessage(errorText(e)));
   },[]);
@@ -35,6 +36,16 @@ export default function EmployeeFundsPage(){
     try{await api.post('/employee-funds/movements',{...data,request_key:request.current.key});request.current=null;setForm(empty());await refresh();setMessage('Movimiento registrado con su asiento contable.');}
     catch(e){setMessage(errorText(e));}finally{setBusy(false);}
   }
+  async function saveCut(e){
+    e.preventDefault();setBusy(true);setMessage('');
+    try{await api.post(`/employee-funds/${entity}/cuts`,cutForm);await refresh();setMessage('Corte provisional registrado. El saldo anterior continúa en la cuenta.');}
+    catch(e){setMessage(errorText(e));}finally{setBusy(false);}
+  }
+  async function resolveCut(e){
+    e.preventDefault();setBusy(true);setMessage('');
+    try{await api.post(`/employee-funds/${entity}/cuts/${statement.reconciliation.id}/resolve`,{note:resolution});await refresh();setResolution('');setMessage('Conciliación registrada. Los movimientos y saldos se conservan.');}
+    catch(e){setMessage(errorText(e));}finally{setBusy(false);}
+  }
   function chooseUser(id){const u=users.find(u=>u.id===id);setSelectedUser(id);setEmployeeLink(u?.entity_id||'');setOverrides(u?.permissions||{});}
   async function saveAccess(){setBusy(true);try{
     await api.put(`/employee-funds/access/${selectedUser}`,{entity_id:employeeLink||null});
@@ -51,6 +62,27 @@ export default function EmployeeFundsPage(){
       <button onClick={refresh} disabled={!entity||busy}>Actualizar saldo</button>
       {statement&&<div className={s.grid}>{['ARS','USD'].map(currency=><div key={currency}><h2>{currency} {fmt(statement.balances[currency])}</h2><p>Pendiente de aprobar: {fmt(statement.pending[currency])}</p></div>)}</div>}
     </section>
+    {statement?.reconciliation&&<section className={s.panel} aria-label="Corte de conciliación">
+      <h2>{statement.reconciliation.status==='PENDING'?'Corte pendiente de conciliación':'Corte conciliado'}</h2>
+      <p>Desde {statement.reconciliation.cutoff_date}: {statement.reconciliation.reason}</p>
+      <p>El corte conserva la deuda o el dinero pendiente de rendir. Los gastos anteriores se incorporan al período de su fecha real cuando se aprueban.</p>
+      <div className={s.scroll}><table><thead><tr><th>Moneda</th><th>Saldo anterior actualizado</th><th>Movimientos desde el corte</th><th>Saldo total</th></tr></thead><tbody>
+        {['ARS','USD'].map(c=><tr key={c}><td>{c}</td><td>{fmt(statement.reconciliation.before[c])}</td><td>{fmt(statement.reconciliation.since[c])}</td><td>{fmt(statement.balances[c])}</td></tr>)}
+      </tbody></table></div>
+      {statement.reconciliation.resolution_note&&<p>Última revisión: {statement.reconciliation.resolution_note}</p>}
+      {statement.reconciliation.status==='PENDING'&&can('employee_reconciliation','edit')&&<form onSubmit={resolveCut}>
+        <label>Resultado de la revisión<input required minLength={3} maxLength={1000} value={resolution} onChange={e=>setResolution(e.target.value)}/></label>
+        <button disabled={busy}>Marcar conciliado sin ajustar el saldo</button>
+      </form>}
+    </section>}
+    {entity&&statement&&statement.reconciliation?.status!=='PENDING'&&can('employee_reconciliation','create')&&<form className={s.panel} onSubmit={saveCut}>
+      <h2>Marcar un corte provisional</h2>
+      <p>Permite seguir registrando movimientos mientras se buscan comprobantes anteriores. No cancela ni pone en cero la cuenta.</p>
+      <div className={s.grid}>
+        <label>Fecha del corte<input required type="date" value={cutForm.cutoff_date} onChange={e=>setCutForm({...cutForm,cutoff_date:e.target.value})}/></label>
+        <label>Motivo del corte<input required minLength={3} maxLength={1000} value={cutForm.reason} onChange={e=>setCutForm({...cutForm,reason:e.target.value})}/></label>
+      </div><button disabled={busy}>Registrar corte pendiente</button>
+    </form>}
     {entity&&can('employee_funds','create')&&<form onSubmit={save} className={s.panel}>
       <h2>Registrar movimiento</h2><div className={s.grid}>
       <label>Movimiento<select value={form.kind} onChange={e=>setForm({...form,kind:e.target.value,exchange_rate:e.target.value==='FX'?'':form.currency==='ARS'?1:form.exchange_rate})}>{Object.entries(kinds).filter(([k])=>k!=='CLAIM').map(([k,v])=><option key={k} value={k}>{v}</option>)}</select></label>

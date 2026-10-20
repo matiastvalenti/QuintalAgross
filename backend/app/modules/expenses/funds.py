@@ -188,5 +188,11 @@ def approve_claim(db,claim,user):
     db.add(EmployeeFundOperation(request_key='claim:'+claim.id,payload_hash=claim.id,entity_id=claim.entity_id,kind='CLAIM',
         currency=currency,amount=delta,base_amount=base,exchange_rate=rate,date=claim.date,description=claim.title,
         claim_id=claim.id,journal_id=entry.id,created_by=user.id))
+    # A newly approved historical receipt requires reviewing the current cut again.
+    from .reconciliation import latest_cut
+    cut=latest_cut(db,claim.entity_id)
+    if cut and cut.resolved_at and any(item.date.date()<cut.cutoff_date for item in claim.items):
+        cut.resolved_at=None;cut.resolved_by=None
+        audit(db,user,'REAPERTURA_CONCILIACION',cut.id,'Se aprobó un gasto anterior al corte: '+claim.id)
     claim.status=m.ExpenseClaimStatus.APPROVED
     audit(db,user,'APROBACION',claim.id,claim.title)

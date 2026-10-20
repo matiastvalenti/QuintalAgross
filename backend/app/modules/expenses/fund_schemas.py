@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, date
 from decimal import Decimal
 from typing import Literal
 from pydantic import BaseModel, Field, model_validator
@@ -18,3 +18,11 @@ class FundInput(BaseModel):
 
 class AccessInput(BaseModel):
     entity_id: str | None = None
+
+
+class CutInput(BaseModel):
+    cutoff_date: date
+    reason: str = Field(min_length=3,max_length=1000)
+
+class CutResolution(BaseModel):
+    note: str = Field(min_length=3,max_length=1000)

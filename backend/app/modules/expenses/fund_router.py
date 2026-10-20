@@ -8,8 +8,11 @@ from app.db.models.commercial_models import Account
 from app.db.models.employee_fund_models import EmployeeAccess, EmployeeFundOperation, ClaimFunding
 from app.modules.auth.auth_router import get_current_user
 from .access import scope, require, allowed, own_entity
-from .fund_schemas import FundInput, AccessInput
-from .funds import record_movement, balances, audit
+from .fund_schemas import FundInput, AccessInput, CutInput, CutResolution
+from .funds import record_movement, balances, audit, lock_employee
+from .reconciliation import describe_cut, latest_cut
+from app.db.models.employee_fund_models import EmployeeFundCut
+from datetime import datetime
 
 router=APIRouter(prefix='/employee-funds',tags=['Fondos y rendiciones de empleados'])
 
@@ -57,6 +60,7 @@ def statement(entity_id:str,db:Session=Depends(get_db),user=Depends(get_current_
         meta=db.get(ClaimFunding,claim.id); pending[meta.currency if meta else 'ARS']+=claim.total_amount
     rows=db.query(EmployeeFundOperation).filter_by(entity_id=entity_id).order_by(EmployeeFundOperation.date,EmployeeFundOperation.created_at,EmployeeFundOperation.id).all()
     return dict(balances={k:float(v) for k,v in amounts.items()},pending=pending,
+        reconciliation=describe_cut(db,entity_id,rows),
         movements=[dict(id=r.id,kind=r.kind,date=r.date,currency=r.currency,amount=float(r.amount),
             exchange_rate=float(r.exchange_rate),other_currency=r.other_currency,
             other_amount=float(r.other_amount) if r.other_amount is not None else None,
@@ -73,3 +77,42 @@ def create_movement(data:FundInput,db:Session=Depends(get_db),user=Depends(get_c
         db.rollback(); raise HTTPException(409,'Hubo otro movimiento simultáneo. Reintente la misma solicitud.')
     except Exception:
         db.rollback(); raise
+
+
+@router.post('/{entity_id}/cuts')
+def create_cut(entity_id:str,data:CutInput,db:Session=Depends(get_db),user=Depends(get_current_user)):
+    """Mark a provisional cutoff without posting a balancing adjustment."""
+    scope(db,user,entity_id);require(db,user,'employee_reconciliation','create')
+    try:
+        lock_employee(db,entity_id)
+        previous=latest_cut(db,entity_id)
+        if previous and previous.resolved_at is None:
+            if previous.cutoff_date==data.cutoff_date and previous.reason==data.reason.strip():return {'id':previous.id}
+            raise HTTPException(409,'Ya hay un corte pendiente de conciliación para este empleado.')
+        if previous and data.cutoff_date<=previous.cutoff_date:
+            raise HTTPException(400,'El nuevo corte debe ser posterior al último corte registrado.')
+        if not data.reason.strip():raise HTTPException(400,'Indique el motivo del corte.')
+        cut=EmployeeFundCut(entity_id=entity_id,cutoff_date=data.cutoff_date,reason=data.reason.strip(),created_by=user.id)
+        db.add(cut);db.flush();audit(db,user,'CORTE_PROVISIONAL',cut.id,data.reason)
+        db.commit();return {'id':cut.id}
+    except (IntegrityError,OperationalError):
+        db.rollback();raise HTTPException(409,'Hubo una operación simultánea. Recargue el saldo.')
+    except Exception:
+        db.rollback();raise
+
+@router.post('/{entity_id}/cuts/{cut_id}/resolve')
+def resolve_cut(entity_id:str,cut_id:str,data:CutResolution,db:Session=Depends(get_db),user=Depends(get_current_user)):
+    """Record a reviewed reconciliation; never zero the employee's account."""
+    scope(db,user,entity_id);require(db,user,'employee_reconciliation','edit')
+    try:
+        lock_employee(db,entity_id)
+        cut=latest_cut(db,entity_id)
+        if not cut or cut.id!=cut_id:raise HTTPException(404,'Corte actual no encontrado.')
+        db.refresh(cut)
+        if cut.resolved_at:return {'id':cut.id}
+        if not data.note.strip():raise HTTPException(400,'Indique el resultado de la conciliación.')
+        cut.resolved_at=datetime.utcnow();cut.resolved_by=user.id;cut.resolution_note=data.note.strip()
+        audit(db,user,'CONCILIACION',cut.id,data.note)
+        db.commit();return {'id':cut.id}
+    except Exception:
+        db.rollback();raise

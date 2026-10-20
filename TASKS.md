@@ -132,3 +132,4 @@ _Esta fase depende críticamente de que el Core de la Fase 2 sea sólido._
 - [ ] **T11.4.4** Reversión integral auditada de rendiciones aprobadas y movimientos de fondos.
 - [ ] **T11.4.5** Percepciones e impuestos adicionales de rendiciones con cuentas configuradas.
 - [ ] **T11.4.6** Importación y conciliación de saldos iniciales de empleados desde Excel.
+- [x] **T11.4.7** Cortes provisionales, gastos anteriores y comprobantes pendientes.

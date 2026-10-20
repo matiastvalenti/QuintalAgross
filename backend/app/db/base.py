@@ -25,3 +25,4 @@ from app.db.models.geo_models import Country, Province, Locality, PostalCode
 from app.db.models.service_models import ServiceWork, ServiceWorkCost, ServiceWorkBilling, ServiceInvoiceRequest
 from app.db.models.employee_fund_models import EmployeeAccess, ClaimFunding, EmployeeFundOperation
 from app.db.models.employee_fund_models import EmployeeReceiptUpload
+from app.db.models.employee_fund_models import EmployeeFundCut

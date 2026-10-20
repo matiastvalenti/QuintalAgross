@@ -26,4 +26,19 @@ describe('Employee funds',()=>{
   await waitFor(()=>expect(api.post).toHaveBeenCalledTimes(2));
   expect(api.post.mock.calls[1][1].request_key).toBe(key);
  });
+ it('shows a pending cut and records reconciliation without a money movement',async()=>{
+  const reconciliation={id:'cut',cutoff_date:'2026-10-15',reason:'Comprobantes pendientes',status:'PENDING',before:{ARS:100,USD:0},since:{ARS:50,USD:0}};
+  api.get.mockImplementation(url=>Promise.resolve(url.endsWith('catalogs')?{employees:[{id:'e',name:'Empleado'}],accounts:[]}:{balances:{ARS:150,USD:0},pending:{ARS:0,USD:0},movements:[],reconciliation}));
+  api.post.mockResolvedValue({id:'cut'});
+  render(<EmployeeFundsPage/>);
+  await screen.findByRole('heading',{name:'Corte pendiente de conciliación'});
+  expect(screen.getByText('Saldo anterior actualizado')).toBeInTheDocument();
+  expect(screen.getByText('Movimientos desde el corte')).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Registrar corte pendiente'})).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Resultado de la revisión'),{target:{value:'Comprobantes revisados'}});
+  fireEvent.click(screen.getByRole('button',{name:'Marcar conciliado sin ajustar el saldo'}));
+  await waitFor(()=>expect(api.post).toHaveBeenCalledOnce());
+  expect(api.post.mock.calls[0]).toEqual(['/employee-funds/e/cuts/cut/resolve',{note:'Comprobantes revisados'}]);
+ });
+
 });

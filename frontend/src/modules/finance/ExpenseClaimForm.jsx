@@ -289,7 +289,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                         <div className={s.iconBadge}><Receipt size={22} /></div>
                         <div>
                             <h2 className={s.titleText}>{claimId ? "Consulta de Rendición" : "Carga de Rendición de Gastos"}</h2>
-                            <p className={s.subtitleText}>Ingrese los tickets y comprobantes del empleado.</p>
+                            <p className={s.subtitleText}>Ingrese los gastos del empleado con su fecha real, incluso si son anteriores a un corte. Puede guardar el borrador y adjuntar el comprobante cuando aparezca.</p>
                         </div>
                     </div>
                     <div className={s.headerActions}>
@@ -389,13 +389,18 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                                             <input className={s.cellInput} value={item.description} onChange={e => updateItem(item.id, 'description', e.target.value)} placeholder="¿En qué se gastó?" disabled={isViewOnly} />
                                         </td>
                                         <td className={s.td} style={{ width: 180 }}>
-                                            <input className={s.cellInput} value={item.provider_name} onChange={e => updateItem(item.id, 'provider_name', e.target.value)} placeholder="Nombre del comercio..." disabled={isViewOnly} />
+                                            <select aria-label={`Proveedor del gasto ${item.id}`} className={s.cellInput} value={item.provider_id || ''} disabled={isViewOnly}
+                                                onChange={e=>setFormData(prev=>({...prev,items:prev.items.map(i=>i.id===item.id?{...i,provider_id:e.target.value||null,provider_name:catalog.providers.find(p=>p.id===e.target.value)?.name||i.provider_name}:i)}))}>
+                                                <option value="">{item.provider_name || 'Seleccionar proveedor registrado'}</option>
+                                                {catalog.providers.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}
+                                            </select>
                                         </td>
                                         <td className={s.td} style={{ width: 130 }}>
                                             <input type="number" className={`${s.cellInput} ${s.totalInput}`} value={item.amount} onChange={e => updateItem(item.id, 'amount', e.target.value)} disabled={isViewOnly} placeholder="0.00" />
                                         </td>
                                         <td className={s.td} style={{ width: 120 }}>
                                             <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
+                                                {!item.attachment_url && <span title="Puede adjuntarlo después mientras la rendición sea editable">Adjunto pendiente</span>}
                                                 {item.attachment_url && (
                                                     <button className={s.actionBtn} onClick={() => viewReceipt(item.attachment_url)} title="Ver Comprobante">
                                                         <Eye size={18} className={s.viewIcon} />

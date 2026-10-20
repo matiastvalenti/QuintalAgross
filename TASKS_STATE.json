@@ -617,6 +617,25 @@
       ],
       "files": [],
       "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.7",
+      "title": "Cortes provisionales de fondos, gastos anteriores y comprobantes pendientes",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [
+        "backend/app/db/models/employee_fund_models.py",
+        "backend/app/modules/expenses/reconciliation.py",
+        "backend/app/modules/expenses/fund_router.py",
+        "backend/app/modules/expenses/funds.py",
+        "frontend/src/modules/finance/EmployeeFundsPage.jsx",
+        "frontend/src/modules/finance/ExpenseClaimForm.jsx",
+        "checks/test_employee_reconciliation.py"
+      ],
+      "updated_at": "2026-10-20"
     }
   ]
 }

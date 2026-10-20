@@ -1,6 +1,6 @@
 """Employee funds: additive tables, leaving historical documents untouched."""
 from datetime import datetime
-from sqlalchemy import Column, String, ForeignKey, Numeric, DateTime, Integer
+from sqlalchemy import Column, String, ForeignKey, Numeric, DateTime, Integer, Date
 from sqlalchemy.orm import relationship
 from app.db.session import Base
 from app.db.models.models import generate_uuid
@@ -45,3 +45,16 @@ class EmployeeReceiptUpload(Base):
     id = Column(String, primary_key=True, default=generate_uuid)
     user_id = Column(String, ForeignKey('users.id'), nullable=False)
     mime_type = Column(String, nullable=False)
+
+
+class EmployeeFundCut(Base):
+    __tablename__ = 'employee_fund_cuts'
+    id = Column(String, primary_key=True, default=generate_uuid)
+    entity_id = Column(String, ForeignKey('entities.id'), nullable=False, index=True)
+    cutoff_date = Column(Date, nullable=False)
+    reason = Column(String, nullable=False)
+    created_by = Column(String, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    resolved_at = Column(DateTime)
+    resolved_by = Column(String, ForeignKey('users.id'))
+    resolution_note = Column(String)

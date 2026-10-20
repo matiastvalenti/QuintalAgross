@@ -59,7 +59,8 @@ const PERMISSION_GROUPS = [
             { id: "employee_expenses", label: "Rendiciones propias (ver/cargar/presentar/eliminar)" },
             { id: "employee_expenses_all", label: "Ver y gestionar empleados ajenos (Ver)" },
             { id: "employee_review", label: "Revisar rendiciones (Crear: aprobar; Editar: devolver)" },
-            { id: "employee_funds", label: "Movimientos de fondos de empleados (Crear)" }
+            { id: "employee_funds", label: "Movimientos de fondos de empleados (Crear)" },
+            { id: "employee_reconciliation", label: "Cortes de empleados (Crear: marcar; Editar: conciliar)" }
         ]
     },
     {
