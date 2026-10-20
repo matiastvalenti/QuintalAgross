@@ -383,7 +383,7 @@ def list_sales_orders(
             # Healing preventivo si el progreso es 0 pero el estado dice remitido
             curr_deliv_progress = round((sum(float(l.qty_delivered or 0) for l in lines) / total_qty) * 100, 1) if total_qty > 0 else 0
             if total_qty > 0 and curr_deliv_progress == 0 and "REMITIDO" in (o.status.name if hasattr(o.status, 'name') else str(o.status)).upper():
-                sync_sales_order_traceability(db, o)
+                recalc_sales_order_traceability_strict(db, o)
                 lines = o.lines # Refresh lines reference
             
             if total_qty > 0:
@@ -560,7 +560,7 @@ def get_sales_order(order_id: str, db: Session = Depends(get_db)):
     order.delivery_notes = [dn for dn in order.delivery_notes if dn.id in final_dn_ids]
 
     # Sincronización Automática (Healing) para reparar contadores dañados
-    sync_sales_order_traceability(db, order)
+    recalc_sales_order_traceability_strict(db, order)
 
     # 4. Volver a buscar facturas vinculadas (ahora que los vínculos están sanados)
     dn_ids = [dn.id for dn in order.delivery_notes if dn.status != DeliveryNoteStatus.CANCELLED]

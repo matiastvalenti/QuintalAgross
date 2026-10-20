@@ -35,7 +35,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
   const [entity, setEntity] = useState(null);
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
   const [currency, setCurrency] = useState('ARS');
-  const [exchangeRate, setExchangeRate] = useState(1);
+  const [exchangeRate, setExchangeRate] = useState(0);
   const [fxCache, setFxCache] = useState({});
   const [status, setStatus] = useState('Borrador');
   const [receiptNumber, setReceiptNumber] = useState('AUTO');
@@ -66,16 +66,17 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         console.error(e);
       }
 
-      let defaultRate = 1;
+      let defaultRate = 0;
       const today = new Date().toISOString().split("T")[0];
       try {
         const fxRes = await api.get(`/accounting/fx/usd?date=${today}`);
         if (fxRes?.rate) {
           defaultRate = Number(fxRes.rate);
+          if (mounted && fxRes.warning) showToast(fxRes.warning, "warning");
           if (mounted) setFxCache(prev => ({ ...prev, [today]: defaultRate }));
         }
       } catch (e) {
-        console.error("No se pudo cargar TC del dia", e);
+        if (mounted && !isView) showToast("No se pudo obtener BNA divisas. Ingrese y verifique el tipo de cambio manualmente.", "warning");
       }
 
       // Normalization Logic
@@ -112,7 +113,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
             original_exchange_rate: initialInvoice.exchange_rate || initialInvoice.fx_rate || 1,
             collection_exchange_rate: defaultRate,
             pending_amount: pending,
-            amount_applied: (initialInvoice.currency === 'USD') ? pending * defaultRate : pending
+            amount_applied: pending
           }],
           payments: []
         };
@@ -135,7 +136,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
           exchangeRate: initialData.exchange_rate || 1,
           number: initialData.number,
           status: initialData.status || 'Completado',
-          applications: rawApps.map(app => {
+          applications: rawApps.filter(app => !app.is_system_fx).map(app => {
             const doc = app.to_document || app.document || app.target_document || {};
             // to_document_currency y to_document_exchange_rate vienen del backend (TC histórico factura)
             const invCurrency = app.to_document_currency || doc.currency || initialData.currency;
@@ -143,7 +144,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
             // app.exchange_rate es el TC del cobro (guardado en Application.exchange_rate)
             const tcCobro = app.exchange_rate || initialData.exchange_rate || 1;
             // amount_applied está en moneda de la factura (USD si la factura es USD)
-            const amountApplied = app.amount_applied || app.applied_amount || app.amount || 0;
+            const amountApplied = app.fx_settled_amount ?? app.amount_applied ?? app.applied_amount ?? app.amount ?? 0;
             // El saldo pendiente después de esta aplicación
             const pendingAfter = app.to_document_applied != null
               ? Math.max(0, (app.to_document_total || 0) - app.to_document_applied)
@@ -220,9 +221,14 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         const res = await api.get(`/accounting/fx/usd?date=${newDate}`);
         if (res?.rate) {
           rate = Number(res.rate);
+          if (res.warning) showToast(res.warning, "warning");
           setFxCache(prev => ({ ...prev, [newDate]: rate }));
         }
-      } catch (e) {}
+      } catch (e) {
+        showToast("No hay cotización verificada para esa fecha. Revise e ingrese el tipo de cambio manualmente.", "warning");
+        setExchangeRate(0);
+        setApplications(prev => prev.map(app => ({ ...app, collection_exchange_rate: 0 })));
+      }
     }
     if (rate) {
       setExchangeRate(rate);
@@ -244,9 +250,14 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
           const res = await api.get(`/accounting/fx/usd?date=${date}`);
           if (res?.rate) {
             rate = Number(res.rate);
+            if (res.warning) showToast(res.warning, "warning");
             setFxCache(prev => ({ ...prev, [date]: rate }));
           }
-        } catch (e) {}
+        } catch (e) {
+          showToast("No hay cotización verificada para esa fecha. Revise e ingrese el tipo de cambio manualmente.", "warning");
+          setExchangeRate(0);
+          setApplications(prev => prev.map(app => ({ ...app, collection_exchange_rate: 0 })));
+        }
       }
       if (rate) {
         setExchangeRate(rate);
@@ -361,6 +372,14 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
 
   const validateForm = () => {
     if (!entity) return { valid: false, error: "No hay cliente seleccionado." };
+    const needsFx = currency === 'USD' || applications.some(app => app.currency === 'USD');
+    if (needsFx && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+      return { valid: false, error: "Ingrese un tipo de cambio válido antes de registrar la cobranza." };
+    }
+    if (applications.some(app => app.currency === 'USD' &&
+        (!Number.isFinite(Number(app.collection_exchange_rate || exchangeRate)) || Number(app.collection_exchange_rate || exchangeRate) <= 0))) {
+      return { valid: false, error: "Revise el tipo de cambio de los comprobantes aplicados." };
+    }
     
     if (!isAdvance && applications.length === 0) {
       return { valid: false, error: "Seleccione al menos un comprobante." };
@@ -482,13 +501,13 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         number: "AUTO",
         date: new Date(date).toISOString(),
         currency: currency,
-        exchange_rate: exchangeRate,
+        exchange_rate: currency === 'ARS' && !applications.some(app => app.currency === 'USD') ? 1 : exchangeRate,
         total_amount: totalCollected,
         entity_id: entity.id,
         applications: isAdvance ? [] : applications.map(app => ({
           to_document_id: app.to_document_id,
           amount_applied: app.amount_applied,
-          exchange_rate: app.collection_exchange_rate || exchangeRate
+          exchange_rate: app.currency === 'USD' ? (app.collection_exchange_rate || exchangeRate) : 1
         })),
         payments: payments.map(p => ({
           type: p.type === 'OTHER' ? 'OTHER' : p.type,

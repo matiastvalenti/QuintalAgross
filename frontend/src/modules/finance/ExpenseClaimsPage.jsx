@@ -77,7 +77,7 @@ export default function ExpenseClaimsPage() {
     const stats = {
         totalPending: claims.filter(c => c.status === 'SUBMITTED').length,
         totalApproved: claims.filter(c => c.status === 'APPROVED').length,
-        totalAmount: claims.reduce((acc, c) => acc + (c.total_amount || 0), 0)
+        totalAmount: claims.reduce((acc, c) => acc + (c.total_amount || 0) * (c.currency === 'USD' ? c.exchange_rate : 1), 0)
     };
 
     return (
@@ -103,7 +103,7 @@ export default function ExpenseClaimsPage() {
                 <div className={s.statCard}>
                     <div className={s.iconBox} style={{ background: '#eff6ff', color: '#3b82f6' }}><TrendingUp size={24}/></div>
                     <div>
-                        <p className={s.statLabel}>Total Gestionado</p>
+                        <p className={s.statLabel}>Total gestionado (ARS)</p>
                         <h4 className={s.statValue}>$ {stats.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</h4>
                     </div>
                 </div>
@@ -190,7 +190,7 @@ export default function ExpenseClaimsPage() {
                                             </div>
                                         </td>
                                         <td className={s.td} style={{ textAlign: 'right' }}>
-                                            <span className={s.amountText}>$ {claim.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+                                            <span className={s.amountText}>{claim.currency || 'ARS'} {claim.total_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                                         </td>
                                         <td className={s.td} style={{ textAlign: 'center' }}>
                                             <span className={s.statusTag} style={{ background: `${st.color}15`, color: st.color, border: `1px solid ${st.color}30` }}>

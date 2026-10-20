@@ -666,6 +666,7 @@ export default function InvoicesPage() {
               </div>
               <div className={s.invoiceMain} style={{ color: 'var(--primary)' }}>
                 {inv.number ? inv.number.split('-')[1] : inv.number}
+                {inv.is_draft && <strong title="Pendiente de registro fiscal"> · BORRADOR</strong>}
               </div>
             </div>
           </td>
@@ -677,6 +678,13 @@ export default function InvoicesPage() {
               <div className={s.invoiceSub} title={originTooltip || originText}>
                 {originText}
               </div>
+              {inv.delivery_status && inv.delivery_status !== 'NOT_REQUIRED' && (
+                <div className={s.invoiceSub} title={(inv.delivery_quantities || []).map(line =>
+                  `${line.description}: ${Number(line.pending_qty).toLocaleString('es-AR')} ${line.unit || ''} pendientes de entregar`
+                ).join('\n')}>
+                  {{ PENDING: 'Pendiente de entrega', PARTIAL: 'Entrega parcial', DELIVERED: 'Entregado' }[inv.delivery_status]}
+                </div>
+              )}
             </div>
           </td>
           <td className={s.td} style={{ width: 130, textAlign: 'left' }}>

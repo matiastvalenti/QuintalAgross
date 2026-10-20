@@ -1,3 +1,5 @@
+import EmployeeFundsPage from "./modules/finance/EmployeeFundsPage";
+import ServiceWorksPage from "./modules/services/ServiceWorksPage";
 import {
   BrowserRouter,
   Routes,
@@ -255,6 +257,8 @@ export default function App() {
                     <Route path="/cereales/movimientos" element={<GrainMovementsPage />} />
                     <Route path="/cereales/stock" element={<GrainStockPage />} />
 
+                    <Route path="/empleados/fondos" element={<EmployeeFundsPage />} />
+                    <Route path="/servicios/trabajos" element={<ServiceWorksPage />} />
                     {/* Campo */}
                     <Route path="/campo/establecimientos" element={<FarmsPage />} />
                     <Route path="/campo/lotes" element={<LotsPage />} />

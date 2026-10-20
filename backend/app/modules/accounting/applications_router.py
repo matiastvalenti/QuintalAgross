@@ -104,6 +104,10 @@ def get_sales_application_history(entity_id: str, db: Session = Depends(get_db))
             is_fx = True
             is_system = True
 
+        if credit.is_exchange_difference:
+            is_fx = True
+            is_system = True
+
         can_void = not is_fx
         origin = "FX_COMPENSATION" if is_fx else "MANUAL"
         
@@ -136,7 +140,7 @@ def get_sales_application_history(entity_id: str, db: Session = Depends(get_db))
             "currency": debit.currency.value,
             "credit_currency": credit.currency.value,
             "debit_currency": debit.currency.value,
-            "amount": app.amount_applied,
+            "amount": app.fx_link.applied_amount_original if app.fx_link else app.amount_applied,
             "amount_applied_ars": app.amount_applied_ars,
             "notes": "Aplicación automática" if is_fx else "Aplicación manual",
             "can_void": can_void,
@@ -170,6 +174,9 @@ def void_sales_application_endpoint(
     debit = app_to_void.to_document
     if debit and debit.doc_type.value in ["DEBIT_NOTE", "CREDIT_NOTE"] and debit.reason_type and debit.reason_type.value == "EXCHANGE_DIFFERENCE":
         raise HTTPException(status_code=400, detail="No se pueden revertir manualmente aplicaciones de diferencia de cambio automáticas.")
+
+    if app_to_void.from_document and app_to_void.from_document.is_exchange_difference:
+        raise HTTPException(400, "Revierta la aplicación del recibo que originó este ajuste automático.")
 
     from app.modules.accounting.application_service import void_sales_application
     reason = payload.reason if payload else "Aplicación realizada por error"
@@ -385,31 +392,8 @@ def create_sales_applications(payload: SalesApplicationCreate, db: Session = Dep
                 fx_link = generate_fx_adjustment(new_app.id, db, mode="FISCAL")
                 
                 if fx_link:
-                    fx_doc = db.query(Document).filter(Document.id == fx_link.generated_document_id).first()
-                    # If an ND-FX is generated and we have credit remaining, auto-compensate it
-                    # When apply_max_credit is true, the ARS credit covers exactly the historical + difference.
-                    if fx_doc and fx_doc.doc_type == DocumentType.DEBIT_NOTE:
-                        fx_bal = get_document_balance_info(fx_doc, db)
-                        if fx_bal["balance"] > 0:
-                            lines = db.query(DocumentLine).filter(DocumentLine.document_id == fx_doc.id).all()
-                            base_amount = sum(float(l.net_amount or 0) for l in lines)
-                            apply_amount = min(base_amount, fx_bal["balance"])
-                            
-                            if apply_amount > 0:
-                                comp_app = Application(
-                                    from_document_id=credit_doc.id,
-                                    to_document_id=fx_doc.id,
-                                    cost_center=1, # Default
-                                    amount_applied=apply_amount,
-                                    amount_applied_ars=apply_amount,
-                                    exchange_rate=1.0,
-                                    created_at=datetime.utcnow()
-                                )
-                                db.add(comp_app)
-                                db.flush()
-                                created_applications.append(comp_app.id)
-                                updated_documents.add(fx_doc)
-            
+                    updated_documents.add(fx_link.generated_document)
+
             created_applications.append(new_app.id)
             updated_documents.add(credit_doc)
             updated_documents.add(debit_doc)

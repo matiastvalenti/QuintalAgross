@@ -47,7 +47,7 @@ def build_entity_ledger(
 
     if view == 'customer':
         customer_types = {
-            DocumentType.INVOICE, DocumentType.FCE_MIPYME, DocumentType.DEBIT_NOTE,
+            DocumentType.INVOICE, DocumentType.FCE_MIPYME, DocumentType.TIQUET_FACTURA, DocumentType.DEBIT_NOTE,
             DocumentType.CREDIT_NOTE, DocumentType.RECEIPT
         }
         query = query.filter(Document.doc_type.in_(customer_types))
@@ -135,7 +135,7 @@ def build_entity_ledger(
     for doc in docs:
         # 4.1 Identificación de signo del impacto
         if view == 'customer':
-            is_positive_impact = doc.doc_type in {DocumentType.INVOICE, DocumentType.FCE_MIPYME, DocumentType.DEBIT_NOTE}
+            is_positive_impact = doc.doc_type in {DocumentType.INVOICE, DocumentType.FCE_MIPYME, DocumentType.TIQUET_FACTURA, DocumentType.DEBIT_NOTE}
         elif view == 'supplier':
             is_positive_impact = doc.doc_type in {DocumentType.PURCHASE_INVOICE, DocumentType.PURCHASE_DEBIT_NOTE, DocumentType.LPG_PRIMARY}
         else:
@@ -195,7 +195,8 @@ def build_entity_ledger(
         applied_total_ars = sum(v[1] for v in apps.values())
 
         if not has_apps:
-            applied_already = applied_to_map.get(doc.id, (0.0, 0.0))[0]
+            applied_total, applied_total_ars = applied_to_map.get(doc.id, (0.0, 0.0))
+            applied_already = applied_total
             remaining = max(0.0, total_usd_doc - applied_already)
             
             if remaining < 0.01: payment_status = "PAID"
@@ -230,6 +231,7 @@ def build_entity_ledger(
                 "date": doc.date.isoformat() if doc.date else None,
                 "doc_type": doc.doc_type.value if hasattr(doc.doc_type, "value") else str(doc.doc_type),
                 "payment_status": payment_status,
+                "is_draft": doc.is_draft,
                 "number": doc.number,
                 "due_date": doc.due_date.isoformat() if doc.due_date else None,
                 "currency": doc.currency.value if hasattr(doc.currency, "value") else str(doc.currency),

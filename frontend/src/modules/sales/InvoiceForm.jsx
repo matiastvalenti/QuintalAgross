@@ -162,6 +162,7 @@ export default function InvoiceForm(props) {
   const [observations, setObservations] = useState("");
   const [salespersonId, setSalespersonId] = useState("");
   const [selectedConditionId, setSelectedConditionId] = useState("");
+  const [fiscalInfo, setFiscalInfo] = useState({ is_draft: true });
   const [status, setStatus] = useState("BORRADOR");
   const [reasonType, setReasonType] = useState("");
   const [returnStock, setReturnStock] = useState(true);
@@ -378,6 +379,7 @@ export default function InvoiceForm(props) {
         setCtroCosto(data.cost_center || "1");
         setObservations(data.notes || "");
         setStatus(data.status || "DRAFT");
+        setFiscalInfo(data);
         setDocType(data.doc_type || "INVOICE");
         setLetter(data.line || "A");
         setReasonType(data.reason_type || "");
@@ -696,6 +698,13 @@ export default function InvoiceForm(props) {
     if (!entity) return showToast("Falta Cliente", "error");
     if (currency === "USD" && exchangeRate <= 1) {
         return showToast("Para moneda USD el Tipo de Cambio debe ser mayor a 1", "error");
+    }
+    if (['INVOICE', 'FCE_MIPYME', 'TIQUET_FACTURA'].includes(docType)) {
+      const missingOrder = items.find(item => {
+        const product = findProductById(products, item.product_id);
+        return product && !product.is_service && !item.source_sales_line_id && !item.source_dn_line_id;
+      });
+      if (missingOrder) return showToast('Los productos deben facturarse desde una OV o su remito. La factura directa admite servicios y conceptos sin stock.', 'error');
     }
     const hasOriginInvoice = sourceInvoiceId || fullInvoiceData?.source_invoice_id;
     if (reasonType === 'EXCHANGE_DIFFERENCE' && !hasOriginInvoice) {
@@ -1022,6 +1031,7 @@ export default function InvoiceForm(props) {
                         <span>&middot;</span>
                         <span>TC {exchangeRate}</span>
                         <TraceabilityStatusBadge status={status} />
+                        {fiscalInfo.is_draft && <strong>BORRADOR</strong>}
                         {hasApplications && (
                             <span className={s.appliedWarningWrap}>
                                 <span className={s.appliedWarningIcon}>
@@ -1613,11 +1623,11 @@ export default function InvoiceForm(props) {
                                 <div className={s.arcaGrid}>
                                     <div className={s.arcaItem}>
                                         <span className={s.arcaLabel}>Estado</span>
-                                        <span className={s.arcaValue}>Pendiente</span>
+                                        <span className={s.arcaValue}>{fiscalInfo.cae ? "Registrado" : fiscalInfo.is_draft ? "BORRADOR" : "Sin registro"}</span>
                                     </div>
                                     <div className={s.arcaItem}>
                                         <span className={s.arcaLabel}>CAE</span>
-                                        <span className={s.arcaValue}>-</span>
+                                        <span className={s.arcaValue}>{fiscalInfo.cae || "-"}</span>
                                     </div>
                                     <div className={s.arcaItem}>
                                         <span className={s.arcaLabel}>Vto CAE</span>
@@ -1628,7 +1638,8 @@ export default function InvoiceForm(props) {
                                         <span className={s.arcaValue}>-</span>
                                     </div>
                                 </div>
-                                <button className={s.arcaButton} disabled>Confirmar en ARCA</button>
+                                <p>El guardado no registra en ARCA. El registro manual estará disponible cuando se configure la conexión real.</p>
+                                <button className={s.arcaButton} disabled>Registrar en ARCA — no configurado</button>
                             </div>
                         )}
                     </div>

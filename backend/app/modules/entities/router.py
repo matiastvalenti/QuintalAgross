@@ -261,7 +261,7 @@ def get_entity_dashboard(entity_id: str, cost_center: Optional[int] = None, db: 
     now = datetime.now()
     open_docs_query = db.query(Document).filter(
         Document.entity_id == entity_id,
-        Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL])
+        Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL, DocumentStatus.DRAFT])
     )
     if cost_center:
         open_docs_query = open_docs_query.filter(Document.cost_center == cost_center)
@@ -614,7 +614,7 @@ def get_ageing_report(
                 }
 
         open_docs_query = db.query(Document).filter(
-            Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL]),
+            Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL, DocumentStatus.DRAFT]),
             Document.entity_id.in_(balances_map.keys())
         )
         if cost_center in [1, 2]:

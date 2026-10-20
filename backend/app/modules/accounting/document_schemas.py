@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from app.db.models.models import DocumentType, CurrencyType, DocumentStatus, PaymentMethod, DocumentReasonType
 
 # ──────────────────────────────────────────────
@@ -155,6 +155,8 @@ class ApplicationResponse(ApplicationBase):
     amount_applied_ars: float
     exchange_rate: float # Override to make it non-optional in response
     created_at: datetime
+    fx_settled_amount: Optional[float] = None  # USD settled by receipt plus its linked NC
+    is_system_fx: bool = False
     # Extra fields for traceability injected by router
     to_document_number: Optional[str] = None
     to_document_date: Optional[datetime] = None
@@ -193,6 +195,7 @@ class DocumentBase(BaseModel):
     return_stock: Optional[bool] = False
 
 class DocumentCreate(DocumentBase):
+    status: Literal[DocumentStatus.OPEN, DocumentStatus.DRAFT] = DocumentStatus.OPEN
     entity_id: str
     reimbursement_entity_id: Optional[str] = None
     lines: Optional[List[DocumentLineCreate]] = None
@@ -235,6 +238,10 @@ class DocumentResponse(DocumentBase):
     attachment_url: Optional[str] = None
     total_amount_ars: float
     status: DocumentStatus
+    is_draft: bool = False
+    cae: Optional[str] = None
+    cae_due_date: Optional[datetime] = None
+    afip_status: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     created_by: Optional[str] = None
@@ -258,6 +265,9 @@ class DocumentResponse(DocumentBase):
     retentions: List[DocumentRetentionResponse] = []
     history: List[DocumentHistoryResponse] = []
     
+    delivery_status: str = "NOT_REQUIRED"
+    delivery_quantities: List[Dict[str, Any]] = []
+
     # Traceability progress (0 to 100)
     delivered_pct: float = 0.0
     invoiced_pct: float = 0.0

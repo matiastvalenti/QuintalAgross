@@ -9,7 +9,7 @@ from typing import List, Optional
 
 # Umbral mínimo en ARS para generar ND/NC.
 # Si abs(diff_total) < este valor, no se genera ajuste.
-FX_ADJUSTMENT_THRESHOLD_ARS = 1.0
+FX_ADJUSTMENT_THRESHOLD_ARS = 0.01
 
 
 @dataclass

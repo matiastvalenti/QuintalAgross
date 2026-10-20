@@ -6,7 +6,7 @@ import Select from '../../components/ui/Select';
 import t from '../../components/ui/Table.module.css';
 import { Package, Plus, Trash2, Save, X, Search, ArrowRight, Printer, Copy, Ban, Edit3 } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
-import { API_URL } from '../../config';
+import api from '../../services/api';
 
 export default function StockMovementEditor({ movementId = null, initialType = 'ADJUSTMENT', onSave, onCancel }) {
     const { showToast } = useToast();
@@ -103,8 +103,26 @@ export default function StockMovementEditor({ movementId = null, initialType = '
         
         setLoading(true);
         try {
-            await api.post(`/inventory/stock/movements`, { ...header, lines });
-            showToast("Movimiento registrado", "success");
+            const result = await api.post(`/inventory/stock/movements`, {
+                ...header,
+                from_warehouse_id: header.from_warehouse_id || null,
+                to_warehouse_id: header.to_warehouse_id || null,
+                lines: lines.map(line => ({
+                    ...line,
+                    batch: line.batch || null,
+                    expiry_date: line.expiry_date || null,
+                    container_qty: line.container_qty === '' ? null : line.container_qty,
+                    container_type: line.container_type || null,
+                })),
+            });
+            if (result.warnings?.length) {
+                const detail = result.warnings.map(w =>
+                    `${w.product_name} en ${w.warehouse_name}: ${w.resulting_qty}`
+                ).join('; ');
+                showToast(`Movimiento registrado. Stock negativo: ${detail}`, 'warning', 10000);
+            } else {
+                showToast("Movimiento registrado", "success");
+            }
             onSave();
         } catch (e) {
             console.error(e);
@@ -297,6 +315,7 @@ export default function StockMovementEditor({ movementId = null, initialType = '
                                 <td>
                                     <input 
                                         type="number"
+                                        step="any"
                                         placeholder="0.00"
                                         value={newLine.container_qty}
                                         onChange={e => setNewLine({...newLine, container_qty: e.target.value})}
@@ -314,6 +333,7 @@ export default function StockMovementEditor({ movementId = null, initialType = '
                                 <td>
                                     <input 
                                         type="number"
+                                        step="any"
                                         placeholder="Cant"
                                         value={newLine.qty}
                                         onChange={e => setNewLine({...newLine, qty: e.target.value})}
@@ -321,7 +341,7 @@ export default function StockMovementEditor({ movementId = null, initialType = '
                                     />
                                 </td>
                                 <td>
-                                    <Button variant="primary" size="sm" onClick={addLine} style={{ padding: 4 }}>
+                                    <Button variant="primary" size="sm" aria-label="Agregar ítem" onClick={addLine} style={{ padding: 4 }}>
                                         <Plus size={14} />
                                     </Button>
                                 </td>

@@ -29,6 +29,8 @@ accounts_router = APIRouter(prefix="/accounts", tags=["accounts"])
 # Documentos que aumentan la deuda de la entidad (o disminuyen nuestro saldo a favor)
 DEBIT_TYPES = {
     DocumentType.INVOICE,
+    DocumentType.FCE_MIPYME,
+    DocumentType.TIQUET_FACTURA,
     DocumentType.DEBIT_NOTE,
     DocumentType.LPG_SECONDARY,
     DocumentType.PAYMENT,           # Pago realizado (baja nuestra deuda -> positivo p/nosotros)

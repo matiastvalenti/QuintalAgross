@@ -244,7 +244,11 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
       setLoadingModalOrders(true);
       api.get('/sales/sales-orders/')
         .then(data => {
-            const validOrders = data.filter(ov => ov.status === 'CONFIRMED' || ov.status === 'PARTIAL');
+            const pendingDeliveryStates = ['CONFIRMED', 'PARTIAL', 'PARTIALLY_DELIVERED',
+              'INVOICED', 'PARTIALLY_INVOICED', 'REMITIDO_PARCIAL_FACTURADO_TOTAL',
+              'REMITIDO_PARCIAL_FACTURADO_PARCIAL'];
+            const validOrders = data.filter(ov => pendingDeliveryStates.includes(ov.status) &&
+              (!ov.lines?.length || ov.lines.some(line => Number(line.qty) > Number(line.qty_delivered || 0))));
             setModalOrders(validOrders);
         })
         .catch(err => console.error("Error fetching OV for modal", err))

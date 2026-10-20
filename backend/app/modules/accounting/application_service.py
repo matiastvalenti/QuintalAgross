@@ -26,6 +26,9 @@ def void_sales_application(db: Session, application_id: str, reason: str = None)
                         "detail": "Esta aplicación corresponde a una compensación automática de diferencia de cambio y no puede revertirse desde esta pantalla."
                     }
 
+    if credit_doc and credit_doc.is_exchange_difference:
+        return {"ok": False, "detail": "Revierta la aplicación del recibo que originó el ajuste automático."}
+
     credit_doc_id = app.from_document_id
     debit_doc_id = app.to_document_id
     
@@ -102,6 +105,12 @@ def void_sales_application(db: Session, application_id: str, reason: str = None)
                 
             db.flush()
             
+            # Release the NC's share of the original invoice before reversing it.
+            if not is_nd:
+                for allocation in db.query(Application).filter_by(from_document_id=original_fx_doc.id, to_document_id=debit_doc_id).all():
+                    db.delete(allocation)
+                db.flush()
+
             # Auto-apply them
             comp_app = Application(
                 from_document_id=rev_doc.id if is_nd else original_fx_doc.id,
@@ -126,6 +135,8 @@ def void_sales_application(db: Session, application_id: str, reason: str = None)
             
             recalc_document_status(original_fx_doc, db)
             recalc_document_status(rev_doc, db)
+            from app.modules.accounting.document_guards import require_accounting
+            require_accounting(db, rev_doc)
             
             fx_reversal = {
                 "original_fx_note_id": original_fx_doc.id,

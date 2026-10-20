@@ -1,7 +1,7 @@
 {
   "project": "Quintal Agross ERP",
   "version": "1.1.0",
-  "last_update": "2026-03-16",
+  "last_update": "2026-10-20",
   "tasks": [
     {
       "id": "T2.0.1",
@@ -9,7 +9,9 @@
       "phase": 2,
       "status": "DONE",
       "dependencies": [],
-      "files": ["docs/ACCOUNTING_RULES.md"],
+      "files": [
+        "docs/ACCOUNTING_RULES.md"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -17,8 +19,12 @@
       "title": "Crear modelo Document (UUID, multi-moneda)",
       "phase": 2,
       "status": "DONE",
-      "dependencies": ["T2.0.1"],
-      "files": ["api/app/db/models.py"],
+      "dependencies": [
+        "T2.0.1"
+      ],
+      "files": [
+        "api/app/db/models.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -26,8 +32,12 @@
       "title": "Crear modelo Application (UUID, vinculación)",
       "phase": 2,
       "status": "DONE",
-      "dependencies": ["T2.1.1"],
-      "files": ["api/app/db/models.py"],
+      "dependencies": [
+        "T2.1.1"
+      ],
+      "files": [
+        "api/app/db/models.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -35,8 +45,12 @@
       "title": "Implementar Lógica de Pagos Parciales",
       "phase": 2,
       "status": "DONE",
-      "dependencies": ["T2.1.2"],
-      "files": ["api/app/modules/accounts/document_router.py"],
+      "dependencies": [
+        "T2.1.2"
+      ],
+      "files": [
+        "api/app/modules/accounts/document_router.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -44,9 +58,11 @@
       "title": "ND Automática por Diferencia de Cambio",
       "phase": 2,
       "status": "DONE",
-      "dependencies": ["T2.1.2"],
+      "dependencies": [
+        "T2.1.2"
+      ],
       "files": [
-        "api/app/modules/accounts/document_router.py", 
+        "api/app/modules/accounts/document_router.py",
         "api/app/modules/accounts/fx_router.py",
         "api/app/modules/accounts/fx_service.py",
         "web/src/modules/accounting/FxAdjustmentDocModal.jsx"
@@ -58,8 +74,12 @@
       "title": "Cálculo de Saldo Vivo por Comprobante",
       "phase": 2,
       "status": "DONE",
-      "dependencies": ["T2.1.3"],
-      "files": ["api/app/modules/accounts/document_router.py"],
+      "dependencies": [
+        "T2.1.3"
+      ],
+      "files": [
+        "api/app/modules/accounts/document_router.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -67,8 +87,13 @@
       "title": "Ledger Multimoneda Real",
       "phase": 2,
       "status": "DONE",
-      "dependencies": ["T2.1.4"],
-      "files": ["api/app/modules/accounts/document_router.py", "web/src/modules/accounting/Accounting.jsx"],
+      "dependencies": [
+        "T2.1.4"
+      ],
+      "files": [
+        "api/app/modules/accounts/document_router.py",
+        "web/src/modules/accounting/Accounting.jsx"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -76,8 +101,13 @@
       "title": "Definir entidades: OV/OC/Remito como docs operativos, Factura como Document",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T2.1.5"],
-      "files": ["api/app/db/commercial_models.py", "api/app/main.py"],
+      "dependencies": [
+        "T2.1.5"
+      ],
+      "files": [
+        "api/app/db/commercial_models.py",
+        "api/app/main.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -85,8 +115,14 @@
       "title": "Modelo Product + categorías + iva_rate + cuentas contables",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.0.1"],
-      "files": ["api/app/db/commercial_models.py", "api/app/modules/products/product_router.py", "api/app/modules/products/product_schemas.py"],
+      "dependencies": [
+        "T3.0.1"
+      ],
+      "files": [
+        "api/app/db/commercial_models.py",
+        "api/app/modules/products/product_router.py",
+        "api/app/modules/products/product_schemas.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -94,8 +130,14 @@
       "title": "Modelo Warehouse / StockItem",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.0.1"],
-      "files": ["api/app/db/commercial_models.py", "api/app/modules/warehouse/warehouse_router.py", "api/app/modules/warehouse/warehouse_schemas.py"],
+      "dependencies": [
+        "T3.0.1"
+      ],
+      "files": [
+        "api/app/db/commercial_models.py",
+        "api/app/modules/warehouse/warehouse_router.py",
+        "api/app/modules/warehouse/warehouse_schemas.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -103,8 +145,14 @@
       "title": "Ventas: Crear OV + líneas",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.1.1"],
-      "files": ["api/app/db/commercial_models.py", "api/app/modules/sales/sales_order_router.py", "api/app/modules/sales/sales_order_schemas.py"],
+      "dependencies": [
+        "T3.1.1"
+      ],
+      "files": [
+        "api/app/db/commercial_models.py",
+        "api/app/modules/sales/sales_order_router.py",
+        "api/app/modules/sales/sales_order_schemas.py"
+      ],
       "updated_at": "2026-02-18"
     },
     {
@@ -112,7 +160,10 @@
       "title": "Ventas: Crear Remito desde OV + impacto stock (-)",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.2.1", "T3.1.2"],
+      "dependencies": [
+        "T3.2.1",
+        "T3.1.2"
+      ],
       "files": [
         "api/app/db/commercial_models.py",
         "api/app/modules/sales/delivery_note_router.py",
@@ -125,8 +176,12 @@
       "title": "Ventas: Crear Factura desde Remito(s) + DocumentLines + cuenta corriente",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.2.2"],
-      "files": ["src/modules/sales/InvoiceForm.jsx"],
+      "dependencies": [
+        "T3.2.2"
+      ],
+      "files": [
+        "src/modules/sales/InvoiceForm.jsx"
+      ],
       "updated_at": "2026-03-14"
     },
     {
@@ -134,8 +189,12 @@
       "title": "Reporte: Remitos pendientes de facturar (ventas)",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.2.3"],
-      "files": ["src/modules/sales/DeliveryNotesPage.jsx"],
+      "dependencies": [
+        "T3.2.3"
+      ],
+      "files": [
+        "src/modules/sales/DeliveryNotesPage.jsx"
+      ],
       "updated_at": "2026-03-14"
     },
     {
@@ -143,8 +202,13 @@
       "title": "Compras: Crear OC + líneas",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.1.1"],
-      "files": ["api/app/modules/purchases/purchase_order_router.py", "src/modules/purchases/PurchaseOrderForm.jsx"],
+      "dependencies": [
+        "T3.1.1"
+      ],
+      "files": [
+        "api/app/modules/purchases/purchase_order_router.py",
+        "src/modules/purchases/PurchaseOrderForm.jsx"
+      ],
       "updated_at": "2026-03-14"
     },
     {
@@ -152,8 +216,13 @@
       "title": "Compras: Crear Remito desde OC + impacto stock (+)",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.3.1", "T3.1.2"],
-      "files": ["api/app/modules/sales/delivery_note_router.py"],
+      "dependencies": [
+        "T3.3.1",
+        "T3.1.2"
+      ],
+      "files": [
+        "api/app/modules/sales/delivery_note_router.py"
+      ],
       "updated_at": "2026-03-14"
     },
     {
@@ -161,8 +230,13 @@
       "title": "Compras: Crear Factura compra desde Remito(s) + cuenta proveedor",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.3.2"],
-      "files": ["api/app/modules/accounts/document_router.py", "src/modules/sales/InvoiceForm.jsx"],
+      "dependencies": [
+        "T3.3.2"
+      ],
+      "files": [
+        "api/app/modules/accounts/document_router.py",
+        "src/modules/sales/InvoiceForm.jsx"
+      ],
       "updated_at": "2026-03-14"
     },
     {
@@ -170,8 +244,12 @@
       "title": "Reporte: Remitos pendientes de facturar (compras)",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.3.3"],
-      "files": ["src/modules/purchases/PurchaseDeliveryNotesPage.jsx"],
+      "dependencies": [
+        "T3.3.3"
+      ],
+      "files": [
+        "src/modules/purchases/PurchaseDeliveryNotesPage.jsx"
+      ],
       "updated_at": "2026-03-14"
     },
     {
@@ -179,8 +257,14 @@
       "title": "PDFs: Remito preimpreso + Factura PDF básico",
       "phase": 3,
       "status": "DONE",
-      "dependencies": ["T3.2.3", "T3.3.3"],
-      "files": ["api/app/modules/finance/pdf_export.py", "api/app/modules/sales/delivery_note_router.py"],
+      "dependencies": [
+        "T3.2.3",
+        "T3.3.3"
+      ],
+      "files": [
+        "api/app/modules/finance/pdf_export.py",
+        "api/app/modules/sales/delivery_note_router.py"
+      ],
       "updated_at": "2026-04-09"
     },
     {
@@ -202,7 +286,9 @@
       "title": "Estandarización Modular del Frontend (src/modules)",
       "phase": 0,
       "status": "DONE",
-      "dependencies": ["T0.1.2"],
+      "dependencies": [
+        "T0.1.2"
+      ],
       "files": [
         "src/modules/auth/*",
         "src/modules/dashboard/*",
@@ -218,7 +304,10 @@
       "phase": 5,
       "status": "DONE",
       "dependencies": [],
-      "files": ["api/app/modules/accounting/iva_router.py", "web/src/modules/reports/TaxReportsPage.jsx"],
+      "files": [
+        "api/app/modules/accounting/iva_router.py",
+        "web/src/modules/reports/TaxReportsPage.jsx"
+      ],
       "updated_at": "2026-03-16"
     },
     {
@@ -227,7 +316,9 @@
       "phase": 5,
       "status": "DONE",
       "dependencies": [],
-      "files": ["api/app/modules/accounting/iva_router.py"],
+      "files": [
+        "api/app/modules/accounting/iva_router.py"
+      ],
       "updated_at": "2026-03-16"
     },
     {
@@ -235,9 +326,334 @@
       "title": "Liquidación de Granos (LPG AFIP) - Lógica interna",
       "phase": 6,
       "status": "DONE",
-      "dependencies": ["T6.0.2"],
-      "files": ["api/app/modules/inventory/grain_lpg_engine.py", "web/src/modules/inventory/grains/GrainSettlementModal.jsx"],
+      "dependencies": [
+        "T6.0.2"
+      ],
+      "files": [
+        "api/app/modules/inventory/grain_lpg_engine.py",
+        "web/src/modules/inventory/grains/GrainSettlementModal.jsx"
+      ],
       "updated_at": "2026-03-16"
+    },
+    {
+      "id": "T11.0.1",
+      "title": "Estabilizar instalación, configuración y arranque portable",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        ".gitignore",
+        "README.md",
+        "TASKS.md",
+        "TASKS_STATE.json",
+        "backend/requirements.txt",
+        "backend/requirements-dev.txt",
+        "backend/.env.example",
+        "backend/app/core/config.py",
+        "backend/app/main.py",
+        "backend/start_back.bat",
+        "backend/scripts/start_backend.bat",
+        "frontend/.env.example",
+        "frontend/src/config.js",
+        "checks/test_bootstrap.py",
+        "docs/REVISION_2026-10-20.md"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.0.2",
+      "title": "Aislar las pruebas históricas del backend y desactivar efectos externos en pruebas",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.0.1"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.0.3",
+      "title": "Validar entidades mixtas y cuentas corrientes ARS/USD",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.0.2"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.0.4",
+      "title": "Validar ventas y compras de punta a punta",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.0.2"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.0.5",
+      "title": "Refactorizar gradualmente formularios grandes y revisar errores/permisos antes de publicar",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.0.2"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.1.1",
+      "title": "Permitir fracciones y avisar sobre stock negativo en inventario",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        "backend/app/modules/inventory/stock_router.py",
+        "frontend/src/modules/inventory/StockMovementEditor.jsx"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.2.1",
+      "title": "Obtener cotización BNA divisas verificable y eliminar valores ficticios",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        "backend/app/modules/fx/router.py",
+        "backend/app/modules/fx/bna_rates.py",
+        "checks/test_bna_rates.py",
+        "frontend/src/modules/finance/ReceiptCollectionForm.jsx"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.2.2",
+      "title": "Validar saldos y evitar doble consumo del recibo al generar ND/NC por diferencia de cambio",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.2.1"
+      ],
+      "files": [
+        "backend/app/modules/accounting/fx_service.py",
+        "backend/app/modules/accounting/fx_engine.py",
+        "backend/app/modules/accounting/applications_router.py",
+        "backend/app/modules/accounting/application_service.py",
+        "backend/app/modules/accounting/document_router.py",
+        "backend/app/modules/accounting/document_schemas.py",
+        "frontend/src/modules/finance/ReceiptCollectionForm.jsx",
+        "checks/test_fx_settlement.py",
+        "frontend/src/tests/modules/ReceiptCollectionForm.test.jsx"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.1",
+      "title": "Facturar desde OV antes de entregar y controlar remitos parciales sin duplicar stock",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        "backend/app/modules/accounting/document_router.py",
+        "backend/app/modules/accounting/document_schemas.py",
+        "backend/app/modules/sales/delivery_allocation.py",
+        "backend/app/modules/sales/sales_utils.py",
+        "backend/app/modules/sales/delivery_note_router.py",
+        "backend/app/modules/sales/sales_order_router.py",
+        "frontend/src/modules/sales/InvoicesPage.jsx",
+        "frontend/src/modules/sales/DeliveryNotesPage.jsx",
+        "checks/test_invoice_delivery.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.2",
+      "title": "Exigir OV para facturas de productos y permitir servicios directos",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.3.1"
+      ],
+      "files": [
+        "backend/app/modules/sales/invoice_origin.py",
+        "backend/app/modules/accounting/document_router.py",
+        "frontend/src/modules/sales/InvoiceForm.jsx",
+        "checks/test_invoice_delivery.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.3",
+      "title": "Corregir generación de asientos que referencia DocumentLine.account_code inexistente",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        "backend/app/modules/accounting/ledger_engine.py",
+        "backend/app/modules/accounting/ledger_router.py",
+        "checks/test_ledger.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.4",
+      "title": "Borradores fiscales con saldo e imputaciones y guardado contable obligatorio",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.3.3"
+      ],
+      "files": [
+        "backend/app/modules/accounting/document_guards.py",
+        "backend/app/modules/accounting/document_router.py",
+        "backend/app/modules/accounting/document_schemas.py",
+        "backend/app/modules/accounting/ledger_engine.py",
+        "backend/app/modules/entities/account_statement_service.py",
+        "frontend/src/modules/reports/StatementPage.jsx",
+        "checks/test_drafts.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.3.5",
+      "title": "Configurar integración ARCA real en homologación con registro manual y revisión previa",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.3.4"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.1",
+      "title": "Trabajos de servicios, costos por empleado/equipo y facturación agrupada parcial; propuesta de cuentas por actividad",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.3.4"
+      ],
+      "files": [
+        "backend/app/db/models/service_models.py",
+        "backend/app/modules/services/router.py",
+        "backend/app/modules/services/service.py",
+        "frontend/src/modules/services/ServiceWorksPage.jsx",
+        "checks/test_service_works.py",
+        "docs/PLAN_CUENTAS_PROPUESTA.md"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.2",
+      "title": "Gastos de flota vinculados a comprobantes, sin reparto a trabajos ni doble conteo",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.4.1"
+      ],
+      "files": [
+        "backend/app/modules/logistics/vehicle_expenses.py",
+        "backend/app/modules/logistics/vehicle_router.py",
+        "backend/app/modules/logistics/vehicle_schemas.py",
+        "backend/app/modules/accounting/document_router.py",
+        "frontend/src/modules/purchases/PurchaseInvoiceForm.jsx",
+        "frontend/src/modules/fleet/FleetPage.jsx",
+        "frontend/src/modules/finance/ExpenseClaimForm.jsx",
+        "checks/test_vehicle_expenses.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.3",
+      "title": "Fondos acumulados de empleados ARS/USD, conversión elegida, rendiciones con aprobación y permisos configurables",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.4.2"
+      ],
+      "files": [
+        "backend/app/db/models/employee_fund_models.py",
+        "backend/app/modules/expenses/funds.py",
+        "backend/app/modules/expenses/fund_router.py",
+        "backend/app/modules/expenses/expense_router.py",
+        "frontend/src/modules/finance/EmployeeFundsPage.jsx",
+        "checks/test_employee_funds.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.4",
+      "title": "Reversión integral auditada de rendiciones aprobadas y movimientos de fondos",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.5",
+      "title": "Imputar percepciones e impuestos adicionales de rendiciones a cuentas configuradas",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.6",
+      "title": "Importar saldos iniciales de empleados desde Excel con fecha y conciliación",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.7",
+      "title": "Cortes provisionales de fondos, gastos anteriores y comprobantes pendientes",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [
+        "backend/app/db/models/employee_fund_models.py",
+        "backend/app/modules/expenses/reconciliation.py",
+        "backend/app/modules/expenses/fund_router.py",
+        "backend/app/modules/expenses/funds.py",
+        "frontend/src/modules/finance/EmployeeFundsPage.jsx",
+        "frontend/src/modules/finance/ExpenseClaimForm.jsx",
+        "checks/test_employee_reconciliation.py"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.8",
+      "title": "Autorizar gastos sin comprobante con permiso, motivo y trazabilidad",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [
+        "backend/app/db/models/employee_fund_models.py",
+        "backend/app/modules/expenses/funds.py",
+        "backend/app/modules/expenses/expense_router.py",
+        "backend/app/modules/expenses/expense_schemas.py",
+        "frontend/src/modules/finance/ExpenseClaimForm.jsx",
+        "checks/test_expense_authorization.py"
+      ],
+      "updated_at": "2026-10-20"
     }
   ]
 }
