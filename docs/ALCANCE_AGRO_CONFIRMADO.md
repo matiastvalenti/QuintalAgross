@@ -50,3 +50,13 @@ Reutilizar estos modelos y validar sus flujos; no crear catálogos duplicados.
 - No se duplica una deuda al vincular una liquidación con otros comprobantes.
 - Cuenta de cliente y proveedor separadas para entidades mixtas; consolidado informativo.
 
+
+## Ventas y cobranzas: nuevas reglas confirmadas
+- Se puede facturar antes de entregar; debe quedar visible lo pendiente de remitir.
+- El precio de productos se carga por litro o kilogramo, no por envase.
+- Ventas en ARS o USD.
+- Referencia de cotización: Banco Nación, divisas. Pendiente confirmar compra o venta.
+- Cobros en pesos a cotización del día o cotización manual acordada.
+- Al aplicar el cobro a una deuda con distinta cotización, generar automáticamente la ND/NC correspondiente a la porción aplicada y mantener trazabilidad.
+- No cambiar deuda pactada en ARS a deuda ajustable por USD sin una regla explícita.
+- La generación de la nota interna no equivale a autorización fiscal: validar emisión en homologación.

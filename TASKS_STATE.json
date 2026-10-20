@@ -415,6 +415,34 @@
         "frontend/src/modules/inventory/StockMovementEditor.jsx"
       ],
       "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.2.1",
+      "title": "Obtener cotización BNA divisas verificable y eliminar valores ficticios",
+      "phase": 11,
+      "status": "DONE",
+      "dependencies": [],
+      "files": [
+        "backend/app/modules/fx/router.py",
+        "backend/app/modules/fx/bna_rates.py",
+        "checks/test_bna_rates.py",
+        "frontend/src/modules/finance/ReceiptCollectionForm.jsx"
+      ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.2.2",
+      "title": "Validar saldos y evitar doble consumo del recibo al generar ND/NC por diferencia de cambio",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.2.1"
+      ],
+      "files": [
+        "backend/app/modules/accounting/applications_router.py",
+        "backend/app/modules/accounting/fx_service.py"
+      ],
+      "updated_at": "2026-10-20"
     }
   ]
 }
