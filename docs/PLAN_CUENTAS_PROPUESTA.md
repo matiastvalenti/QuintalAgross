@@ -44,3 +44,16 @@ Se separan ingresos y costos de insumos, granos, dron/aplicaciones y fletes. El 
 - Antes del uso real corresponde definir inventarios/costo de venta, impuestos y retenciones particulares, diferencias de cambio, depreciaciones y gastos comunes con el contador.
 
 Referencia conceptual consultada: [FACPCE, Contabilidad y Auditoría](https://www.facpce.org.ar/wp-content/uploads/2020/07/Contabilidad-y-AuditoriaCC.pdf), sobre la diferencia entre las necesidades del plan de cuentas del ERP y las de los estados contables. La propuesta de códigos y actividades de este archivo es específica de Quintal Agross.
+
+## Fondos acumulados de empleados
+Se agregan a la propuesta, sin instalación automática, las siguientes cuentas revisables:
+
+| Código propuesto | Uso | Parámetro alternativo |
+|---|---|---|
+| 1.1.4.001 | Fondos de empleados en ARS | EMPLOYEE_FUNDS_ARS |
+| 1.1.4.002 | Fondos de empleados en USD | EMPLOYEE_FUNDS_USD |
+| 2.1.4.099 | Cuenta transitoria de rendiciones | EMPLOYEE_CLEARING |
+| 4.2.1.001 | Diferencias de cambio positivas | EMPLOYEE_FX_GAIN |
+| 5.2.1.001 | Diferencias de cambio negativas | EMPLOYEE_FX_LOSS |
+
+Cada movimiento requiere cuentas existentes y activas. El asiento está expresado en ARS; la cuenta de fondos conserva cantidades separadas ARS/USD. Se utiliza el valor contable medio del saldo USD para las cantidades compensadas, con la diferencia de cambio en una cuenta explícita. La clasificación de saldos acreedores y el cierre contable requieren revisión del contador. La cuenta transitoria se cancela dentro de la misma aprobación; no duplica el gasto.

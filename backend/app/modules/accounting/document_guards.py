@@ -6,6 +6,7 @@ from app.modules.accounting.ledger_engine import create_journal_entry_for_docume
 
 
 def require_unapplied_draft(db, doc):
+    require_unmanaged_employee_document(db, doc)
     if not doc.is_draft:
         return
     apps = db.query(Application).filter(or_(
@@ -39,3 +40,15 @@ def require_accounting(db, doc):
         return entry
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=f'No se puede guardar: {exc}') from exc
+
+
+def require_unmanaged_employee_document(db,doc):
+    if not doc: return
+    from app.db.models.models import ExpenseItem, Application
+    from app.db.models.employee_fund_models import EmployeeFundOperation
+    sources=db.query(ExpenseItem.generated_doc_id).join(EmployeeFundOperation,
+        EmployeeFundOperation.claim_id==ExpenseItem.claim_id).filter(ExpenseItem.generated_doc_id.isnot(None))
+    managed=db.query(ExpenseItem).join(EmployeeFundOperation,EmployeeFundOperation.claim_id==ExpenseItem.claim_id).filter(ExpenseItem.generated_doc_id==doc.id).first()
+    payment=db.query(Application).filter(Application.from_document_id==doc.id,Application.to_document_id.in_(sources)).first()
+    if managed or payment:
+        raise HTTPException(409,'Comprobante de una rendición aprobada. No se puede alterar desde el circuito general; requiere reversión integral de la rendición.')

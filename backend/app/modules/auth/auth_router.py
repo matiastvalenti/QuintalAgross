@@ -165,7 +165,11 @@ def get_effective_permissions(user: User, db: Session) -> Dict[str, Dict[str, bo
         pass 
 
     # 3. Overrides directos del usuario (si los hubiera en el futuro, por ahora User.permissions es Dict[str, bool] antiguo)
-    # Por ahora ignoramos los overrides de User.permissions hasta que migremos esa parte también si fuera necesario
+    # Explicit user overrides take precedence over inherited roles (including False).
+    for module, actions in (user.permissions or {}).items():
+        if isinstance(actions, dict):
+            effective.setdefault(module, {})
+            effective[module].update({action: value for action, value in actions.items() if isinstance(value, bool)})
     
     return effective
 
@@ -273,7 +277,8 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
             "email": user.email,
             "username": user.username,
             "name": user.full_name,
-            "roles": user.roles
+            "roles": user.roles,
+            "permissions": get_effective_permissions(user, db)
         }
     }
 
@@ -314,7 +319,8 @@ async def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
             "email": user.email,
             "username": user.username,
             "name": user.full_name,
-            "roles": user.roles
+            "roles": user.roles,
+            "permissions": get_effective_permissions(user, db)
         }
     }
 
@@ -570,14 +576,14 @@ def ensure_system_roles(db: Session):
     def get_full_access():
         modules = ["sales_orders", "sales_delivery", "sales_invoices", "sales_quotes", "customers", 
                    "purchase_orders", "purchase_delivery", "purchase_invoices", "suppliers", 
-                   "products", "items", "stock_moves", "service_works", 
+                   "products", "items", "stock_moves", "service_works", "employee_expenses", "employee_expenses_all", "employee_review", "employee_funds",
                    "warehouses", "cash", "banks", "cheques", "payments", "ledger", "journal", "accounting_reports", "users"]
         return {m: {"view": True, "create": True, "edit": True, "delete": True} for m in modules}
 
     def get_read_only():
         perms = get_full_access()
         for m in perms:
-            perms[m] = {"view": True, "create": False, "edit": False, "delete": False}
+            perms[m] = {"view": m != "employee_expenses_all", "create": False, "edit": False, "delete": False}
         return perms
 
     roles = [

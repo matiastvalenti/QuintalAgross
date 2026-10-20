@@ -50,3 +50,6 @@ api_router.include_router(commission_router.router)
 
 from app.modules.services.router import router as service_work_router
 api_router.include_router(service_work_router)
+
+from app.modules.expenses.fund_router import router as employee_fund_router
+api_router.include_router(employee_fund_router)

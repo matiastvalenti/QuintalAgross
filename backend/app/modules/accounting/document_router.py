@@ -1,3 +1,4 @@
+from app.modules.accounting.document_guards import require_unmanaged_employee_document
 from app.modules.accounting.document_guards import require_unapplied_draft, require_accounting
 from app.modules.sales.invoice_origin import validate_invoice_origins
 from fastapi import APIRouter, Depends, HTTPException, Response
@@ -1874,6 +1875,8 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
     # 1. Verificar existencia de ambos documentos
     from_doc = db.query(models.Document).filter(models.Document.id == app.from_document_id).first()
     to_doc = db.query(models.Document).filter(models.Document.id == app.to_document_id).first()
+    require_unmanaged_employee_document(db,from_doc)
+    require_unmanaged_employee_document(db,to_doc)
     
     if not from_doc or not to_doc:
         raise HTTPException(status_code=404, detail="One or both documents not found")
@@ -2027,6 +2030,8 @@ def delete_application(id: str, db: Session = Depends(get_db), current_user: mod
     
     from_doc = app.from_document
     to_doc = app.to_document
+    require_unmanaged_employee_document(db,from_doc)
+    require_unmanaged_employee_document(db,to_doc)
     
     # 1. Si tenía ajuste de cambio, manejarlo
     if app.fx_link:

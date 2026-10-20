@@ -3,6 +3,11 @@ from app.db.models.commercial_models import Account
 from app.db.models.models import LedgerSetting
 
 BASE_ACCOUNTS = [
+    ('1.1.4.001', 'Fondos de empleados en pesos'),
+    ('1.1.4.002', 'Fondos de empleados en dólares'),
+    ('2.1.4.099', 'Cuenta transitoria de rendiciones'),
+    ('4.2.1.001', 'Diferencias de cambio positivas de empleados'),
+    ('5.2.1.001', 'Diferencias de cambio negativas de empleados'),
     ('1.1.1.001', 'Caja'), ('1.1.1.002', 'Bancos'), ('1.1.1.003', 'Cheques en cartera'),
     ('1.1.2.001', 'Clientes'), ('1.1.3.001', 'IVA crédito fiscal'),
     ('1.1.3.004', 'Retenciones sufridas'), ('2.1.1.001', 'Proveedores'),

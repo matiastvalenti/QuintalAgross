@@ -128,4 +128,7 @@ _Esta fase depende críticamente de que el Core de la Fase 2 sea sólido._
 - [ ] **T11.3.5** Configurar integración ARCA real en homologación con revisión y registro manual.
 - [x] **T11.4.1** Trabajos de servicios, costos y facturación agrupada/parcial; cuentas por actividad.
 - [x] **T11.4.2** Gastos de flota vinculados a comprobantes, sin reparto a trabajos ni doble conteo.
-- [ ] **T11.4.3** Corregir aprobación de rendiciones de empleados: cuentas válidas, asientos e imputaciones sin duplicados.
+- [x] **T11.4.3** Fondos acumulados ARS/USD, conversión elegida, rendiciones con aprobación y permisos configurables (límites pendientes en T11.4.4–6).
+- [ ] **T11.4.4** Reversión integral auditada de rendiciones aprobadas y movimientos de fondos.
+- [ ] **T11.4.5** Percepciones e impuestos adicionales de rendiciones con cuentas configuradas.
+- [ ] **T11.4.6** Importación y conciliación de saldos iniciales de empleados desde Excel.

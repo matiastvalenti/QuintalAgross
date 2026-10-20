@@ -36,7 +36,10 @@ def vehicle_expenses(db, vehicle_id, start=None, end=None):
         vehicles = sorted({link.vehicle_id for link in item.vehicles})
         # Existing renditions may reference several vehicles. Preserve their split,
         # allocating rounding cents once, with no distribution to service jobs.
-        cents = int(money(item.amount) * 100)
+        from app.db.models.employee_fund_models import ClaimFunding
+        meta = db.get(ClaimFunding,item.claim_id)
+        rate = Decimal(meta.exchange_rate) if meta and meta.currency == 'USD' else Decimal(1)
+        cents = int(money(Decimal(str(item.amount)) * rate) * 100)
         share, remainder = divmod(cents, len(vehicles))
         amount = Decimal(share + (vehicles.index(vehicle_id) < remainder)) / 100
         results.append(dict(date=item.date, description=item.description, amount=float(amount),

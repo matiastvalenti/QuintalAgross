@@ -1,3 +1,4 @@
+import { useAuth } from "../../context/AuthContext";
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
     Save, X, Plus, Trash2, Calendar, User, FileText, 
@@ -44,17 +45,14 @@ const DOCUMENT_LINES = [
     { label: 'X', value: 'X' },
 ];
 
-const ACCOUNT_OPTIONS = [
-    { value: '2.FUEL', label: 'Combustible' },
-    { value: '2.MEALS', label: 'Comida' },
-    { value: '2.SERVICES', label: 'Servicios' },
-    { value: '2.TICKET', label: 'Peaje/Ticket' },
-    { value: '2.TRAVEL', label: 'Viáticos' },
-    { value: '2.VARIOUS', label: 'Varios/Otros' }
-];
+
 
 export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
     const { showToast } = useToast();
+    const { can } = useAuth();
+    const [catalog, setCatalog] = useState({employees:[],providers:[],accounts:[]});
+    const [previewType, setPreviewType] = useState('');
+    const authFetch = (url, options = {}) => fetch(url, {...options, headers: {...options.headers, Authorization: `Bearer ${localStorage.getItem('token')}`}});
     const { openWindow } = useWindow();
     const { costCenter: globalCostCenter } = useCostCenter();
     const [loading, setLoading] = useState(false);
@@ -68,6 +66,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
     // Form state
     const [formData, setFormData] = useState({
         title: '',
+        currency: 'ARS', exchange_rate: 1,
         entity_id: '',
         employee_name: '',
         date: new Date().toISOString().split('T')[0],
@@ -86,6 +85,10 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
         } else {
             addItem();
         }
+        authFetch(`${API_URL}/employee-funds/catalogs`).then(r => { if (!r.ok) throw new Error('No se pudieron cargar sus permisos y empleados'); return r.json(); }).then(data => {
+            setCatalog(data);
+            if (!claimId && data.employees.length === 1) setFormData(prev => ({...prev, entity_id:data.employees[0].id,employee_name:data.employees[0].name}));
+        }).catch(e => showToast(e.message,'error'));
         fetchVehicles();
         fetchGlobalOptions();
     }, [claimId]);
@@ -106,7 +109,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
 
     const fetchVehicles = async () => {
         try {
-            const res = await fetch(`${API_URL}/vehicles?active_only=true`);
+            const res = await authFetch(`${API_URL}/vehicles?active_only=true`);
             if (res.ok) setVehicles(await res.json());
         } catch (e) { console.error(e); }
     };
@@ -114,7 +117,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
     const fetchClaim = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`${API_URL}/expenses/claims/${claimId}`);
+            const res = await authFetch(`${API_URL}/expenses/claims/${claimId}`);
             if (!res.ok) throw new Error('Error al cargar rendición');
             const data = await res.json();
             
@@ -218,13 +221,13 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
         try {
             const method = claimId ? 'PUT' : 'POST';
             const url = claimId ? `${API_URL}/expenses/claims/${claimId}` : `${API_URL}/expenses/claims`;
-            const res = await fetch(url, {
+            const res = await authFetch(url, {
                 method,
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(submissionData)
             });
-            if (!res.ok) throw new Error('Error al guardar');
-            showToast('Rendición enviada!', 'success');
+            if (!res.ok) { const err=await res.json(); throw new Error(typeof err.detail === 'string' ? err.detail : 'Revise los datos de la rendición'); }
+            showToast('Borrador guardado. Presentalo cuando esté completo.', 'success');
             if (onSave) onSave();
             onClose();
         } catch (err) {
@@ -238,7 +241,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
         const formDataUpload = new FormData();
         formDataUpload.append('file', file);
         try {
-            const res = await fetch(`${API_URL}/expenses/upload-receipt`, { method: 'POST', body: formDataUpload });
+            const res = await authFetch(`${API_URL}/expenses/upload-receipt`, { method: 'POST', body: formDataUpload });
             if (!res.ok) throw new Error('Error al subir comprobante');
             const data = await res.json();
             updateItem(itemId, 'attachment_url', `${API_URL}${data.url}`);
@@ -248,10 +251,24 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
         }
     };
 
-    const updateStatus = async (newStatus) => {
+    const viewReceipt = async (url) => {
         try {
-            const res = await fetch(`${API_URL}/expenses/claims/${claimId}/status?status=${newStatus}`, { method: 'PATCH' });
-            if (!res.ok) throw new Error('Error al actualizar');
+            if (!url.includes('/expenses/receipts/')) { setPreviewType(url.endsWith('.pdf')?'application/pdf':'image'); setPreviewUrl(url); return; }
+            const path=url.slice(url.indexOf('/expenses/receipts/'));
+            const res=await authFetch(`${API_URL}${path}`);
+            if (!res.ok) throw new Error('No se pudo abrir el comprobante');
+            const blob=await res.blob(); setPreviewType(blob.type);
+            if (previewUrl?.startsWith('blob:')) URL.revokeObjectURL(previewUrl);
+            setPreviewUrl(URL.createObjectURL(blob));
+        } catch (e) { showToast(e.message,'error'); }
+    };
+
+    const updateStatus = async (newStatus) => {
+        const reason = newStatus === 'REJECTED' ? window.prompt('Motivo de devolución para corregir:') : '';
+        if (newStatus === 'REJECTED' && !reason?.trim()) return;
+        try {
+            const res = await authFetch(`${API_URL}/expenses/claims/${claimId}/status?status=${newStatus}&reason=${encodeURIComponent(reason || '')}`, { method: 'PATCH' });
+            if (!res.ok) { const err=await res.json(); throw new Error(typeof err.detail === 'string' ? err.detail : 'No se pudo actualizar'); }
             showToast(`Estado: ${newStatus}`, 'success');
             fetchClaim();
             if (onSave) onSave();
@@ -261,7 +278,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
     };
 
     const totalRendicion = formData.items.reduce((sum, item) => sum + parseFloat(item.amount || 0), 0);
-    const isViewOnly = claimId && formData.status !== 'DRAFT';
+    const isViewOnly = !can('employee_expenses',claimId ? 'edit' : 'create') || (claimId && !['DRAFT','REJECTED'].includes(formData.status));
 
     return (
         <div className={s.container}>
@@ -282,14 +299,11 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
 
                 <div className={s.headerFieldsGrid}>
                     <div style={{ gridColumn: 'span 3' }}>
-                        <Autocomplete 
-                            label="Empleado Responsable"
-                            onSearch={(q) => fetch(`${API_URL}/entities?type=employee&q=${q}`).then(r => r.json())}
-                            initialValue={formData.entity_id ? { id: formData.entity_id, name: formData.employee_name } : null}
-                            onSelect={e => setFormData({ ...formData, entity_id: e.id, employee_name: e.name })}
-                            disabled={isViewOnly || !!claimId}
-                            placeholder="Buscar por nombre..."
-                        />
+                        <Select label="Empleado responsable" value={formData.entity_id} disabled={isViewOnly || !!claimId}
+                            onChange={e => setFormData({...formData,entity_id:e.target.value,employee_name:catalog.employees.find(x=>x.id===e.target.value)?.name || ''})}>
+                            <option value="">Seleccionar empleado</option>
+                            {catalog.employees.map(e=><option key={e.id} value={e.id}>{e.name}</option>)}
+                        </Select>
                     </div>
                     <Input 
                         label="Motivo" 
@@ -383,12 +397,12 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                                         <td className={s.td} style={{ width: 120 }}>
                                             <div style={{ display: 'flex', gap: 6, justifyContent: 'center' }}>
                                                 {item.attachment_url && (
-                                                    <button className={s.actionBtn} onClick={() => setPreviewUrl(item.attachment_url)} title="Ver Comprobante">
+                                                    <button className={s.actionBtn} onClick={() => viewReceipt(item.attachment_url)} title="Ver Comprobante">
                                                         <Eye size={18} className={s.viewIcon} />
                                                     </button>
                                                 )}
                                                 <label className={s.actionBtn} title="Adjuntar Ticket">
-                                                    <input type="file" style={{ display: 'none' }} onChange={e => handleFileUpload(item.id, e.target.files[0])} disabled={isViewOnly} />
+                                                    <input type="file" accept="image/jpeg,image/png,image/webp,application/pdf" style={{ display: 'none' }} onChange={e => handleFileUpload(item.id, e.target.files[0])} disabled={isViewOnly} />
                                                     <Paperclip size={18} className={item.attachment_url ? s.successIcon : s.paperclipIcon} />
                                                 </label>
                                                 <button className={s.actionBtn} onClick={() => setExpandedItemId(expandedItemId === item.id ? null : item.id)} title="Más datos / Vehículos">
@@ -448,7 +462,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                                                                 <div className={s.fieldGroup} style={{ gridColumn: 'span 3' }}>
                                                                     <label className={s.label}>Cuenta Contable</label>
                                                                     <select className={s.cellInput} style={{ height: 28 }} value={item.account_code} onChange={e => updateItem(item.id, 'account_code', e.target.value)} disabled={isViewOnly}>
-                                                                        {ACCOUNT_OPTIONS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                                                                        <option value="">Seleccionar cuenta</option>{catalog.accounts.map(a => <option key={a.id} value={a.code}>{a.code} · {a.name}</option>)}
                                                                     </select>
                                                                 </div>
                                                             </div>
@@ -504,11 +518,22 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                 </div>
             </div>
 
+            <div className={s.header}>
+                {formData.review_note && <p>Devolución: {formData.review_note}</p>}
+                <Select label="Moneda de esta rendición" value={formData.currency} disabled={isViewOnly}
+                    onChange={e=>setFormData({...formData,currency:e.target.value,exchange_rate:e.target.value==='ARS' ? 1 : ''})}>
+                    <option value="ARS">Pesos</option><option value="USD">Dólares</option>
+                </Select>
+                {formData.currency==='USD' && <Input label="Tipo de cambio (ARS por USD)" type="number" value={formData.exchange_rate} disabled={isViewOnly}
+                    onChange={e=>setFormData({...formData,exchange_rate:e.target.value})}/>}
+                {claimId && ['DRAFT','REJECTED'].includes(formData.status) && can('employee_expenses','edit') &&
+                    <Button onClick={()=>updateStatus('SUBMITTED')}>Presentar versión guardada para revisión</Button>}
+            </div>
             {/* Footer consistent with system aesthetics */}
             <div className={s.footer}>
                 <div className={s.totalsArea}>
-                    <div className={s.totalLabel}>REEMBOLSO TOTAL AL EMPLEADO</div>
-                    <div className={s.totalValue}>$ {totalRendicion.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                    <div className={s.totalLabel}>TOTAL DE LA RENDICIÓN</div>
+                    <div className={s.totalValue}>{formData.currency} {totalRendicion.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
                 </div>
                 <div className={s.actionArea}>
                     {!isViewOnly ? (
@@ -520,25 +545,21 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                             style={{ height: 54, padding: '0 32px', borderRadius: 14, fontSize: 16, fontWeight: 800 }}
                         >
                             <Save size={20} style={{ marginRight: 10 }} />
-                            {saving ? "Enviando..." : claimId ? "Guardar Cambios" : "Presentar Rendición"}
+                            {saving ? "Enviando..." : claimId ? "Guardar Cambios" : "Guardar borrador"}
                         </Button>
                     ) : (
                         <div style={{ display: 'flex', gap: 12 }}>
-                            {formData.status === 'SUBMITTED' && (
+                            {formData.status === 'SUBMITTED' && (can('employee_review','create') || can('employee_review','edit')) && (
                                 <>
-                                    <Button variant="success" onClick={() => updateStatus('APPROVED')} size="lg">
+                                    <Button disabled={!can('employee_review','create')} variant="success" onClick={() => updateStatus('APPROVED')} size="lg">
                                         <CheckCircle2 size={20} style={{ marginRight: 10 }} /> Aprobar y Contabilizar
                                     </Button>
-                                    <Button variant="danger" onClick={() => updateStatus('REJECTED')} size="lg">
-                                        Rechazar
+                                    <Button disabled={!can('employee_review','edit')} variant="danger" onClick={() => updateStatus('REJECTED')} size="lg">
+                                        Devolver para corregir
                                     </Button>
                                 </>
                             )}
-                            {formData.status === 'APPROVED' && (
-                                <Button variant="success" onClick={() => updateStatus('REIMBURSED')} size="lg">
-                                    <DollarSign size={20} style={{ marginRight: 10 }} /> Confirmar Pago Realizado
-                                </Button>
-                            )}
+                            {formData.status === 'APPROVED' && <p>Contabilizada en la cuenta del empleado. Registrá adelantos, devoluciones y reintegros desde Fondos de empleados.</p>}
                         </div>
                     )}
                 </div>
@@ -553,7 +574,7 @@ export default function ExpenseClaimForm({ claimId, onSave, onClose }) {
                             <button className={s.closePreview} onClick={() => setPreviewUrl(null)}><X size={24} /></button>
                         </div>
                         <div className={s.previewBody}>
-                            {previewUrl.toLowerCase().endsWith('.pdf') ? (
+                            {previewType === 'application/pdf' ? (
                                 <iframe src={previewUrl} className={s.previewFrame} title="Ticket PDF" />
                             ) : (
                                 <img src={previewUrl} alt="Ticket" className={s.previewImage} />

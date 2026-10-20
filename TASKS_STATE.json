@@ -569,15 +569,53 @@
     },
     {
       "id": "T11.4.3",
-      "title": "Corregir aprobación de rendiciones de empleados: cuentas válidas, asientos e imputaciones sin duplicados",
+      "title": "Fondos acumulados de empleados ARS/USD, conversión elegida, rendiciones con aprobación y permisos configurables",
       "phase": 11,
-      "status": "TODO",
+      "status": "DONE",
       "dependencies": [
         "T11.4.2"
       ],
       "files": [
-        "backend/app/modules/expenses/expense_router.py"
+        "backend/app/db/models/employee_fund_models.py",
+        "backend/app/modules/expenses/funds.py",
+        "backend/app/modules/expenses/fund_router.py",
+        "backend/app/modules/expenses/expense_router.py",
+        "frontend/src/modules/finance/EmployeeFundsPage.jsx",
+        "checks/test_employee_funds.py"
       ],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.4",
+      "title": "Reversión integral auditada de rendiciones aprobadas y movimientos de fondos",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.5",
+      "title": "Imputar percepciones e impuestos adicionales de rendiciones a cuentas configuradas",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [],
+      "updated_at": "2026-10-20"
+    },
+    {
+      "id": "T11.4.6",
+      "title": "Importar saldos iniciales de empleados desde Excel con fecha y conciliación",
+      "phase": 11,
+      "status": "TODO",
+      "dependencies": [
+        "T11.4.3"
+      ],
+      "files": [],
       "updated_at": "2026-10-20"
     }
   ]

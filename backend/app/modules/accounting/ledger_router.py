@@ -65,6 +65,8 @@ def manual_journalize_doc(doc_id: str, db: Session = Depends(get_db)):
     if not doc:
         raise HTTPException(status_code=404, detail="Doc not found")
         
+    from app.modules.accounting.document_guards import require_unmanaged_employee_document
+    require_unmanaged_employee_document(db,doc)
     try:
         entry = create_journal_entry_for_document(db, doc)
     except ValueError as exc:

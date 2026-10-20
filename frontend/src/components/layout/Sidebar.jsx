@@ -21,6 +21,7 @@ const NAV_GROUPS = [
   {
     title: 'OPERACIONES',
     items: [
+      { label: 'Fondos y rendiciones', to: '/empleados/fondos', icon: UserIcon, perm: 'employee_expenses' },
       { label: 'Servicios y trabajos', to: '/servicios/trabajos', icon: Tractor, perm: 'service_works' },
       {
         label: 'Campo', icon: Sprout, perm: 'items',

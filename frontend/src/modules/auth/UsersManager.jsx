@@ -55,7 +55,11 @@ const PERMISSION_GROUPS = [
             { id: "cash", label: "Cajas" },
             { id: "cheques", label: "Cheques" },
             { id: "payments", label: "Recibos y Pagos" },
-            { id: "banks", label: "Bancos" }
+            { id: "banks", label: "Bancos" },
+            { id: "employee_expenses", label: "Rendiciones propias (ver/cargar/presentar/eliminar)" },
+            { id: "employee_expenses_all", label: "Ver y gestionar empleados ajenos (Ver)" },
+            { id: "employee_review", label: "Revisar rendiciones (Crear: aprobar; Editar: devolver)" },
+            { id: "employee_funds", label: "Movimientos de fondos de empleados (Crear)" }
         ]
     },
     {
