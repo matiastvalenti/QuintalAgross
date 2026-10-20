@@ -434,13 +434,20 @@
       "id": "T11.2.2",
       "title": "Validar saldos y evitar doble consumo del recibo al generar ND/NC por diferencia de cambio",
       "phase": 11,
-      "status": "TODO",
+      "status": "DONE",
       "dependencies": [
         "T11.2.1"
       ],
       "files": [
+        "backend/app/modules/accounting/fx_service.py",
+        "backend/app/modules/accounting/fx_engine.py",
         "backend/app/modules/accounting/applications_router.py",
-        "backend/app/modules/accounting/fx_service.py"
+        "backend/app/modules/accounting/application_service.py",
+        "backend/app/modules/accounting/document_router.py",
+        "backend/app/modules/accounting/document_schemas.py",
+        "frontend/src/modules/finance/ReceiptCollectionForm.jsx",
+        "checks/test_fx_settlement.py",
+        "frontend/src/tests/modules/ReceiptCollectionForm.test.jsx"
       ],
       "updated_at": "2026-10-20"
     }

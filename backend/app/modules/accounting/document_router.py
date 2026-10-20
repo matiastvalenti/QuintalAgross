@@ -188,6 +188,9 @@ def _sanitize_document_for_response(doc, db: Session = None):
     # Traceabilidad para aplicaciones (especialmente para recibos)
     from sqlalchemy.orm import object_session
     for app in getattr(doc, "applied_to", []):
+        app.fx_settled_amount = app.fx_link.applied_amount_original if app.fx_link else None
+        app.is_system_fx = bool(app.to_document and app.to_document.fx_links_as_generated)
+
         if getattr(app, "amount_applied_ars", None) is None:
             app.amount_applied_ars = getattr(app, "amount_applied", 0.0)
         if getattr(app, "exchange_rate", None) is None:
@@ -491,6 +494,13 @@ def void_document(
         # Guardamos cambios pendientes para que _recalc sume sin las aplicaciones
         db.flush()
         
+        for fx in fx_notes:
+            if fx.doc_type == models.DocumentType.CREDIT_NOTE:
+                for allocation in db.query(models.Application).filter_by(from_document_id=fx.id, to_document_id=fx.source_invoice_id).all():
+                    affected_docs.add(allocation.to_document)
+                    db.delete(allocation)
+        db.flush()
+
         # 4. Recalcular saldo de facturas afectadas
         for affected in affected_docs:
             _recalc_document_status(affected, db)
@@ -1227,14 +1237,9 @@ def create_document(
                         # Trigger FX adjustment if needed:
                         # SOLO cuando la factura es USD y el RECIBO es ARS
                         # Si recibo USD + factura USD: NO generar DDC (mismo universo monetario)
-                        try:
-                            receipt_is_ars = str(db_doc.currency) not in ("USD", "CurrencyType.USD")
-                            invoice_is_usd = str(to_doc.currency) in ("USD", "CurrencyType.USD")
-                            if receipt_is_ars and invoice_is_usd:
-
-                                generate_fx_adjustment(db_app.id, db)
-                        except Exception as e:
-                            logger.error(f"Error generando ajuste FX en create_document: {e}")
+                        # Let failures abort the transaction: never save the receipt
+                        # without its required adjustment.
+                        generate_fx_adjustment(db_app.id, db)
 
                         docs_to_recalc.add(app_data.to_document_id)
 
@@ -1914,6 +1919,8 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
         db.add(db_app)
         db.flush()
         
+        generate_fx_adjustment(db_app.id, db)
+
         # 5. Recalcular estado del documento destino (deuda)
         _recalc_document_status(to_doc, db)
 

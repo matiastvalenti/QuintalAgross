@@ -155,6 +155,8 @@ class ApplicationResponse(ApplicationBase):
     amount_applied_ars: float
     exchange_rate: float # Override to make it non-optional in response
     created_at: datetime
+    fx_settled_amount: Optional[float] = None  # USD settled by receipt plus its linked NC
+    is_system_fx: bool = False
     # Extra fields for traceability injected by router
     to_document_number: Optional[str] = None
     to_document_date: Optional[datetime] = None

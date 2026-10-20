@@ -55,8 +55,13 @@ Reutilizar estos modelos y validar sus flujos; no crear catálogos duplicados.
 - Se puede facturar antes de entregar; debe quedar visible lo pendiente de remitir.
 - El precio de productos se carga por litro o kilogramo, no por envase.
 - Ventas en ARS o USD.
-- Referencia de cotización: Banco Nación, divisas. Pendiente confirmar compra o venta.
+- Referencia de cotización: Banco Nación, divisas vendedor.
 - Cobros en pesos a cotización del día o cotización manual acordada.
 - Al aplicar el cobro a una deuda con distinta cotización, generar automáticamente la ND/NC correspondiente a la porción aplicada y mantener trazabilidad.
-- No cambiar deuda pactada en ARS a deuda ajustable por USD sin una regla explícita.
+- Ventas pactadas en ARS mantienen importe fijo, sin ajuste por cotización.
 - La generación de la nota interna no equivale a autorización fiscal: validar emisión en homologación.
+
+### Imputación confirmada
+- Ejemplo: factura USD 1.000 a TC 1.000, cobro ARS 1.100.000 a TC 1.100. El mismo recibo cancela ARS 1.000.000 de factura y ARS 100.000 de ND por diferencia de cambio. No deja deuda adicional.
+- Si baja el TC, la NC cubre la diferencia sobre la parte cancelada de la factura; recibo y NC cancelan juntos esa porción.
+- Los pagos parciales ajustan únicamente su porción aplicada. Los USD pendientes conservan el TC original para calcular ajustes futuros.

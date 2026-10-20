@@ -113,7 +113,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
             original_exchange_rate: initialInvoice.exchange_rate || initialInvoice.fx_rate || 1,
             collection_exchange_rate: defaultRate,
             pending_amount: pending,
-            amount_applied: (initialInvoice.currency === 'USD') ? pending * defaultRate : pending
+            amount_applied: pending
           }],
           payments: []
         };
@@ -136,7 +136,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
           exchangeRate: initialData.exchange_rate || 1,
           number: initialData.number,
           status: initialData.status || 'Completado',
-          applications: rawApps.map(app => {
+          applications: rawApps.filter(app => !app.is_system_fx).map(app => {
             const doc = app.to_document || app.document || app.target_document || {};
             // to_document_currency y to_document_exchange_rate vienen del backend (TC histórico factura)
             const invCurrency = app.to_document_currency || doc.currency || initialData.currency;
@@ -144,7 +144,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
             // app.exchange_rate es el TC del cobro (guardado en Application.exchange_rate)
             const tcCobro = app.exchange_rate || initialData.exchange_rate || 1;
             // amount_applied está en moneda de la factura (USD si la factura es USD)
-            const amountApplied = app.amount_applied || app.applied_amount || app.amount || 0;
+            const amountApplied = app.fx_settled_amount ?? app.amount_applied ?? app.applied_amount ?? app.amount ?? 0;
             // El saldo pendiente después de esta aplicación
             const pendingAfter = app.to_document_applied != null
               ? Math.max(0, (app.to_document_total || 0) - app.to_document_applied)

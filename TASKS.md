@@ -117,4 +117,4 @@ _Esta fase depende críticamente de que el Core de la Fase 2 sea sólido._
 - [x] **T11.1.1** Permitir fracciones y avisar sobre stock negativo en inventario (pruebas aisladas aprobadas).
 
 - [x] **T11.2.1** Cotización BNA divisas verificable, sin valores ficticios; aviso y carga manual si falla.
-- [ ] **T11.2.2** Validar saldos y evitar doble consumo del recibo al generar ND/NC por diferencia de cambio.
+- [x] **T11.2.2** Imputar factura y ND/NC con el mismo recibo sin duplicar saldo; pruebas aisladas de pagos totales, parciales y anulaciones aprobadas.
