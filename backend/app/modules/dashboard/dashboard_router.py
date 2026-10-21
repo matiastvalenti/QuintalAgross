@@ -1,13 +1,17 @@
-from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from app.db.models.dashboard_models import DashboardPreference
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func, and_, or_, desc, case
 from datetime import datetime, timedelta
 from typing import List, Optional, Dict
 import traceback
-
+import logging
 from app.db.session import get_db
+from app.modules.auth.auth_router import get_current_user, get_effective_permissions
+from app.db.models.auth_models import User
 from app.db.models.commercial_models import (
-    SalesOrder, OrderStatus, 
+    SalesOrder, OrderStatus,
     DeliveryNote, DeliveryNoteStatus,
     Product, StockItem
 )
@@ -18,9 +22,11 @@ from app.db.models.models import (
 )
 from app.db.models.finance_models import Cheque
 from app.db.models.auth_models import CashPosition, CashMovement, ExchangeRate
-
-router = APIRouter(prefix="/dashboard", tags=["Dashboard"])
-
+router = APIRouter(
+    prefix="/dashboard",
+    tags=["Dashboard"],
+    dependencies=[Depends(get_current_user)]
+)
 # Caching mechanism
 _dashboard_cache = {
     "data": None,
@@ -28,12 +34,44 @@ _dashboard_cache = {
 }
 CACHE_TTL_SECONDS = 30 # 30 seconds of TTL for the dashboard
 
+def dashboard_can(user: User, db: Session, module: str, action: str = "view") -> bool:
+    roles = {str(role).lower() for role in (user.roles or [])}
+
+    if roles.intersection({"admin", "owner"}):
+        return True
+
+    permissions = get_effective_permissions(user, db)
+    return permissions.get(module, {}).get(action) is True
 @router.get("/drilldown/{type}")
-def get_dashboard_drilldown(type: str, cost_center: Optional[int] = None, db: Session = Depends(get_db)):
+def get_dashboard_drilldown(
+    type: str,
+    cost_center: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Retorna el detalle (ítems) que compone un cuello de botella específico.
     Permite pasar del número agregado (Ej: 1M USD pendiente) a la lista accionable.
     """
+    permissions_by_type = {
+        "to_invoice": "sales_delivery",
+        "to_deliver": "sales_orders",
+    }
+
+    required_module = permissions_by_type.get(type)
+
+    if required_module is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Tipo de consulta no encontrado"
+        )
+
+    if not dashboard_can(current_user, db, required_module):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenés permisos para consultar esta información"
+        )
+
     if type == "to_invoice":
         # Remitos Pendientes de Facturar
         query = db.query(DeliveryNote).options(joinedload(DeliveryNote.entity)).filter(
@@ -41,19 +79,15 @@ def get_dashboard_drilldown(type: str, cost_center: Optional[int] = None, db: Se
         )
         if cost_center:
             query = query.filter(DeliveryNote.cost_center == cost_center)
-            
         dns = query.order_by(DeliveryNote.date.desc()).all()
-        
         # Enriquecemos con el total de sus líneas si el campo header no está denormalizado
         results = []
         from sqlalchemy import func
         from app.db.models.commercial_models import DeliveryNoteLine
-        
         for dn in dns:
             # Si el header ya tiene total_amount, lo usamos; si no, sumamos líneas.
             # (Depende de si se configuró el trigger de actualización)
             lines_total = db.query(func.sum(DeliveryNoteLine.total_amount)).filter(DeliveryNoteLine.delivery_note_id == dn.id).scalar() or 0.0
-            
             results.append({
                 "id": dn.id,
                 "number": dn.number,
@@ -65,47 +99,60 @@ def get_dashboard_drilldown(type: str, cost_center: Optional[int] = None, db: Se
                 "amount_ars": float(dn.total_amount_ars or (lines_total * (dn.exchange_rate or 1) if dn.currency == CurrencyType.USD else lines_total))
             })
         return results
-        
     elif type == "to_deliver":
         # Órdenes de Venta Pendientes de Entregar
         query = db.query(SalesOrder).options(joinedload(SalesOrder.entity)).filter(
-            SalesOrder.status.in_([OrderStatus.APPROVED, OrderStatus.PARTIAL])
+            SalesOrder.status.in_([OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED])
         )
         if cost_center:
             query = query.filter(SalesOrder.cost_center == cost_center)
-            
         orders = query.order_by(SalesOrder.date.desc()).all()
         return [{
             "id": o.id, "number": o.number, "date": o.date, "entity": o.entity.name if o.entity else "S/D",
             "total": float(o.total_amount or 0), "currency": o.currency, "amount_ars": float(o.total_amount_ars or 0)
         } for o in orders]
-        
     return []
-
 # Global logger for direct debugging without terminal
 def log_debug(msg):
     with open("dashboard_debug.txt", "a") as f:
         f.write(f"[{datetime.now()}] {msg}\n")
-
 @router.get("/summary")
-def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depends(get_db)):
-    # 0. Check Cache (Include cost_center in cache key logic if needed, but for simplicity we invalidate with time or params)
+def get_dashboard_summary(
+    cost_center: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    # 0. Check Cache (Include cost_center y user_id en cache key para aislamiento de permisos)
     now = datetime.now()
-    cache_key = f"dashboard_{cost_center}"
-    
+    cache_key = f"dashboard_{cost_center}_user_{current_user.id}"
     # We'll use a slightly different cache structure to support cost_center
     if not hasattr(router, "_dashboard_caches"):
         router._dashboard_caches = {}
-    
-    cached = router._dashboard_caches.get(cache_key)
-    if cached and cached["expires"] > now:
-        return cached["data"]
-
-    log_debug(f"Starting dashboard summary (Refreshed) - CostCenter: {cost_center}")
+    # Caché temporalmente desactivada mientras implementamos
+    # y verificamos el filtrado de permisos.
+    cached = None
+    log_debug(f"Starting dashboard summary (Refreshed) - CostCenter: {cost_center} - User: {current_user.id}")
     try:
+        # Permisos del usuario
+        can_view_finance = dashboard_can(current_user, db, "finance")
+        can_view_sales = dashboard_can(current_user, db, "sales_invoices")
+        can_view_purchases = dashboard_can(current_user, db, "purchase_invoices")
+        can_view_orders = dashboard_can(current_user, db, "sales_orders")
+        can_view_delivery = dashboard_can(current_user, db, "sales_delivery")
+        can_view_stock = dashboard_can(current_user, db, "products")
+        can_view_grain = any(
+            dashboard_can(current_user, db, module)
+            for module in (
+                "grain_primary_settlements",
+                "grain_secondary_settlements",
+                "grain_contracts",
+                "grain_movements",
+                "grain_stock",
+            )
+        )
+
         # 1. KPIs & Base Data
         first_day_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        
         kpi_query = db.query(
             Document.doc_type,
             func.sum(Document.total_amount_ars),
@@ -116,14 +163,11 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         )
         if cost_center:
             kpi_query = kpi_query.filter(Document.cost_center == cost_center)
-        
         kpi_results = kpi_query.group_by(Document.doc_type).all()
-        
         kpi_map = {row[0]: {"ars": float(row[1] or 0), "usd": float(row[2] or 0)} for row in kpi_results}
         sales_month = kpi_map.get(DocumentType.INVOICE, {"ars": 0, "usd": 0})["ars"]
         sales_month_usd = kpi_map.get(DocumentType.INVOICE, {"ars": 0, "usd": 0})["usd"]
         purchases_month = kpi_map.get(DocumentType.PURCHASE_INVOICE, {"ars": 0, "usd": 0})["ars"]
-            
         # Productos Críticos (Bajo Stock) - Optimized query with outer join
         low_stock_count = 0
         critical_products = []
@@ -135,7 +179,7 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                 or_(
                     func.coalesce(func.sum(StockItem.qty_on_hand), 0) < 0,
                     and_(
-                        Product.min_stock > 0, 
+                        Product.min_stock > 0,
                         func.coalesce(func.sum(StockItem.qty_on_hand), 0) <= Product.min_stock
                     )
                 )
@@ -144,12 +188,10 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                 Product.is_service == False,
                 Product.track_stock == True
             )
-            
             low_stock_count = critical_query.count()
             critical_products = critical_query.limit(3).all()
         except Exception as e:
             log_debug(f"Error in critical stock: {e}")
-        
         # Remitos a Facturar (Join with lines since header doesn't have total_amount)
         from app.db.models.commercial_models import DeliveryNoteLine
         pending_dn_q = db.query(
@@ -160,29 +202,23 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             DeliveryNote.status == DeliveryNoteStatus.DISPATCHED
         )
         if cost_center:
-            pending_dn_q = pending_dn_q.filter(DeliveryNote.cost_center == cost_center) 
-            
+            pending_dn_q = pending_dn_q.filter(DeliveryNote.cost_center == cost_center)
         pending_dn_data = pending_dn_q.first()
-
         pending_delivery_notes = int(pending_dn_data[0] or 0)
         pending_delivery_notes_ars = float(pending_dn_data[1] or 0)
         pending_delivery_notes_usd = float(pending_dn_data[2] or 0)
-
         # Clientes Activos (Filtrando por tipo)
         active_clients_count = db.query(Entity).filter(
             Entity.type.in_([EntityType.CLIENT, EntityType.MIXED])
         ).count()
-        
         # 2. Posición Consolidada (AR/AP/Checks)
         debit_types = [DocumentType.INVOICE, DocumentType.DEBIT_NOTE, DocumentType.PURCHASE_INVOICE]
-        
         # Subquery para aplicaciones (monto pagado por documento)
         applied_subquery = db.query(
             Application.to_document_id.label("doc_id"),
             func.sum(Application.amount_applied_ars).label("applied_ars"),
             func.sum(Application.amount_applied).label("applied_orig")
         ).group_by(Application.to_document_id).subquery()
-
         # AR Total (ARS Equivalent)
         ar_q = db.query(func.sum(
             case(
@@ -198,7 +234,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ar_q = ar_q.filter(Document.cost_center == cost_center)
         ar_total_ars = ar_q.scalar() or 0
-
         # AR Total (Neto USD Equivalent) - Linea 98
         ar_usd_q = db.query(func.sum(
             case(
@@ -214,7 +249,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ar_usd_q = ar_usd_q.filter(Document.cost_center == cost_center)
         ar_total = ar_usd_q.scalar() or 0
-        
         # AR Vencido (Desglosado)
         ar_ov_ars_q = db.query(func.sum(
             Document.total_amount_ars - func.coalesce(applied_subquery.c.applied_ars, 0)
@@ -230,7 +264,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ar_ov_ars_q = ar_ov_ars_q.filter(Document.cost_center == cost_center)
         ar_ov_ars = ar_ov_ars_q.scalar() or 0
-
         ar_ov_usd_q = db.query(func.sum(
             Document.total_amount - func.coalesce(applied_subquery.c.applied_orig, 0)
         )).join(Entity, Document.entity_id == Entity.id).outerjoin(
@@ -245,7 +278,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ar_ov_usd_q = ar_ov_usd_q.filter(Document.cost_center == cost_center)
         ar_ov_usd = ar_ov_usd_q.scalar() or 0
-
         # AP Total (ARS Equivalent)
         ap_q = db.query(func.sum(
             case(
@@ -261,7 +293,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ap_q = ap_q.filter(Document.cost_center == cost_center)
         ap_total_ars = ap_q.scalar() or 0
-
         # AP Total (Neto) - Sumamos el saldo de todos los documentos abiertos en USD equivalente
         ap_usd_q = db.query(func.sum(
             case(
@@ -277,7 +308,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ap_usd_q = ap_usd_q.filter(Document.cost_center == cost_center)
         ap_total = ap_usd_q.scalar() or 0
-        
         # AP Vencido (Desglosado)
         ap_ov_ars_q = db.query(func.sum(
             Document.total_amount_ars - func.coalesce(applied_subquery.c.applied_ars, 0)
@@ -293,7 +323,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ap_ov_ars_q = ap_ov_ars_q.filter(Document.cost_center == cost_center)
         ap_ov_ars = ap_ov_ars_q.scalar() or 0
-
         ap_ov_usd_q = db.query(func.sum(
             Document.total_amount - func.coalesce(applied_subquery.c.applied_orig, 0)
         )).join(Entity, Document.entity_id == Entity.id).outerjoin(
@@ -308,12 +337,20 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             ap_ov_usd_q = ap_ov_usd_q.filter(Document.cost_center == cost_center)
         ap_ov_usd = ap_ov_usd_q.scalar() or 0
-
-        checks_q = db.query(func.sum(Cheque.importe)).filter(Cheque.estado.in_(["EN_CARTERA", "PENDIENTE"]))
-        if cost_center:
+        # Cheques en cartera separados por moneda, sin sumar ARS y USD.
+        checks_q = db.query(
+            func.upper(func.trim(Cheque.moneda)).label("moneda"),
+            func.sum(Cheque.importe).label("total")
+        ).filter(Cheque.estado.in_(["EN_CARTERA", "PENDIENTE"]))
+        if cost_center is not None:
             checks_q = checks_q.filter(Cheque.cost_center == cost_center)
-        checks_total = checks_q.scalar() or 0
-        
+        checks_totals = {"ARS": 0.0, "USD": 0.0}
+        checks_unknown = 0.0
+        for moneda, total in checks_q.group_by(func.upper(func.trim(Cheque.moneda))).all():
+            if moneda in checks_totals:
+                checks_totals[moneda] += float(total or 0)
+            else:
+                checks_unknown += float(total or 0)
         # 3. Alertas
         alerts = []
         try:
@@ -326,7 +363,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                     Vehicle.vtv_due <= deadline
                 )
             ).all()
-
             for v in fleet_alerts:
                 if v.insurance_due and v.insurance_due <= deadline:
                     days = (v.insurance_due - now).days
@@ -344,7 +380,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                         "desc": f"Patente: {v.plate} · Vence en {days} días ({v.vtv_due.strftime('%d/%m')})",
                         "icon": "Stethoscope"
                     })
-
             reject_q = db.query(Cheque).filter(
                 Cheque.rechazado == True,
                 Cheque.nd_realizada == False
@@ -361,7 +396,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                 })
         except Exception as e:
             log_debug(f"Error in fleet/check alerts: {e}")
-            
         for p in critical_products:
             alerts.append({
                 "type": "warning",
@@ -369,7 +403,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                 "desc": f"SKU: {p.sku} · Quedan pocas unidades",
                 "icon": "Package"
             })
-            
         # 4. Cronología (limit results to essential fields)
         activity = []
         try:
@@ -385,10 +418,8 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                     "INVOICE": "📄",
                     "PURCHASE_INVOICE": "🛒"
                 }.get(dtype_str, "📄")
-                
                 ent_name = doc.entity.name if doc.entity else "S/D"
                 date_str = doc.created_at.strftime('%d/%m %H:%M') if doc.created_at else ""
-
                 activity.append({
                     "type": dtype_str.lower(),
                     "title": f"{dtype_str} #{doc.number or 'S/N'}",
@@ -401,7 +432,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                 })
         except Exception as e:
             log_debug(f"Error in activity: {e}")
- 
         # 5. Ventas por Unidad de Negocio (Mes Actual)
         sales_by_unit = []
         try:
@@ -416,7 +446,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             if cost_center:
                 unit_q = unit_q.filter(Document.cost_center == cost_center)
             unit_query_results = unit_q.group_by(Document.unidad_negocio).all()
-            
             total_sales = sum(float(row[1] or 0) for row in unit_query_results)
             for unit, amount in unit_query_results:
                 sales_by_unit.append({
@@ -426,12 +455,10 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                 })
         except Exception as e:
             log_debug(f"Error in sales by unit: {e}")
-
         # 6. Próximos Vencimientos (Documentos y Cheques)
         upcoming_deadlines = []
         try:
             target_date = now + timedelta(days=15)
-            
             # Docs por cobrar/pagar
             up_docs_q = db.query(Document).filter(
                 Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL]),
@@ -441,7 +468,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             if cost_center:
                 up_docs_q = up_docs_q.filter(Document.cost_center == cost_center)
             docs_upcoming = up_docs_q.order_by(Document.due_date.asc()).limit(4).all()
-            
             for d in docs_upcoming:
                 upcoming_deadlines.append({
                     "type": "document",
@@ -451,7 +477,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                     "currency": d.currency.value if hasattr(d.currency, 'value') else d.currency,
                     "entity": d.entity.name if d.entity else "S/D"
                 })
-                
             # Cheques a depositar/cobrar
             up_ch_q = db.query(Cheque).filter(
                 Cheque.estado == "EN_CARTERA",
@@ -461,21 +486,18 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             if cost_center:
                 up_ch_q = up_ch_q.filter(Cheque.cost_center == cost_center)
             checks_upcoming = up_ch_q.order_by(Cheque.f_pago.asc()).limit(3).all()
-            
             for c in checks_upcoming:
                 upcoming_deadlines.append({
                     "type": "check",
                     "title": f"Cheque #{c.nro_cheque}",
                     "date": c.f_pago.strftime('%d/%m'),
                     "amount": float(c.importe),
-                    "currency": "ARS",
+                    "currency": (c.moneda or "").strip().upper() or None,
                     "entity": c.banco or "S/D"
                 })
-            
             upcoming_deadlines = sorted(upcoming_deadlines, key=lambda x: x['date'])[:6]
         except Exception as e:
             log_debug(f"Error in upcoming: {e}")
-
         # 7. Precios de Granos (No afectado por Cost Center)
         def get_grain_prices():
             import requests
@@ -496,12 +518,10 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                         meta = data['chart']['result'][0]['meta']
                         price = meta['regularMarketPrice']
                         prev_close = meta['chartPreviousClose']
-                        
                         # Convertir de centavos/bushel a USD/Tonelada
                         price_ton = (price / 100) * multiplier
                         trend = ((price - prev_close) / prev_close) * 100
                         trend_str = f"{'+' if trend > 0 else ''}{trend:.1f}"
-                        
                         results.append({
                             "label": label,
                             "value": round(price_ton, 1),
@@ -513,16 +533,13 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
                     return results
             except Exception as e:
                 log_debug(f"Error fetching grain prices: {e}")
-            
             # Fallback values
             return [
                 {"label": "Soja CBOT", "value": 435.2, "trend": "+0.5", "currency": "USD"},
                 {"label": "Maíz CBOT", "value": 178.5, "trend": "-0.2", "currency": "USD"},
                 {"label": "Trigo CBOT", "value": 215.0, "trend": "0.0", "currency": "USD"}
             ]
-        
         grain_prices = get_grain_prices()
-
         # 8. Composición de Deuda (Aging)
         debt_aging = [
             {"label": "0-30 días", "value": 0},
@@ -545,7 +562,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             if cost_center:
                 aging_q = aging_q.filter(Document.cost_center == cost_center)
             aging_query_res = aging_q.group_by("age_group").all()
-            
             aging_map = {row[0]: float(row[1] or 0) for row in aging_query_res}
             debt_aging = [
                 {"label": "0-30 días", "value": aging_map.get("0-30 días", 0)},
@@ -554,7 +570,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             ]
         except Exception as e:
             log_debug(f"Error in debt aging: {e}")
-
         # 9. Commercial Funnel (Ordered -> Delivered -> Invoiced -> Collected)
         funnel = {}
         try:
@@ -571,7 +586,6 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             if cost_center:
                 so_q = so_q.filter(SalesOrder.cost_center == cost_center)
             ordered_usd = so_q.scalar() or 0
-
             # Stage 2: Delivered (Sum of DNs dispatched this month)
             dn_q = db.query(func.sum(
                 case(
@@ -585,70 +599,119 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
             if cost_center:
                 dn_q = dn_q.filter(DeliveryNote.cost_center == cost_center)
             delivered_usd = dn_q.scalar() or 0
-
             # Stage 3: Invoiced (Already calculated in sales_month_usd)
             invoiced_usd = sales_month_usd
+            # Stage 4: Collected (real receipts applied to invoices)
+            from sqlalchemy.orm import aliased
 
-            # Stage 4: Collected (Applications to invoices this month)
-            coll_q = db.query(func.sum(
-                Application.amount_applied # This is usually in document currency (USD/ARS normalized)
-            )).join(Document, Application.to_document_id == Document.id).filter(
-                Application.date >= first_day_of_month,
-                Document.doc_type == DocumentType.INVOICE
+            Receipt = aliased(Document)
+
+            collections = (
+                db.query(
+                    Application.amount_applied,
+                    Document.currency,
+                    Receipt.currency,
+                    Receipt.exchange_rate,
+                )
+                .join(Document, Application.to_document_id == Document.id)
+                .join(Receipt, Application.from_document_id == Receipt.id)
+                .filter(
+                    Receipt.date >= first_day_of_month,
+                    Document.doc_type == DocumentType.INVOICE,
+                    Document.status != DocumentStatus.CANCELLED,
+                    Receipt.doc_type == DocumentType.RECEIPT,
+                    Receipt.status != DocumentStatus.CANCELLED,
+                )
             )
-            if cost_center:
-                coll_q = coll_q.filter(Document.cost_center == cost_center)
-            collected_usd = coll_q.scalar() or 0
 
+            if cost_center:
+                collections = collections.filter(
+                    Document.cost_center == cost_center
+                )
+
+            collected_usd = 0.0
+            missing_collection_fx = False
+
+            for amount, invoice_currency, receipt_currency, receipt_fx in collections:
+                amount = float(amount or 0)
+
+                if invoice_currency == CurrencyType.USD:
+                    collected_usd += amount
+                elif invoice_currency == CurrencyType.ARS:
+                    fx = float(receipt_fx or 0)
+                    if fx <= 1:
+                        missing_collection_fx = True
+                    else:
+                        collected_usd += amount / fx
+                else:
+                    missing_collection_fx = True
+
+            if missing_collection_fx:
+                collected_usd = None
             funnel = {
                 "ordered": float(ordered_usd),
                 "delivered": float(delivered_usd),
                 "invoiced": float(invoiced_usd),
-                "collected": float(collected_usd),
+                "collected": float(collected_usd) if collected_usd is not None else None,
                 "bottlenecks": {
                     "to_deliver": float(max(0, ordered_usd - delivered_usd)),
                     "to_invoice": float(max(0, delivered_usd - invoiced_usd)),
-                    "to_collect": float(max(0, invoiced_usd - collected_usd))
+                    "to_collect": float(max(0, invoiced_usd - collected_usd)) if collected_usd is not None else None
                 }
             }
         except Exception as e:
             log_debug(f"Error in funnel: {e}")
+            funnel = {}
 
         result = {
             "kpis": {
-                "sales_month": float(sales_month),
-                "sales_month_usd": float(sales_month_usd),
-                "purchases_month": float(purchases_month),
-                "low_stock_count": int(low_stock_count),
-                "pending_delivery_notes": int(pending_delivery_notes),
-                "pending_delivery_notes_ars": float(pending_delivery_notes_ars),
-                "pending_delivery_notes_usd": float(pending_delivery_notes_usd),
-                "active_clients_count": int(active_clients_count)
+                "sales_month": float(sales_month) if can_view_sales else None,
+                "sales_month_usd": float(sales_month_usd) if can_view_sales else None,
+                "purchases_month": float(purchases_month) if can_view_purchases else None,
+                "low_stock_count": int(low_stock_count) if can_view_stock else None,
+                "pending_delivery_notes": int(pending_delivery_notes) if can_view_delivery else None,
+                "pending_delivery_notes_ars": float(pending_delivery_notes_ars) if can_view_delivery else None,
+                "pending_delivery_notes_usd": float(pending_delivery_notes_usd) if can_view_delivery else None,
+                "active_clients_count": int(active_clients_count) if dashboard_can(current_user, db, "customers") else None
             },
             "financial": {
-                "ar_total": float(ar_total),
-                "ar_total_ars": float(ar_total_ars),
+                "ar_total": float(ar_total) if can_view_finance else None,
+                "ar_total_ars": float(ar_total_ars) if can_view_finance else None,
                 "ar_overdue": {
                     "ars": float(ar_ov_ars),
                     "usd": float(ar_ov_usd)
-                },
-                "ap_total": float(ap_total),
-                "ap_total_ars": float(ap_total_ars),
+                } if can_view_finance else None,
+                "ap_total": float(ap_total) if can_view_finance else None,
+                "ap_total_ars": float(ap_total_ars) if can_view_finance else None,
                 "ap_overdue": {
                     "ars": float(ap_ov_ars),
                     "usd": float(ap_ov_usd)
-                },
-                "checks_total": float(checks_total),
-                "aging": debt_aging
+                } if can_view_finance else None,
+                "checks_total_ars": checks_totals["ARS"] if can_view_finance else None,
+                "checks_total_usd": checks_totals["USD"] if can_view_finance else None,
+                "checks_total_unknown": checks_unknown if can_view_finance else None,
+                "aging": debt_aging if can_view_finance else None
             },
-            "funnel": funnel,
-            "sales_by_unit": sales_by_unit,
-            "activity": activity,
-            "alerts": alerts,
-            "upcoming": upcoming_deadlines,
-            "grain_prices": grain_prices
+            "funnel": {
+                "ordered": funnel.get("ordered") if can_view_orders else None,
+                "delivered": funnel.get("delivered") if can_view_delivery else None,
+                "invoiced": funnel.get("invoiced") if can_view_sales else None,
+                "collected": funnel.get("collected") if can_view_finance else None,
+                "bottlenecks": {
+                    "to_deliver": funnel.get("bottlenecks", {}).get("to_deliver")
+                        if can_view_orders and can_view_delivery else None,
+                    "to_invoice": funnel.get("bottlenecks", {}).get("to_invoice")
+                        if can_view_delivery and can_view_sales else None,
+                    "to_collect": funnel.get("bottlenecks", {}).get("to_collect")
+                        if can_view_sales and can_view_finance else None
+                }
+            },
+            "sales_by_unit": sales_by_unit if can_view_sales else [],
+            "activity": [],
+            "alerts": [],
+            "upcoming": [],
+            "grain_prices": grain_prices if can_view_grain else []
         }
-        
         # Update Cache
         router._dashboard_caches[cache_key] = {
         "data": result,
@@ -658,12 +721,13 @@ def get_dashboard_summary(cost_center: Optional[int] = None, db: Session = Depen
         log_debug(f"CRITICAL ERROR in dashboard summary: {e}")
         import traceback
         traceback.print_exc()
-        result = {"error": str(e)}
-
+        raise HTTPException(status_code=500, detail="No se pudo calcular el resumen del dashboard") from e
     return result
-
 @router.get("/alerts")
-def get_dashboard_alerts(db: Session = Depends(get_db)):
+def get_dashboard_alerts(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Motor de Alertas Tempranas (Early Warning System).
     Analiza facturas vencidas, stock bajo y cheques por vencer.
@@ -672,85 +736,97 @@ def get_dashboard_alerts(db: Session = Depends(get_db)):
         alerts = []
         now = datetime.now()
         today = now.date()
-        
+
+        can_view_finance = dashboard_can(current_user, db, "finance")
+        can_view_stock = dashboard_can(current_user, db, "products")
+
+        if not can_view_finance and not can_view_stock:
+            return []
         # 1. Facturas Vencidas (>7 días crítico)
-        overdue_docs = db.query(Document).filter(
-            Document.doc_type == DocumentType.INVOICE,
-            Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL]),
-            Document.due_date < today
-        ).order_by(Document.due_date.asc()).all()
-        
-        for doc in overdue_docs:
-            d_date = doc.due_date if hasattr(doc.due_date, "days") or not hasattr(doc.due_date, "date") else datetime.combine(doc.due_date, datetime.min.time())
-            # Convert both to date for subtraction or use combine
-            try:
-                doc_date_val = doc.due_date.date() if hasattr(doc.due_date, "date") else doc.due_date
-                days = (today - doc_date_val).days
-            except Exception:
-                days = 0
 
-            severity = "high" if days > 7 else "medium"
-            alerts.append({
-                "id": f"overdue-{doc.id}",
-                "title": f"Factura Vencida: {doc.number}",
-                "desc": f"Venció hace {days} días. Deuda pendiente detectada.",
-                "severity": severity,
-                "type": "overdue",
-                "created_at": doc.due_date,
-                "doc_id": doc.id,
-                "module": "/ventas/facturas"
-            })
-
-        # 2. Stock Bajo (Current < Min)
-        products = db.query(Product).options(joinedload(Product.stock_items)).filter(Product.active == True, Product.is_service == False).all()
-        for p in products:
-            total_stock = sum(float(item.qty_on_hand or 0) for item in p.stock_items)
-            if p.min_stock > 0 and total_stock < p.min_stock:
+        if can_view_finance:
+            overdue_docs = db.query(Document).filter(
+                Document.doc_type == DocumentType.INVOICE,
+                Document.status.in_([DocumentStatus.OPEN, DocumentStatus.PARTIAL]),
+                Document.due_date < today
+            ).order_by(Document.due_date.asc()).all()
+            for doc in overdue_docs:
+                d_date = doc.due_date if hasattr(doc.due_date, "days") or not hasattr(doc.due_date, "date") else datetime.combine(doc.due_date, datetime.min.time())
+                # Convert both to date for subtraction or use combine
+                try:
+                    doc_date_val = doc.due_date.date() if hasattr(doc.due_date, "date") else doc.due_date
+                    days = (today - doc_date_val).days
+                except Exception:
+                    days = 0
+                severity = "high" if days > 7 else "medium"
                 alerts.append({
-                    "id": f"stock-{p.id}",
-                    "title": f"Stock Bajo: {p.name}",
-                    "desc": f"Quedan {total_stock:g} unidades (Mínimo: {p.min_stock:g}). Reposición recomendada.",
-                    "severity": "medium" if total_stock > (p.min_stock * 0.5) else "high",
-                    "type": "low_stock",
-                    "created_at": now,
-                    "sku": p.sku,
-                    "module": "/inventario/articulos"
+                    "id": f"overdue-{doc.id}",
+                    "title": f"Factura Vencida: {doc.number}",
+                    "desc": f"Venció hace {days} días. Deuda pendiente detectada.",
+                    "severity": severity,
+                    "type": "overdue",
+                    "created_at": doc.due_date,
+                    "doc_id": doc.id,
+                    "module": "/ventas/facturas"
                 })
+        # 2. Stock Bajo (Current < Min)
 
+        if can_view_stock:
+            products = db.query(Product).options(joinedload(Product.stock_items)).filter(Product.active == True, Product.is_service == False).all()
+            for p in products:
+                total_stock = sum(float(item.qty_on_hand or 0) for item in p.stock_items)
+                if p.min_stock > 0 and total_stock < p.min_stock:
+                    alerts.append({
+                        "id": f"stock-{p.id}",
+                        "title": f"Stock Bajo: {p.name}",
+                        "desc": f"Quedan {total_stock:g} unidades (Mínimo: {p.min_stock:g}). Reposición recomendada.",
+                        "severity": "medium" if total_stock > (p.min_stock * 0.5) else "high",
+                        "type": "low_stock",
+                        "created_at": now,
+                        "sku": p.sku,
+                        "module": "/inventario/articulos"
+                    })
         # 3. Cheques por Vencer (Hoy +/- 2 días)
-        start_window = (now - timedelta(days=2)).date()
-        end_window = (now + timedelta(days=2)).date()
-        pending_cheques = db.query(Cheque).filter(
-            Cheque.f_vencimiento >= start_window,
-            Cheque.f_vencimiento <= end_window,
-            Cheque.estado.in_(["CARTERA", "RECHAZADO"]) # Asumimos estados
-        ).all()
-        
-        for ch in pending_cheques:
-            is_today = ch.f_vencimiento == now.date()
-            alerts.append({
-                "id": f"cheque-{ch.id}",
-                "title": f"Cheque por Vencer: {ch.nro_cheque}",
-                "desc": f"Vence { 'HOY' if is_today else ch.f_vencimiento.strftime('%d/%m/%Y') }. Banco {ch.banco}.",
-                "severity": "high" if is_today or ch.f_vencimiento < now.date() else "medium",
-                "type": "cheque",
-                "created_at": datetime.combine(ch.f_vencimiento, datetime.min.time()),
-                "cheque_id": ch.id,
-                "module": "/finanzas/cheques"
-            })
 
+        if can_view_finance:
+            start_window = (now - timedelta(days=2)).date()
+            end_window = (now + timedelta(days=2)).date()
+            pending_cheques = db.query(Cheque).filter(
+                Cheque.f_vencimiento >= start_window,
+                Cheque.f_vencimiento <= end_window,
+                Cheque.estado.in_(["CARTERA", "RECHAZADO"]) # Asumimos estados
+            ).all()
+            for ch in pending_cheques:
+                is_today = ch.f_vencimiento == now.date()
+                alerts.append({
+                    "id": f"cheque-{ch.id}",
+                    "title": f"Cheque por Vencer: {ch.nro_cheque}",
+                    "desc": f"Vence { 'HOY' if is_today else ch.f_vencimiento.strftime('%d/%m/%Y') }. Banco {ch.banco}.",
+                    "severity": "high" if is_today or ch.f_vencimiento < now.date() else "medium",
+                    "type": "cheque",
+                    "created_at": datetime.combine(ch.f_vencimiento, datetime.min.time()),
+                    "cheque_id": ch.id,
+                    "module": "/finanzas/cheques"
+                })
         # Ordenar por severidad (high primero)
         severity_map = {"high": 3, "medium": 2, "low": 1}
         alerts.sort(key=lambda x: severity_map.get(x["severity"], 0), reverse=True)
-        
         return alerts
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"dashboard alerts error: {e}", exc_info=True)
         return []
-
 @router.get("/cash-flow-forecast")
-def get_cash_flow_forecast(cost_center: Optional[int] = None, db: Session = Depends(get_db)):
+def get_cash_flow_forecast(
+    cost_center: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not dashboard_can(current_user, db, "finance"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenés permisos para consultar el flujo de caja"
+        )
     """
     Motor de Proyección de Flujo de Caja.
     Proyecta ingresos y egresos para los próximos 30 días basándose en vtos.
@@ -758,22 +834,18 @@ def get_cash_flow_forecast(cost_center: Optional[int] = None, db: Session = Depe
     try:
         now = datetime.now()
         end_date = now + timedelta(days=30)
-        
         # 1. Saldo Inicial ARS (Caja Abierta)
         pos_q = db.query(CashPosition).filter(CashPosition.status == "OPEN")
         if cost_center:
             pos_q = pos_q.filter(CashPosition.cost_center == cost_center) # Note: requires CashPosition to have cost_center
-            
         pos = pos_q.order_by(desc(CashPosition.opened_at)).first()
         rate = db.query(ExchangeRate).order_by(desc(ExchangeRate.timestamp)).first()
         xr = rate.sell if rate else 1000.0
-        
         initial_balance = 0.0
         if pos and pos.opening_balances:
             balances = pos.opening_balances
             initial_balance += float(balances.get("ARS", 0))
             initial_balance += float(balances.get("USD", 0)) * xr
-        
         # 2. Obtener Ingresos Futuros (Invoices + Cheques)
         incomes_q = db.query(Document).filter(
             Document.doc_type == DocumentType.INVOICE,
@@ -784,7 +856,6 @@ def get_cash_flow_forecast(cost_center: Optional[int] = None, db: Session = Depe
         if cost_center:
             incomes_q = incomes_q.filter(Document.cost_center == cost_center)
         incomes = incomes_q.all()
-        
         cheques_q = db.query(Cheque).filter(
             Cheque.f_vencimiento >= now.date(),
             Cheque.f_vencimiento <= end_date.date(),
@@ -793,7 +864,6 @@ def get_cash_flow_forecast(cost_center: Optional[int] = None, db: Session = Depe
         if cost_center:
             cheques_q = cheques_q.filter(Cheque.cost_center == cost_center)
         cheques = cheques_q.all()
-        
         # 3. Obtener Egresos Futuros (Purchase Invoices)
         expenses_q = db.query(Document).filter(
             Document.doc_type == DocumentType.PURCHASE_INVOICE,
@@ -804,38 +874,32 @@ def get_cash_flow_forecast(cost_center: Optional[int] = None, db: Session = Depe
         if cost_center:
             expenses_q = expenses_q.filter(Document.cost_center == cost_center)
         expenses = expenses_q.all()
-        
         # 4. Agrupar por día
         daily_data = {}
         for i in range(31):
             day = (now + timedelta(days=i)).date()
             daily_data[day] = {"income": 0.0, "expense": 0.0, "balance": 0.0}
-            
         for doc in incomes:
             amount = float(doc.total_amount)
             if doc.currency == CurrencyType.USD: amount *= xr
             d_date = doc.due_date if not hasattr(doc.due_date, "date") else doc.due_date.date()
             if d_date in daily_data:
                 daily_data[d_date]["income"] += amount
-            
         for ch in cheques:
             d_date = ch.f_vencimiento if not hasattr(ch.f_vencimiento, "date") else ch.f_vencimiento.date()
             if d_date in daily_data:
                 daily_data[d_date]["income"] += float(ch.importe or 0)
-                
         for doc in expenses:
             amount = float(doc.total_amount)
             if doc.currency == CurrencyType.USD: amount *= xr
             d_date = doc.due_date if not hasattr(doc.due_date, "date") else doc.due_date.date()
             if d_date in daily_data:
                 daily_data[d_date]["expense"] += amount
-                
         # 5. Generar Series Acumulada
         forecast = [
             {"date": now.strftime("%d/%m"), "income":0, "expense":0, "balance": round(initial_balance, 2)}
         ]
         current_acc = initial_balance
-        
         for day in sorted(daily_data.keys()):
             stats = daily_data[day]
             current_acc += (stats["income"] - stats["expense"])
@@ -845,13 +909,11 @@ def get_cash_flow_forecast(cost_center: Optional[int] = None, db: Session = Depe
                 "expense": round(stats["expense"], 2),
                 "balance": round(current_acc, 2)
             })
-            
         return {
             "initial_balance": initial_balance,
             "xr_used": xr,
             "forecast": forecast
         }
-
     except Exception as e:
         import traceback
         log_debug(f"GLOBAL ERROR in cash flow forecast: {e}\n{traceback.format_exc()}")
@@ -861,14 +923,21 @@ def get_cash_flow_forecast(cost_center: Optional[int] = None, db: Session = Depe
             "forecast": [],
             "error": str(e)
         }
-
 @router.get("/rentability")
-def get_daily_rentability(cost_center: Optional[int] = None, db: Session = Depends(get_db)):
+def get_daily_rentability(
+    cost_center: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not dashboard_can(current_user, db, "finance"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenés permisos para consultar la rentabilidad"
+        )
     try:
         # 1. Movimientos de caja del d\u00eda
         today_str = datetime.now().strftime("%Y-%m-%d")
         from app.db.models.auth_models import CashPosition, CashMovement
-        
         # Comparación robusta: convertir a string o comparar directamente con date
         pos = db.query(CashPosition).filter(
             func.date(CashPosition.date) == func.date(today_str)
@@ -882,11 +951,9 @@ def get_daily_rentability(cost_center: Optional[int] = None, db: Session = Depen
                 for m in movements:
                     variation[m.currency] = variation.get(m.currency, 0) + m.amount
             except: pass
-                
         # 2. Gastos prorrateados
         now = datetime.now()
         today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        
         exp_q = db.query(func.sum(Document.total_amount_ars)).filter(
             Document.date >= today_start,
             Document.doc_type == DocumentType.PURCHASE_INVOICE
@@ -894,7 +961,6 @@ def get_daily_rentability(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             exp_q = exp_q.filter(Document.cost_center == cost_center)
         daily_expenses_ars = exp_q.scalar() or 0
-        
         # 3. Ganancia expl\u00edcita
         sales_q = db.query(Document).filter(
             Document.date >= today_start,
@@ -903,16 +969,13 @@ def get_daily_rentability(cost_center: Optional[int] = None, db: Session = Depen
         if cost_center:
             sales_q = sales_q.filter(Document.cost_center == cost_center)
         daily_sales = sales_q.all()
-        
         explicit_profit = 0
         for s in daily_sales:
             try:
                 cost = sum(l.total_cost for l in s.lines) if s.lines else 0
                 explicit_profit += (s.total_amount_ars - (cost * s.exchange_rate))
             except: pass
-            
         net_ars = (variation.get("ARS", 0)) - float(daily_expenses_ars or 0)
-        
         return {
             "variation": variation,
             "daily_expenses_ars": float(daily_expenses_ars or 0),
@@ -926,15 +989,22 @@ def get_daily_rentability(cost_center: Optional[int] = None, db: Session = Depen
         return {
             "variation": {}, "daily_expenses_ars": 0.0, "explicit_profit": 0.0, "net_ars": 0.0, "is_day_open": False
         }
-
 @router.get("/sales-chart")
-def get_sales_chart_data(cost_center: Optional[int] = None, db: Session = Depends(get_db)):
+def get_sales_chart_data(
+    cost_center: Optional[int] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    if not dashboard_can(current_user, db, "sales_invoices"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="No tenés permisos para consultar las estadísticas de facturación"
+        )
     try:
         # Ultimos 7 dias
         now = datetime.now()
         today_end = now.replace(hour=23, minute=59, second=59, microsecond=999)
         start_date = (now - timedelta(days=6)).replace(hour=0, minute=0, second=0, microsecond=0)
-        
         # Query sales per day
         sales_q = db.query(
             func.date(Document.date).label('day'),
@@ -947,14 +1017,11 @@ def get_sales_chart_data(cost_center: Optional[int] = None, db: Session = Depend
         )
         if cost_center:
             sales_q = sales_q.filter(Document.cost_center == cost_center)
-            
         sales_query_results = sales_q.group_by(func.date(Document.date)).all()
-        
         # Fill gaps to have exactly 7 entries
         result = []
         days_map_ars = {str(s.day): float(s.total_ars or 0.0) for s in sales_query_results}
         days_map_usd = {str(s.day): float(s.total_usd or 0.0) for s in sales_query_results}
-        
         current = start_date
         while current <= today_end:
             day_str = current.strftime("%Y-%m-%d")
@@ -962,7 +1029,6 @@ def get_sales_chart_data(cost_center: Optional[int] = None, db: Session = Depend
             # Ajustamos busqueda flexible
             val_ars = days_map_ars.get(day_str, 0)
             val_usd = days_map_usd.get(day_str, 0)
-            
             result.append({
                 "label": current.strftime("%a"), # Lun, Mar...
                 "value_ars": val_ars,
@@ -970,9 +1036,131 @@ def get_sales_chart_data(cost_center: Optional[int] = None, db: Session = Depend
                 "date": day_str
             })
             current += timedelta(days=1)
-            
         return result
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"sales-chart error: {e}", exc_info=True)
         return []
+
+# Preferencias visuales del dashboard por usuario
+@router.get("/preferences")
+def get_dashboard_preferences(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    preference = (
+        db.query(DashboardPreference)
+        .filter(DashboardPreference.user_id == current_user.id)
+        .first()
+    )
+
+    if preference is None:
+        return {
+            "layout": [],
+            "hidden_widgets": [],
+        }
+
+    return {
+        "layout": preference.layout or [],
+        "hidden_widgets": preference.hidden_widgets or [],
+    }
+
+
+# Catálogo de widgets personalizables y sus permisos.
+DASHBOARD_WIDGET_PERMISSIONS = {
+    "accounts_receivable": ("finance",),
+    "accounts_payable": ("finance",),
+    "cheques": ("finance",),
+    "pending_delivery_notes": ("sales_delivery",),
+    "commercial_activity": (
+        "sales_orders", "sales_delivery", "sales_invoices",
+        "purchase_invoices", "customers",
+    ),
+    "agricultural_activity": (
+        "grain_primary_settlements", "grain_secondary_settlements",
+        "grain_contracts", "grain_movements", "grain_stock",
+    ),
+    "risks_and_due_dates": ("finance", "products"),
+}
+
+
+def dashboard_widget_allowed(user, db, widget_id):
+    modules = DASHBOARD_WIDGET_PERMISSIONS.get(widget_id, ())
+    return any(dashboard_can(user, db, module) for module in modules)
+
+
+class DashboardPreferencesUpdate(BaseModel):
+    layout: List[str] = Field(default_factory=list, max_length=100)
+    hidden_widgets: List[str] = Field(default_factory=list, max_length=100)
+
+
+@router.put("/preferences")
+def update_dashboard_preferences(
+    payload: DashboardPreferencesUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    # Los identificadores se validan también contra un catálogo
+    # de widgets antes de habilitar la personalización en el frontend.
+    for field_name, widget_ids in (
+        ("layout", payload.layout),
+        ("hidden_widgets", payload.hidden_widgets),
+    ):
+        if any(not widget_id.strip() or len(widget_id) > 100 for widget_id in widget_ids):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Identificador inválido en {field_name}",
+            )
+
+        if len(widget_ids) != len(set(widget_ids)):
+            raise HTTPException(
+                status_code=422,
+                detail=f"Hay widgets duplicados en {field_name}",
+            )
+
+
+    for widget_id in set(payload.layout + payload.hidden_widgets):
+        if widget_id not in DASHBOARD_WIDGET_PERMISSIONS:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Widget desconocido: {widget_id}",
+            )
+        if not dashboard_widget_allowed(current_user, db, widget_id):
+            raise HTTPException(
+                status_code=403,
+                detail=f"No tenés permisos para configurar: {widget_id}",
+            )
+
+    preference = db.get(DashboardPreference, current_user.id)
+
+    if preference is None:
+        preference = DashboardPreference(user_id=current_user.id)
+        db.add(preference)
+
+    preference.layout = payload.layout
+    preference.hidden_widgets = payload.hidden_widgets
+    preference.updated_at = datetime.utcnow()
+
+    db.commit()
+
+    return {
+        "layout": preference.layout,
+        "hidden_widgets": preference.hidden_widgets,
+    }
+
+
+@router.delete("/preferences")
+def reset_dashboard_preferences(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    preference = db.get(DashboardPreference, current_user.id)
+
+    if preference is not None:
+        db.delete(preference)
+        db.commit()
+
+    return {
+        "layout": [],
+        "hidden_widgets": [],
+    }
