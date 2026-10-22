@@ -31,10 +31,11 @@ export default function DocumentListPage({
   kpis = [],
   toolbar,
   table,
-  pagination
+  pagination,
+  theme = "default"
 }) {
   return (
-    <div className={s.pageLayout}>
+    <div className={`${s.pageLayout} ${theme === "quintal" ? s.quintalTheme : ""}`}>
       <ContentHeader breadcrumbs={breadcrumbs} title={title} />
 
       {/* KPI Row */}

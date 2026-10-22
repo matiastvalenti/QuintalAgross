@@ -8,16 +8,30 @@ from datetime import datetime
 from app.modules.inventory.grain_notifications import send_settlement_notification
 from app.modules.inventory.grain_lpg_engine import LpgEngine
 from decimal import Decimal
-
+from app.modules.auth.auth_router import check_permission
 from typing import List, Optional, Dict, Any
 from decimal import Decimal
 from app.modules.inventory.grain_lpg_engine import LpgEngine
+from app.modules.auth.auth_router import (
+    check_permission,
+    get_current_user,
+    get_effective_permissions,
+)
+from app.modules.auth.auth_router import (
+    check_permission,
+    get_current_user,
+    get_effective_permissions,
+)
 
 router = APIRouter(prefix="/grains", tags=["Grains"])
 
 # ─── MASTERS ───
 
-@router.get("/types", response_model=List[grain_schemas.GrainTypeSchema])
+@router.get(
+    "/types",
+    response_model=List[grain_schemas.GrainTypeSchema],
+    dependencies=[Depends(get_current_user)]
+)
 def get_grain_types(db: Session = Depends(get_db)):
     types = db.query(grain_models.GrainType).filter(grain_models.GrainType.active == True).all()
     if not types:
@@ -37,7 +51,11 @@ def get_grain_types(db: Session = Depends(get_db)):
         types = db.query(grain_models.GrainType).all()
     return types
 
-@router.get("/harvests", response_model=List[grain_schemas.HarvestSchema])
+@router.get(
+    "/harvests",
+    response_model=List[grain_schemas.HarvestSchema],
+    dependencies=[Depends(get_current_user)]
+)
 def get_harvests(db: Session = Depends(get_db)):
     harvests = db.query(grain_models.Harvest).all()
     if not harvests:
@@ -51,7 +69,11 @@ def get_harvests(db: Session = Depends(get_db)):
 
 # ─── CONTRACTS ───
 
-@router.get("/contracts", response_model=List[grain_schemas.GrainContractSchema])
+@router.get(
+    "/contracts",
+    response_model=List[grain_schemas.GrainContractSchema],
+    dependencies=[Depends(check_permission("grain_contracts", "view"))]
+)
 def get_contracts(entity_id: Optional[str] = None, grain_type_id: Optional[str] = None, status: Optional[str] = None, cost_center: Optional[int] = None, db: Session = Depends(get_db)):
     query = db.query(grain_models.GrainContract)
     if entity_id:
@@ -70,7 +92,11 @@ def get_contracts(entity_id: Optional[str] = None, grain_type_id: Optional[str] 
         r.harvest_name = r.harvest.name
     return results
 
-@router.post("/contracts", response_model=grain_schemas.GrainContractSchema)
+@router.post(
+    "/contracts",
+    response_model=grain_schemas.GrainContractSchema,
+    dependencies=[Depends(check_permission("grain_contracts", "create"))]
+)
 def create_contract(data: grain_schemas.GrainContractCreate, db: Session = Depends(get_db)):
     db_contract = grain_models.GrainContract(**data.model_dump())
     db.add(db_contract)
@@ -80,7 +106,11 @@ def create_contract(data: grain_schemas.GrainContractCreate, db: Session = Depen
 
 # ─── MOVEMENTS ───
 
-@router.get("/movements", response_model=List[grain_schemas.GrainMovementSchema])
+@router.get(
+    "/movements",
+    response_model=List[grain_schemas.GrainMovementSchema],
+    dependencies=[Depends(check_permission("grain_movements", "view"))]
+)
 def get_movements(entity_id: Optional[str] = None, grain_type_id: Optional[str] = None, cost_center: Optional[int] = None, db: Session = Depends(get_db)):
     query = db.query(grain_models.GrainMovement)
     if entity_id:
@@ -101,7 +131,11 @@ def get_movements(entity_id: Optional[str] = None, grain_type_id: Optional[str] 
         
     return results
 
-@router.post("/movements", response_model=grain_schemas.GrainMovementSchema)
+@router.post(
+    "/movements",
+    response_model=grain_schemas.GrainMovementSchema,
+    dependencies=[Depends(check_permission("grain_movements", "create"))]
+)
 def create_movement(data: grain_schemas.GrainMovementCreate, db: Session = Depends(get_db)):
     db_move = grain_models.GrainMovement(**data.model_dump())
     db.add(db_move)
@@ -122,14 +156,44 @@ def create_movement(data: grain_schemas.GrainMovementCreate, db: Session = Depen
 def calculate_settlement(
     total_kilos: Decimal,
     price_per_ton: Decimal,
+    settlement_type: str,
     sisa_status: str = "1",
     has_broker: bool = False,
-    include_paritaria: bool = True
+    include_paritaria: bool = True,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
     """
     Simula el cálculo de una LPG sin guardar nada en la DB.
     Útil para el wizard del frontend.
     """
+    settlement_type = settlement_type.upper()
+
+    if settlement_type not in ("PRIMARY", "SECONDARY"):
+        raise HTTPException(
+            status_code=400,
+            detail="Tipo de liquidación inválido"
+        )
+
+    permission_module = (
+        "grain_primary_settlements"
+        if settlement_type == "PRIMARY"
+        else "grain_secondary_settlements"
+    )
+
+    is_super = any(
+        role in (current_user.roles or [])
+        for role in ("admin", "owner")
+    )
+
+    if not is_super:
+        permissions = get_effective_permissions(current_user, db)
+
+        if permissions.get(permission_module, {}).get("create") is not True:
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permiso para calcular este tipo de liquidación"
+            )
     return LpgEngine.calculate(
         total_kilos=total_kilos,
         price_per_ton=price_per_ton,
@@ -140,45 +204,188 @@ def calculate_settlement(
 
 @router.get("/settlements", response_model=List[grain_schemas.GrainSettlementSchema])
 def get_settlements(
-    entity_id: Optional[str] = None, 
+    entity_id: Optional[str] = None,
     settlement_type: Optional[str] = None,
     grain_type_id: Optional[str] = None,
     cost_center: Optional[int] = None,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
 ):
+    is_super = any(
+        role in (current_user.roles or [])
+        for role in ("admin", "owner")
+    )
+
+    permissions = (
+        {}
+        if is_super
+        else get_effective_permissions(current_user, db)
+    )
+
+    can_primary = is_super or permissions.get(
+        "grain_primary_settlements", {}
+    ).get("view") is True
+
+    can_secondary = is_super or permissions.get(
+        "grain_secondary_settlements", {}
+    ).get("view") is True
+
+    if not can_primary and not can_secondary:
+        raise HTTPException(
+            status_code=403,
+            detail="No tiene permisos para consultar liquidaciones de granos",
+        )
+
+    allowed_types = []
+
+    if can_primary:
+        allowed_types.append("PRIMARY")
+
+    if can_secondary:
+        allowed_types.append("SECONDARY")
+
+    if settlement_type is not None:
+        settlement_type = settlement_type.upper()
+
+        if settlement_type not in ("PRIMARY", "SECONDARY"):
+            raise HTTPException(
+                status_code=400,
+                detail="Tipo de liquidación inválido",
+            )
+
+        if settlement_type not in allowed_types:
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permiso para consultar este tipo de liquidación",
+            )
+
     query = db.query(grain_models.GrainSettlement)
+
+    # Nunca devolver liquidaciones de tipos no autorizados.
+    query = query.filter(
+        grain_models.GrainSettlement.settlement_type.in_(allowed_types)
+    )
+
     if entity_id:
-        query = query.filter(grain_models.GrainSettlement.entity_id == entity_id)
+        query = query.filter(
+            grain_models.GrainSettlement.entity_id == entity_id
+        )
+
     if settlement_type:
-        query = query.filter(grain_models.GrainSettlement.settlement_type == settlement_type)
+        query = query.filter(
+            grain_models.GrainSettlement.settlement_type == settlement_type
+        )
+
     if grain_type_id:
-        query = query.filter(grain_models.GrainSettlement.grain_type_id == grain_type_id)
+        query = query.filter(
+            grain_models.GrainSettlement.grain_type_id == grain_type_id
+        )
+
     if cost_center:
-        query = query.filter(grain_models.GrainSettlement.cost_center == cost_center)
-    
-    results = query.order_by(grain_models.GrainSettlement.date.desc()).all()
+        query = query.filter(
+            grain_models.GrainSettlement.cost_center == cost_center
+        )
+
+    results = query.order_by(
+        grain_models.GrainSettlement.date.desc()
+    ).all()
+
     for r in results:
         r.entity_name = r.entity.name
         r.broker_name = r.broker.name if r.broker else None
         r.grain_name = r.grain_type.name
-        
+
     return results
 
 @router.get("/settlements/by-document/{doc_id}", response_model=grain_schemas.GrainSettlementSchema)
-def get_settlement_by_document(doc_id: str, db: Session = Depends(get_db)):
-    settle = db.query(grain_models.GrainSettlement).filter(grain_models.GrainSettlement.document_id == doc_id).first()
+@router.get(
+    "/settlements/by-document/{doc_id}",
+    response_model=grain_schemas.GrainSettlementSchema
+)
+def get_settlement_by_document(
+    doc_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    settle = db.query(grain_models.GrainSettlement).filter(
+        grain_models.GrainSettlement.document_id == doc_id
+    ).first()
+
     if not settle:
-        raise HTTPException(status_code=404, detail="Settlement not found")
-    
-    # Decorate
+        raise HTTPException(
+            status_code=404,
+            detail="Liquidación no encontrada"
+        )
+
+    settlement_type = settle.settlement_type.upper()
+
+    if settlement_type not in ("PRIMARY", "SECONDARY"):
+        raise HTTPException(
+            status_code=403,
+            detail="Tipo de liquidación no autorizado"
+        )
+
+    permission_module = (
+        "grain_primary_settlements"
+        if settlement_type == "PRIMARY"
+        else "grain_secondary_settlements"
+    )
+
+    is_super = any(
+        role in (current_user.roles or [])
+        for role in ("admin", "owner")
+    )
+
+    if not is_super:
+        permissions = get_effective_permissions(current_user, db)
+
+        if permissions.get(permission_module, {}).get("view") is not True:
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permiso para consultar esta liquidación"
+            )
+
     settle.entity_name = settle.entity.name
     settle.broker_name = settle.broker.name if settle.broker else None
     settle.grain_name = settle.grain_type.name
-    
+
     return settle
 
 @router.post("/settlements", response_model=grain_schemas.GrainSettlementSchema)
-def create_settlement(data: grain_schemas.GrainSettlementCreate, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
+def create_settlement(
+    data: grain_schemas.GrainSettlementCreate,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
+    settlement_type = data.settlement_type.upper()
+
+    if settlement_type not in ("PRIMARY", "SECONDARY"):
+        raise HTTPException(
+            status_code=400,
+            detail="Tipo de liquidación inválido",
+        )
+
+    permission_module = (
+        "grain_primary_settlements"
+        if settlement_type == "PRIMARY"
+        else "grain_secondary_settlements"
+    )
+
+    is_super = any(
+        role in (current_user.roles or [])
+        for role in ("admin", "owner")
+    )
+
+    if not is_super:
+        permissions = get_effective_permissions(current_user, db)
+
+        if permissions.get(permission_module, {}).get("create") is not True:
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permiso para crear este tipo de liquidación",
+            )
+
     # 1. Create the Accounting Document
     doc_type = models.DocumentType.LPG_PRIMARY if data.settlement_type == "PRIMARY" else models.DocumentType.LPG_SECONDARY
     
@@ -275,7 +482,10 @@ def create_settlement(data: grain_schemas.GrainSettlementCreate, background_task
     
     return db_settle
 
-@router.get("/summary")
+@router.get(
+    "/summary",
+    dependencies=[Depends(check_permission("grain_stock", "view"))]
+)
 def get_grains_summary(cost_center: Optional[int] = None, db: Session = Depends(get_db)):
     """Summary for grain stock by type (simplified)"""
     from sqlalchemy import func
@@ -317,7 +527,12 @@ def get_grains_summary(cost_center: Optional[int] = None, db: Session = Depends(
         })
     return summary
 
-@router.get("/pending-movements")
+@router.get(
+    "/pending-movements",
+    dependencies=[
+        Depends(check_permission("grain_primary_settlements", "view"))
+    ]
+)
 def get_pending_movements(entity_id: str, grain_type_id: str, harvest_id: str, cost_center: Optional[int] = None, db: Session = Depends(get_db)):
     """Busca movimientos de entrada que no han sido liquidados aún."""
     query = db.query(grain_models.GrainMovement).filter(
@@ -342,7 +557,11 @@ def get_pending_movements(entity_id: str, grain_type_id: str, harvest_id: str, c
     return calc
 
 @router.delete("/settlements/{settlement_id}")
-def delete_settlement(settlement_id: str, db: Session = Depends(get_db)):
+def delete_settlement(
+    settlement_id: str,
+    db: Session = Depends(get_db),
+    current_user = Depends(get_current_user),
+):
     """
     Elimina una Liquidación (LPG) y restaura la trazabilidad.
     1. Anula el Documento comercial vinculado.
@@ -352,7 +571,33 @@ def delete_settlement(settlement_id: str, db: Session = Depends(get_db)):
     settle = db.query(grain_models.GrainSettlement).get(settlement_id)
     if not settle:
         raise HTTPException(status_code=404, detail="Settlement not found")
-        
+        settlement_type = str(settle.settlement_type).upper()
+
+    if settlement_type not in ("PRIMARY", "SECONDARY"):
+        raise HTTPException(
+            status_code=403,
+            detail="Tipo de liquidación no autorizado"
+        )
+
+    permission_module = (
+        "grain_primary_settlements"
+        if settlement_type == "PRIMARY"
+        else "grain_secondary_settlements"
+    )
+
+    is_super = any(
+        role in (current_user.roles or [])
+        for role in ("admin", "owner")
+    )
+
+    if not is_super:
+        permissions = get_effective_permissions(current_user, db)
+
+        if permissions.get(permission_module, {}).get("delete") is not True:
+            raise HTTPException(
+                status_code=403,
+                detail="No tiene permiso para eliminar este tipo de liquidación"
+            )
     # 1. Movimientos de Grano vinculados -> restaurar a NO liquidados
     movements = db.query(grain_models.GrainMovement).filter(
         grain_models.GrainMovement.settlement_id == settlement_id

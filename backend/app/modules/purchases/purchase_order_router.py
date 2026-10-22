@@ -1,3 +1,4 @@
+from app.modules.inventory.product_operational import require_operational_product
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
@@ -53,7 +54,12 @@ def _calculate_line(line_data: dict) -> dict:
     }
 
 def _recalc_total(order: PurchaseOrder):
-    order.total_amount = float(sum(Decimal(str(l.total_amount)) for l in order.lines))
+    order.total_amount = float(
+        sum((Decimal(str(l.total_amount)) for l in order.lines), Decimal("0"))
+    )
+    order.total_vat = float(
+        sum((Decimal(str(l.vat_amount)) for l in order.lines), Decimal("0"))
+    )
     # Purchase Order might not have cost/margin since it IS the cost
 
 def _log_history(db: Session, order_id: str, action: str, details: Optional[str] = None, current_user: Optional[User] = None):
@@ -86,6 +92,11 @@ def create_purchase_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("purchase_orders", "create"))
 ):
+    # Verificar productos antes de crear la orden de compra.
+    for line in data.lines:
+        if line.product_id:
+            require_operational_product(db, line.product_id)
+
     entity = db.query(Entity).filter(Entity.id == data.entity_id).first()
     if not entity:
         raise HTTPException(status_code=404, detail="El proveedor especificado no existe")
@@ -94,8 +105,7 @@ def create_purchase_order(
     pv = "0001" 
     
     if not order_data.get("number"):
-        order_data["number"] = _generate_next_number(pv, db)
-        numbering_service.increment_last_number(db, pv, "OC")
+        order_data["number"] = numbering_service.reserve_next_number(db, pv, "OC")
 
     db_order = PurchaseOrder(**order_data, status=OrderStatus.CONFIRMED)
     db.add(db_order)
@@ -196,6 +206,29 @@ def update_purchase_order(
     has_active_dn = any(dn.status != DeliveryNoteStatus.CANCELLED for dn in db_order.delivery_notes)
     if has_active_dn:
         raise HTTPException(status_code=409, detail="No se puede editar una OC con recepciones activas.")
+
+    # Validar productos antes de reemplazar las líneas.
+    # Los productos históricos se conservan si no se incrementa
+    # su cantidad total ni se cambia el producto.
+    from collections import defaultdict
+
+    previous = defaultdict(float)
+    incoming = defaultdict(float)
+
+    for old_line in db_order.lines:
+        previous[str(old_line.product_id)] += float(old_line.qty or 0)
+
+    for line in data.lines:
+        if not line.product_id:
+            raise HTTPException(
+                status_code=400,
+                detail="La línea debe tener un producto"
+            )
+        incoming[str(line.product_id)] += float(line.qty or 0)
+
+    for product_id, new_qty in incoming.items():
+        if new_qty > previous.get(product_id, 0) + 0.000001:
+            require_operational_product(db, product_id)
 
     # 1. Actualizar cabecera
     order_data = data.model_dump(exclude={"lines"})

@@ -93,7 +93,7 @@ export default function WindowFrame({ window: win, component: Component }) {
     };
   }, [isDragging, isResizing, win.id, updateWindow]); // dependencies
 
-  if (win.isMinimized) return null;
+  // quintal-hybrid-phase1: mantener montado el formulario al minimizar.
 
   const style = {
     left: win.isMaximized ? 0 : win.x,
@@ -106,8 +106,9 @@ export default function WindowFrame({ window: win, component: Component }) {
   return (
     <div
       className={`${s.frame} ${win.isMaximized ? s.maximized : ""} animate-scale`}
-      style={style}
-      onMouseDown={() => focusWindow(win.id)}
+      style={{ ...style, ...(win.isMinimized ? { visibility: 'hidden', pointerEvents: 'none' } : {}) }}
+      aria-hidden={win.isMinimized}
+      onMouseDown={() => { if (!win.isMinimized) focusWindow(win.id); }}
       ref={frameRef}
     >
       <div
@@ -124,6 +125,18 @@ export default function WindowFrame({ window: win, component: Component }) {
           )}
         </div>
         <div className={s.controls}>
+          {win.type === 'sales-order' && win.props?.mode === 'new' && (
+            <button
+              className={s.btn}
+              title="Abrir otra orden nueva en Chrome (no transfiere los datos de esta ventana)"
+              onClick={(e) => {
+                e.stopPropagation();
+                window.open('/standalone/ordenes-venta/nueva', '_blank', 'width=1400,height=900');
+              }}
+            >
+              <ArrowUpRight size={15} />
+            </button>
+          )}
           <button
             onClick={(e) => {
               e.stopPropagation();

@@ -96,3 +96,24 @@
 .resizeHandle:hover {
     opacity: 1;
 }
+/* quintal-hybrid-phase1: armonía con el dashboard */
+.frame { background: #101729; border: 1px solid #33415f; box-shadow: 0 20px 65px rgba(0,0,0,.45); }
+.header { background: #202c46; border-bottom: 1px solid #33415f; height: 42px; }
+.title { color: #f8fafc; font-size: 13px; }
+.btn { color: #c4b5fd; }
+.btn:hover { background: #354264; color: #fff; }
+.content { background: #101729; }
+
+/* QUINTAL_WORKSPACE_SALES_V3 */
+.frame {background:#101729;border:1px solid #354361;border-radius:15px;
+ box-shadow:0 24px 75px #0206178c;}
+.header {height:44px;background:#202c46;border-bottom:1px solid #354361;
+ padding:0 14px;}
+.title {font-size:13px;font-weight:750;color:#f8fafc;}
+.controls {gap:5px;}
+.btn {width:30px;height:30px;border-radius:8px;color:#b8c5dc;}
+.btn:hover {background:#354361;color:#fff;}
+.close:hover {background:#9f354a;color:#fff;}
+.content {background:#101729;overscroll-behavior:contain;}
+.maximized {border-radius:0;}
+.resizeHandle {background:linear-gradient(135deg,transparent 50%,#6955cf 50%);}

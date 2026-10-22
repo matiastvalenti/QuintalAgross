@@ -577,7 +577,14 @@ def ensure_system_roles(db: Session):
         modules = ["sales_orders", "sales_delivery", "sales_invoices", "sales_quotes", "customers", 
                    "purchase_orders", "purchase_delivery", "purchase_invoices", "suppliers", 
                    "products", "items", "stock_moves", "service_works", "employee_expenses", "employee_expenses_all", "employee_review", "employee_funds", "employee_reconciliation", "employee_expense_exceptions",
-                   "warehouses", "cash", "banks", "cheques", "payments", "ledger", "journal", "accounting_reports", "users"]
+                   "warehouses",
+                    "grain_primary_settlements",
+                    "grain_secondary_settlements",
+                    "grain_contracts",
+                    "grain_movements",
+                    "grain_stock",
+                    "cash", "banks", "cheques", "payments",
+                    "ledger", "journal", "accounting_reports", "users"]
         return {m: {"view": True, "create": True, "edit": True, "delete": True} for m in modules}
 
     def get_read_only():
@@ -629,9 +636,15 @@ def ensure_system_roles(db: Session):
             new_role = Role(**r_data)
             db.add(new_role)
         else:
-            # Forzamos actualización de perfiles de sistema para asegurar granularidad
             if role.is_system:
-                role.permissions = r_data["permissions"]
+                current_permissions = dict(role.permissions or {})
+                default_permissions = r_data["permissions"]
+
+                for module, actions in default_permissions.items():
+                    if module not in current_permissions:
+                        current_permissions[module] = actions.copy()
+
+                role.permissions = current_permissions
                 role.description = r_data["description"]
     db.commit()
 

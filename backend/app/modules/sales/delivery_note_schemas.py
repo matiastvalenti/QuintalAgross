@@ -92,7 +92,7 @@ class DeliveryNoteHistoryResponse(BaseModel):
 class CreateDeliveryNoteFromOV(BaseModel):
     """Crear remito desde una OV. Lines define qty a entregar por OVLine."""
     warehouse_id: str
-    number: str
+    number: Optional[str] = None
     notes: Optional[str] = None
     cost_center: int = 1
     currency: Optional[str] = None
@@ -237,7 +237,7 @@ class CreateDeliveryNoteDirect(BaseModel):
     """Crear remito directo (sin OV previa). Generará OV automática."""
     entity_id: str
     warehouse_id: str
-    number: str
+    number: Optional[str] = None
     date: Optional[datetime] = None
     notes: Optional[str] = None
     pv: Optional[str] = None

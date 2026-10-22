@@ -21,7 +21,7 @@ def generate_interest_debit_note(receipt_id: str, amount: float, db: Session, no
     # 1. Determinar número de comprobante
     # Por ahora hardcoded PV 0001 (o el del recibo si es posible)
     pv = receipt.number.split("-")[0] if "-" in receipt.number else "0001"
-    full_number = numbering_service.get_next_number(db, pv, "NDA") # Default to NDA for interests
+    full_number = numbering_service.reserve_next_number(db, pv, "NDA") # Default to NDA for interests
     
     # 2. Crear cabecera de ND
     dn = Document(
@@ -69,6 +69,6 @@ def generate_interest_debit_note(receipt_id: str, amount: float, db: Session, no
     
     # 5. Incrementar contador
     pv_code = full_number.split("-")[0]
-    numbering_service.increment_last_number(db, pv_code, "NDA")
+    # El contador se reservó junto con el documento en esta transacción.
     
     return dn

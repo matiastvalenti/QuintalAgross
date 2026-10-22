@@ -20,7 +20,15 @@ def get_points_of_sale(db: Session = Depends(get_db)):
 @router.post("/pos", response_model=pos_schemas.PointOfSaleResponse, status_code=201)
 def create_pos(data: pos_schemas.PointOfSaleCreate, db: Session = Depends(get_db)):
     
-    db_pos = PointOfSale(pv=data.pv, name=data.name, active=data.active)
+    pv_code = data.pv.strip().zfill(4)
+    if not pv_code.isdigit():
+        raise HTTPException(status_code=422, detail="El código del PV debe ser numérico.")
+
+    existing = db.query(PointOfSale).filter(PointOfSale.pv == pv_code).first()
+    if existing:
+        raise HTTPException(status_code=409, detail="Ya existe un punto de venta con ese código.")
+
+    db_pos = PointOfSale(pv=pv_code, name=data.name.strip(), active=data.active)
     db.add(db_pos)
     db.flush()
     
@@ -42,20 +50,48 @@ def update_pos(pos_id: str, data: pos_schemas.PointOfSaleUpdate, db: Session = D
     if not db_pos:
         raise HTTPException(status_code=404, detail="Punto de venta no encontrado.")
     
-    if data.pv: db_pos.pv = data.pv
-    if data.name: db_pos.name = data.name
-    if data.active is not None: db_pos.active = data.active
+    if data.pv is not None:
+        pv_code = data.pv.strip().zfill(4)
+        if not pv_code.isdigit():
+            raise HTTPException(status_code=422, detail="El código del PV debe ser numérico.")
+        if pv_code != db_pos.pv:
+            raise HTTPException(
+                status_code=409,
+                detail="No se permite cambiar el código de un punto de venta existente."
+            )
+
+    if data.name is not None:
+        if not data.name.strip():
+            raise HTTPException(status_code=422, detail="El nombre no puede estar vacío.")
+        db_pos.name = data.name.strip()
+
+    if data.active is not None:
+        db_pos.active = data.active
     
     if data.document_configs is not None:
         # Reemplazar configuraciones
-        db.query(PosDocumentConfig).filter(PosDocumentConfig.pos_id == pos_id).delete()
+        existing_configs = {
+            cfg.document_type: cfg
+            for cfg in db.query(PosDocumentConfig).filter(
+                PosDocumentConfig.pos_id == pos_id
+            ).all()
+        }
+
         for cfg in data.document_configs:
-            db_cfg = PosDocumentConfig(
-                pos_id=db_pos.id,
-                document_type=cfg.document_type,
-                last_number=cfg.last_number
-            )
-            db.add(db_cfg)
+            current = existing_configs.get(cfg.document_type)
+            if current:
+                if cfg.last_number < current.last_number:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"No se puede disminuir la numeración de {cfg.document_type}."
+                    )
+                current.last_number = cfg.last_number
+            else:
+                db.add(PosDocumentConfig(
+                    pos_id=db_pos.id,
+                    document_type=cfg.document_type,
+                    last_number=cfg.last_number
+                ))
             
     db.commit()
     db.refresh(db_pos)
@@ -67,9 +103,14 @@ def delete_pos(pos_id: str, db: Session = Depends(get_db)):
     if not db_pos:
         raise HTTPException(status_code=404, detail="Punto de venta no encontrado.")
     
-    db.delete(db_pos)
+    # Baja lógica: conservar historial y correlatividad.
+    db_pos.active = False
     db.commit()
-    return {"ok": True}
+    db.refresh(db_pos)
+    return {
+        "ok": True,
+        "message": "Punto de venta desactivado. Se conservan sus configuraciones y numeración."
+    }
 
 @router.get("/pos/next-number")
 def get_pos_next_number(pv: str, doc_type: str, db: Session = Depends(get_db)):

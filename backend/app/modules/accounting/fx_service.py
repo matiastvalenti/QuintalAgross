@@ -121,8 +121,7 @@ def generate_fx_adjustment(app_id: str, db: Session, mode: str = "FISCAL"):
         letter = to_doc.line or "A"
         doc_tag = f"ND{letter}" if result.sign == "ND" else f"NC{letter}"
         
-        doc_number = numbering_service.get_next_number(db, pv, doc_tag)
-        numbering_service.increment_last_number(db, pv, doc_tag)
+        doc_number = numbering_service.reserve_next_number(db, pv, doc_tag)
         
         notes = f"Ajuste automático por diferencia de cambio (TC {to_doc.exchange_rate} -> {app.exchange_rate}). Recibo: {app.from_document.number} [ID:{app.from_document_id}]"
         

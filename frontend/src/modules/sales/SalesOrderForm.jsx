@@ -54,6 +54,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
+import w from "./SalesOrderWorkspace.module.css"; // QUINTAL_SALES_WORKSPACE_V4
 import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/ui/TraceabilityStatusBadge";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkDeliveryNoteModal from "./ManualLinkDeliveryNoteModal";
@@ -93,14 +94,15 @@ export default function SalesOrderForm(props) {
   const [number, setNumber] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
   const [currency, setCurrency] = useState("USD");
-  const [exchangeRate, setExchangeRate] = useState(1); 
+  const [exchangeRate, setExchangeRate] = useState(1);
   const [observations, setObservations] = useState("");
+  const [salesTab, setSalesTab] = useState("products"); // QUINTAL_V6_SOLAPAS
   const [customerPo, setCustomerPo] = useState("");
   const [drawerState, setDrawerState] = useState({ open: false, type: null });
   const [salespersonId, setSalespersonId] = useState("");
   const [selectedConditionId, setSelectedConditionId] = useState("");
   const [status, setStatus] = useState("BORRADOR");
-  
+
   const [isReadOnly, setIsReadOnly] = useState(initialMode === 'edit');
   const [loadingLinkManager, setLoadingLinkManager] = useState(false);
 
@@ -179,19 +181,19 @@ export default function SalesOrderForm(props) {
       if (mode === "edit" && id) fetchSalesOrder(id);
     };
     window.addEventListener('delivery-note-changed', refreshOV);
-    
+
     // Escuchar eventos de la red de documentos
     const handleDocumentMessage = (e) => {
         const payload = e.data;
         if (!payload || payload.type !== 'QUINTAL_DOCUMENT_SAVED') return;
-        
+
         // Si el documento salvado está relacionado con esta OV, refrescar
         if (payload.salesOrderId === id || payload.documentType === 'sales-order') {
             refreshOV();
         }
     };
     window.addEventListener("message", handleDocumentMessage);
-    
+
     let bc;
     try {
         bc = new BroadcastChannel("quintal-documents");
@@ -230,18 +232,18 @@ export default function SalesOrderForm(props) {
     if (totalQty === 0) return { delivered: 0, invoiced: 0, paid: 0 };
     const delivered = items.reduce((acc, i) => acc + (parseFloat(i.qty_delivered) || 0), 0);
     const invoiced = items.reduce((acc, i) => acc + (parseFloat(i.qty_invoiced) || 0), 0);
-    
+
     // Calcular suma de cobros de facturas vinculadas
     const paidSum = invoices.reduce((acc, inv) => {
       // Usar total_amount si está cerrada, o sumatoria de cobros si no
       if (inv.status === 'CLOSED' || inv.status === 'PAID') return acc + (inv.total_amount || 0);
       return acc + (inv.total_amount_paid || 0);
     }, 0);
-    
+
     const orderTotal = totals.total;
     // Si la orden no tiene total (borrador vacío), el progreso es 0
     let paidPct = orderTotal > 0 ? (paidSum / orderTotal) * 100 : 0;
-    
+
     // Heurística: Si hay facturas y todas están cerradas, forzar 100%
     if (invoices.length > 0 && invoices.every(inv => inv.status === 'CLOSED' || inv.status === 'PAID')) {
       paidPct = 100;
@@ -254,11 +256,11 @@ export default function SalesOrderForm(props) {
     };
   }, [items, invoices, totals.total]);
 
-  
+
   const invoicedAmount = useMemo(() => invoices.reduce((acc, inv) => acc + (inv.total_amount || 0), 0), [invoices]);
   const deliveredLts = useMemo(() => items.reduce((acc, item) => acc + (parseFloat(item.qty_delivered) || 0), 0), [items]);
   const orderedLts = useMemo(() => items.reduce((acc, item) => acc + (parseFloat(item.qty) || 0), 0), [items]);
-  
+
   const nextLogicalAction = useMemo(() => {
     if (progress.delivered < 100) return 'REMITO';
     if (progress.invoiced < 100) return 'FACTURA';
@@ -275,7 +277,7 @@ export default function SalesOrderForm(props) {
     if (!linkManagerDoc) return status;
     const isDN = linkManagerDoc.type === 'REMITO';
     let totalDelivered = 0, totalInvoiced = 0, totalOrdered = 0;
-    
+
     items.forEach(item => {
       const lineLink = linkManagerDoc.lines.find(l => l.source_sales_line_id === item.id);
       let simD = parseFloat(item.qty_delivered || 0);
@@ -293,7 +295,7 @@ export default function SalesOrderForm(props) {
     const dPct = totalDelivered / totalOrdered, iPct = totalInvoiced / totalOrdered;
     const isDT = dPct >= 0.999, isDP = dPct > 0.001 && !isDT;
     const isIT = iPct >= 0.999, isIP = iPct > 0.001 && !isIT;
-    
+
     if (isDT && isIT) return 'COMPLETED';
     if (isDT && isIP) return 'REMITIDO_TOTAL_FACTURADO_PARCIAL';
     if (isDT) return 'FULLY_DELIVERED';
@@ -401,8 +403,8 @@ export default function SalesOrderForm(props) {
     }
 
     if (data.lines) {
-      setItems(data.lines.map((l) => ({ 
-        ...l, 
+      setItems(data.lines.map((l) => ({
+        ...l,
         id: l.id || Math.random(),
         _unit_content: l.product?.quantity_per_container || 1,
         _unit_label: l.product?.container?.unit?.short_name || '',
@@ -435,10 +437,10 @@ export default function SalesOrderForm(props) {
       cost_center: parseInt(ctroCosto),
       lines: items.map((item, idx) => {
         const { _unit_content, _unit_label, id: _localId, ...rest } = item;
-        const linePayload = { 
-          ...rest, 
+        const linePayload = {
+          ...rest,
           line_order: idx,
-          unit_cost: item.cost_price || item.unit_cost || 0 
+          unit_cost: item.cost_price || item.unit_cost || 0
         };
         // Preserve DB IDs, discard frontend-generated random numbers
         if (_localId && !String(_localId).startsWith("0.")) {
@@ -483,13 +485,13 @@ export default function SalesOrderForm(props) {
     setLoadingLinkManager(true);
     try {
       const token = localStorage.getItem("token");
-      const url = type === 'REMITO' 
-        ? `${API_URL}/sales/delivery-notes/${docId}` 
+      const url = type === 'REMITO'
+        ? `${API_URL}/sales/delivery-notes/${docId}`
         : `${API_URL}/accounting/documents/${docId}`;
-      
+
       const res = await fetch(url, { headers: { Authorization: `Bearer ${token}` }});
       if (!res.ok) throw new Error("Error loading doc");
-      
+
       const data = await res.json();
       // Filter lines that belong to THIS Sales Order
       const linkedLines = (data.lines || []).filter(l => {
@@ -530,7 +532,7 @@ export default function SalesOrderForm(props) {
 
   const handleUpdateLinkQty = async () => {
     if (!linkManagerDoc) return;
-    
+
     // Check if anything changed
     const changes = linkManagerDoc.lines.filter(l => l.newQty !== l.originalQty);
     if (changes.length === 0) {
@@ -543,13 +545,13 @@ export default function SalesOrderForm(props) {
       // For each change, we could call an update-link endpoint
       // To simplify for the user requirement: "If I modify to 0 should unlink it"
       // and "If I modify from 10 to 5, only keep 5 linked"
-      
+
       // We'll process them sequentially for now (ideally a bulk endpoint)
       for (const change of changes) {
-        const endpoint = linkManagerDoc.type === 'REMITO' 
-          ? `${API_URL}/sales/delivery-notes/adjust-link` 
+        const endpoint = linkManagerDoc.type === 'REMITO'
+          ? `${API_URL}/sales/delivery-notes/adjust-link`
           : `${API_URL}/accounting/documents/adjust-link`;
-        
+
         await fetch(endpoint, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -560,7 +562,7 @@ export default function SalesOrderForm(props) {
           })
         });
       }
-      
+
       showToast("Vínculos actualizados correctamente", "success");
       setLinkManagerDoc(null);
       fetchSalesOrder(); // Refresh to see updated qty_delivered
@@ -644,11 +646,11 @@ export default function SalesOrderForm(props) {
 
   const handleOpenInvoiceModal = () => {
     if (!id) return showToast("Guarde la orden antes de facturar", "warning");
-    
+
     // Si la orden ya está totalmente facturada (o el usuario quiere vincular algo ya existente)
     // abrimos directamente el selector de vínculos manuales para Facturas/Pagos.
     const totalPending = items.reduce((acc, item) => acc + (parseFloat(item.qty || 0) - parseFloat(item.qty_invoiced || 0)), 0);
-    
+
     if (totalPending <= 0 && invoices.length > 0) {
       setIsManualInvoiceLinkOpen(true);
       return;
@@ -661,7 +663,7 @@ export default function SalesOrderForm(props) {
       const pendingPkgs = factor > 1 ? pendingUnits / factor : pendingUnits;
       if (pendingPkgs > 0) initial[item.id] = pendingPkgs;
     });
-    
+
     if (Object.keys(initial).length === 0) {
       setIsManualInvoiceLinkOpen(true);
     } else {
@@ -678,7 +680,7 @@ export default function SalesOrderForm(props) {
         const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
         const qtyUnits = factor > 1 ? qtyPkgs * factor : qtyPkgs;
         const lineName = item.product_name || item.product?.name || item.description || item.name || item.concept || item.item_name || '';
-        
+
         return {
           ...item,
           product_id: item.product_id || item.product?.id,
@@ -722,7 +724,7 @@ export default function SalesOrderForm(props) {
       lines: selectedLines
     };
     localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify(draftData));
-    
+
     openNuevaFactura({ draft_id: draftId });
   };
 
@@ -751,7 +753,7 @@ export default function SalesOrderForm(props) {
       prev.map((i) => {
         if (i.id !== itemId) return i;
         const newItem = { ...i, [field]: value };
-        
+
         // Handle numeric conversion for core fields
         if (field === 'qty_packages') {
             newItem.qty_packages = Number(value);
@@ -771,7 +773,7 @@ export default function SalesOrderForm(props) {
             newItem.unit_cost = val; // Sync both fields
         }
         if (field === 'discount_pct') newItem.discount_pct = Number(value);
-        
+
         return newItem;
       })
     );
@@ -787,7 +789,7 @@ export default function SalesOrderForm(props) {
 
   const searchProducts = async (q) => {
     const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/inventory/products/?q=${q}&active=true`, {
+    const res = await fetch(`${API_URL}/inventory/products/?q=${q}&active=true&operational_enabled=true`, {
       headers: { Authorization: `Bearer ${token}` },
     });
     return res.json();
@@ -811,16 +813,16 @@ export default function SalesOrderForm(props) {
   return (
     <>
       {loadingLinkManager && <LoadingScreen message="Cargando Gestor de Vínculos..." />}
-      <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`}>
+      <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${w.workspace} ${isStandalone ? w.workspaceStandalone : ''}`}>
           {/* Header Section */}
-          <div className={s.headerLine} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12 }}>
-              <div className={s.compactHeaderTitle}>
+          <div className={`${s.headerLine} ${w.headerLine}`} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12 }}>
+              <div className={`${s.compactHeaderTitle} ${w.compactHeaderTitle}`}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <h1 style={{ fontSize: '15px', margin: 0, fontWeight: 900, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                          {mode === 'new' ? 'Nueva Orden de Venta' : `Orden de Venta`}
-                          {isReadOnly && <span className={s.readOnlyBadge}>MODO VISTA</span>}
+                          {isStandalone ? (mode === 'new' ? 'Nueva Orden de Venta' : 'Orden de Venta') : 'Datos de la operación'}
+                          {isReadOnly && <span className={`${s.readOnlyBadge} ${w.readOnlyBadge}`}>MODO VISTA</span>}
                       </h1>
-                      <div className={s.headerMeta}>
+                      <div className={`${s.headerMeta} ${w.headerMeta}`}>
                           <span>{mode === 'new' ? 'Nueva Orden' : `OV ${joinFullNumber(pv, number)}`}</span>
                           <span>&middot;</span>
                           <span>{date ? (date.includes('T') ? new Date(date).toLocaleDateString('es-AR') : date.split('-').reverse().join('/')) : 'S/F'}</span>
@@ -832,31 +834,10 @@ export default function SalesOrderForm(props) {
                       </div>
                   </div>
               </div>
-              <div className={s.headerActions}>
-                  {isReadOnly ? (
-                    <button 
-                      className={s.saveBtn} 
-                      style={{ background: '#64748b', cursor: 'pointer' }} 
-                      onClick={() => {
-                        if (hasProgress) {
-                          showToast("Atención: esta orden tiene remitos o facturas vinculadas. Edite con cuidado.", "warning");
-                        }
-                        setIsReadOnly(false);
-                      }}
-                      title="Activar modo edición"
-                    >
-                        <Pencil size={16} />
-                        {hasProgress ? 'Bloqueado' : 'Editar'}
-                    </button>
-                  ) : (
-                    <button className={s.saveBtn} onClick={handleSave} disabled={saving}>
-                        {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
-                        {saving ? "Guardando..." : "Guardar"}
-                    </button>
-                  )}
-                  <div className={s.actionGroup}>
+              <div className={`${s.headerActions} ${w.headerActions}`}>
+                  <div className={`${s.actionGroup} ${w.actionGroup}`}>
                       <button
-                        className={s.actionBtn}
+                        className={`${s.actionBtn} ${w.actionBtn}`}
                         disabled={!id || pendingCount === 0}
                         onClick={handleOpenRemitoModal}
                         title={!id ? "Guarde la orden para remitir" : (pendingCount === 0 ? "No hay ítems pendientes de remitir" : `Remitir Pedido — ${pendingCount} ítem(s) pendiente(s)`)}
@@ -864,19 +845,19 @@ export default function SalesOrderForm(props) {
                       >
                           <Truck size={18} />
                       </button>
-                      <button 
-                        className={s.actionBtn} 
-                        disabled={!id} 
-                        onClick={handleOpenInvoiceModal} 
+                      <button
+                        className={`${s.actionBtn} ${w.actionBtn}`}
+                        disabled={!id}
+                        onClick={handleOpenInvoiceModal}
                         title={!id ? "Guarde la orden para facturar" : (pendingInvoicedCount === 0 ? "No hay ítems pendientes de facturar" : `Facturar Pedido — ${pendingInvoicedCount} ítem(s) pendiente(s)`)}
                         style={pendingInvoicedCount > 0 && id ? { background: '#f5f3ff', color: '#7c3aed', border: '1.5px solid #ddd6fe' } : {}}
                       >
                           <Receipt size={18} />
                       </button>
-                      <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/sales/sales-orders/${id}/pdf`, '_blank')} title={!id ? "Guarde para imprimir" : "Imprimir Orden de Venta"}>
+                      <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => window.open(`${API_URL}/sales/sales-orders/${id}/pdf`, '_blank')} title={!id ? "Guarde para imprimir" : "Imprimir Orden de Venta"}>
                           <Printer size={18} />
                       </button>
-                      <button className={s.actionBtn} disabled={!id} onClick={() => showToast("Funcionalidad de envío por correo en desarrollo", "info")} title="Enviar por Email">
+                      <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => showToast("Funcionalidad de envío por correo en desarrollo", "info")} title="Enviar por Email">
                           <Mail size={18} />
                       </button>
                   </div>
@@ -884,13 +865,18 @@ export default function SalesOrderForm(props) {
           </div>
 
           {/* Body: 2 Column Layout */}
-          <div className={s.bodyTwoColumns}>
-              {/* Columna Izquierda: Ítems y Productos */}
-              <div className={s.leftCol}>
+          <div className={`${s.bodyTwoColumns} ${w.bodyTwoColumns}`}>
+              <nav className={w.salesTabs} aria-label="Secciones de la orden">
+                  <button type="button" className={salesTab === 'products' ? w.salesTabActive : ''} aria-current={salesTab === 'products' ? 'page' : undefined} onClick={() => setSalesTab('products')}><ShoppingBag size={15}/> Productos <span>{items.length}</span></button>
+                  <button type="button" className={salesTab === 'notes' ? w.salesTabActive : ''} aria-current={salesTab === 'notes' ? 'page' : undefined} onClick={() => setSalesTab('notes')}><FileText size={15}/> Observaciones {observations.trim() ? <span>●</span> : null}</button>
+                  <button type="button" className={salesTab === 'docs' ? w.salesTabActive : ''} aria-current={salesTab === 'docs' ? 'page' : undefined} onClick={() => setSalesTab('docs')}><Receipt size={15}/> Documentos asociados</button>
+              </nav>
+              {/* Productos: ocupan el ancho completo del formulario */}
+              <div className={`${s.leftCol} ${w.leftCol}`} style={{display: salesTab === "products" ? undefined : "none"}}>
                   {!isReadOnly && (
-                      <div className={s.searchRibbon}>
-                          <Autocomplete 
-                              onSearch={searchProducts} 
+                      <div className={`${s.searchRibbon} ${w.searchRibbon}`}>
+                          <Autocomplete
+                              onSearch={searchProducts}
                               onSelect={(p) => { handleAddItem(p); }}
                               renderItem={(item) => (
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: 12 }}>
@@ -899,9 +885,9 @@ export default function SalesOrderForm(props) {
                                           <div style={{ fontSize: 10, fontWeight: 700, color: '#64748b' }}>{item.sku || 'N/A'} · {item.brand || item.subcategory?.name}</div>
                                       </div>
                                       <div style={{ textAlign: 'right' }}>
-                                          <div style={{ 
-                                              fontSize: 10, 
-                                              fontWeight: 900, 
+                                          <div style={{
+                                              fontSize: 10,
+                                              fontWeight: 900,
                                               color: item.total_available > 0.1 ? '#059669' : '#dc2626',
                                               background: item.total_available > 0.1 ? '#ecfdf5' : '#fef2f2',
                                               padding: '2px 8px',
@@ -916,7 +902,7 @@ export default function SalesOrderForm(props) {
                                       </div>
                                   </div>
                               )}
-                              placeholder="Escriba para buscar productos para añadir..."
+                              placeholder="Buscar producto por nombre o código..."
                               variant="glass"
                               icon={<Search size={16} style={{ color: 'var(--primary)' }}/>}
                               minChars={0}
@@ -925,37 +911,37 @@ export default function SalesOrderForm(props) {
                       </div>
                   )}
 
-                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden', flex: 1, minHeight: 0 }}>
+                  <div className={`${s.bentoContainer} ${w.bentoContainer}`} style={{ padding: 0, overflow: 'hidden', flex: 1, minHeight: 0 }}>
                       {items.length > 0 ? (
-                        <>
+                        <div className={w.productsGridViewport} /* QUINTAL_V8_GRILLA_SCROLL */ role="region" aria-label="Productos de la orden" tabIndex={0}>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader}>
-                                    <div className={s.th}>PRODUCTO</div>
-                                    <div className={s.th}>ENVASES</div>
-                                    <div className={s.th}>UNIDADES</div>
-                                    <div className={s.th}>COSTO</div>
-                                    <div className={s.th}>P. UNIT</div>
-                                    <div className={s.th}>DTO%</div>
-                                    <div className={s.th}>IVA%</div>
-                                    <div className={s.th} style={{ textAlign: 'right' }}>UTILIDAD</div>
-                                    <div className={s.th} style={{ textAlign: 'right' }}>SUBTOTAL</div>
+                                <div className={`${s.tableHeader} ${w.tableHeader}`}>
+                                    <div className={`${s.th} ${w.th}`}>PRODUCTO</div>
+                                    <div className={`${s.th} ${w.th}`}>ENVASES</div>
+                                    <div className={`${s.th} ${w.th}`}>UNIDADES</div>
+                                    <div className={`${s.th} ${w.th}`}>COSTO</div>
+                                    <div className={`${s.th} ${w.th}`}>P. UNIT</div>
+                                    <div className={`${s.th} ${w.th}`}>DTO%</div>
+                                    <div className={`${s.th} ${w.th}`}>IVA%</div>
+                                    <div className={`${s.th} ${w.th}`} style={{ textAlign: 'right' }}>UTILIDAD</div>
+                                    <div className={`${s.th} ${w.th}`} style={{ textAlign: 'right' }}>SUBTOTAL</div>
                                     <div></div>
                                 </div>
                             )}
-                            <div className={s.itemsList}>
+                            <div className={`${s.itemsList} ${w.itemsList}`}>
                                 {items.map(item => {
                                     if (isReadOnly) {
                                         const qtyDelivered = parseFloat(item.qty_delivered) || 0;
                                         const qtyOrdered = parseFloat(item.qty) || 0;
                                         const qtyPackages = item.qty_packages;
                                         const hasPackages = qtyPackages !== undefined && qtyPackages !== null;
-                                        
+
                                         const totalQty = qtyOrdered;
                                         const subtotalNeto = totalQty * (item.unit_price || 0) * (1 - (item.discount_pct || 0)/100);
                                         const vatAmount = subtotalNeto * (item.vat_rate || 0.21);
                                         const totalAmount = subtotalNeto + vatAmount;
                                         const utilidad = (item.cost_price > 0 && item.unit_price > 0) ? ((item.unit_price * (1 - (item.discount_pct||0)/100)) - item.cost_price) * totalQty : 0;
-                                        
+
                                         return (
                                             <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
@@ -968,7 +954,7 @@ export default function SalesOrderForm(props) {
                                                         </div>
                                                     )}
                                                 </div>
-                                                
+
                                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569', alignItems: 'center' }}>
                                                     {hasPackages ? (
                                                         <>
@@ -978,11 +964,11 @@ export default function SalesOrderForm(props) {
                                                     ) : (
                                                         <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {totalQty.toFixed(2)} {item._unit_label || 'u'}</div>
                                                     )}
-                                                    
+
                                                     <div><span style={{ fontWeight: 800 }}>Costo:</span> {fmtValue(item.cost_price)}</div>
                                                     <div><span style={{ fontWeight: 800 }}>Precio:</span> {fmtValue(item.unit_price)} / {item._unit_label || 'u'}</div>
                                                     <div><span style={{ fontWeight: 800 }}>Comisión:</span> <span style={{ color: '#059669', fontWeight: 700 }}>{fmtValue(utilidad)}</span></div>
-                                                    
+
                                                     <div><span style={{ fontWeight: 800 }}>Subtotal:</span> {fmtValue(subtotalNeto)}</div>
                                                     <div><span style={{ fontWeight: 800 }}>IVA:</span> {fmtValue(vatAmount)}</div>
                                                     <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Total:</span> {fmtValue(totalAmount)}</div>
@@ -990,38 +976,38 @@ export default function SalesOrderForm(props) {
                                             </div>
                                         );
                                     }
-                                    
+
                                     const qtyDelivered = parseFloat(item.qty_delivered) || 0;
                                     const qtyOrdered = parseFloat(item.qty) || 0;
                                     const isPending = qtyOrdered - qtyDelivered > 0;
                                     return (
-                                        <div key={item.id} className={s.tableRow} style={isPending && isReadOnly ? { borderLeft: '3px solid #f59e0b' } : {}}>
+                                        <div key={item.id} className={`${s.tableRow} ${w.tableRow}`} style={isPending && isReadOnly ? { borderLeft: '3px solid #f59e0b' } : {}}>
                                             <div style={{ padding: '4px 0', overflow: 'hidden' }}>
-                                                <input 
-                                                    type="text" 
-                                                    className={s.tableInput} 
-                                                    value={item.description || item.name || item.product?.name || ''} 
-                                                    onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)} 
+                                                <input
+                                                    type="text"
+                                                    className={`${s.tableInput} ${w.tableInput}`}
+                                                    value={item.description || item.name || item.product?.name || ''}
+                                                    onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)}
                                                     placeholder="Ingrese concepto..."
                                                     style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: 'transparent' }}
                                                 />
                                                 <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>{item.brand || item.product?.brand?.name}</div>
                                             </div>
-                                            <input type="number" className={s.tableInput} value={item.qty_packages !== undefined ? item.qty_packages : (item.qty || 0)} onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)} readOnly={hasProgress || isReadOnly} style={{ background: (hasProgress || isReadOnly) ? '#f8fafc' : '#fff' }} />
+                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item._unit_content > 1 ? (item.qty_packages ?? 0) : ''} onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)} readOnly={hasProgress || isReadOnly || !(item._unit_content > 1)} placeholder={item._unit_content > 1 ? '0' : '—'} title={item._unit_content > 1 ? `Contenido: ${item._unit_content} unidades por envase` : 'Presentación no configurada: cargar unidades directamente'}  />
                                             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                                                <input type="number" className={s.tableInput} value={item.qty || 0} onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)} />
+                                                <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item.qty || 0} onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)} />
                                                 <span style={{ fontSize: 9, fontWeight: 800 }}>{item._unit_label}</span>
                                             </div>
-                                            <input 
-                                                type="number" 
-                                                className={s.tableInput} 
-                                                value={item.cost_price || 0} 
-                                                onChange={(e) => handleUpdateItem(item.id, 'cost_price', e.target.value)} 
+                                            <input
+                                                type="number"
+                                                className={`${s.tableInput} ${w.tableInput}`}
+                                                value={item.cost_price || 0}
+                                                onChange={(e) => handleUpdateItem(item.id, 'cost_price', e.target.value)}
                                                 style={{ background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e' }}
                                                 title="Puedes editar el costo incluso si la orden está bloqueada"
                                             />
-                                            <input type="number" className={s.tableInput} value={item.unit_price || 0} onChange={(e) => handleUpdateItem(item.id, 'unit_price', e.target.value)} readOnly={hasProgress || isReadOnly} style={{ background: (hasProgress || isReadOnly) ? '#f8fafc' : '#fff' }} />
-                                            <input type="number" className={s.tableInput} value={item.discount_pct || 0} onChange={(e) => handleUpdateItem(item.id, 'discount_pct', e.target.value)} readOnly={hasProgress || isReadOnly} style={{ background: (hasProgress || isReadOnly) ? '#f8fafc' : '#fff' }} />
+                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item.unit_price || 0} onChange={(e) => handleUpdateItem(item.id, 'unit_price', e.target.value)} readOnly={hasProgress || isReadOnly}  />
+                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item.discount_pct || 0} onChange={(e) => handleUpdateItem(item.id, 'discount_pct', e.target.value)} readOnly={hasProgress || isReadOnly}  />
                                             <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center' }}>{((item.vat_rate || 0.21) * 100).toFixed(0)}%</div>
                                             <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', textAlign: 'right' }}>
                                                 {fmtValue((item.cost_price > 0 && item.unit_price > 0) ? ( (item.unit_price * (1 - (item.discount_pct||0)/100)) - item.cost_price ) * (item.qty || 0) : 0)}
@@ -1036,245 +1022,272 @@ export default function SalesOrderForm(props) {
                                   );
                                 })}
                             </div>
-                        </>
-                      ) : (
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 0', minHeight: 80 }}>
-                            <Search size={24} style={{ marginBottom: 8, opacity: 0.3, color: 'var(--text-secondary)' }} />
-                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>Sin ítems cargados</div>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Buscá un producto para agregarlo a la orden</div>
                         </div>
+                      ) : (
+                        <div className={w.emptyProducts}>Todavía no hay productos en esta orden.</div>
                       )}
                   </div>
 
-                  {/* OBSERVACIONES (Debajo de productos, misma columna) */}
-                  <div className={s.sideBlock} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', gap: 6, height: 80, flexShrink: 0 }}>
-                      <div className={s.sideBlockTitle} style={{ margin: 0, padding: 0 }}><FileText size={12}/> OBSERVACIONES</div>
+              </div>
+
+              {/* Datos comerciales en la cabecera del formulario */}
+              <div className={`${s.rightCol} ${w.rightCol}`}>
+                  {/* Bloque Cliente */}
+                  <div className={`${s.sideBlock} ${w.sideBlock}`}>
+                      <div className={`${s.sideBlockTitle} ${w.sideBlockTitle}`}><User size={12}/> Datos de la venta</div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Cliente</label>
+                          {isReadOnly ? (
+                              <div className={`${s.sideInput} ${w.sideInput}`}>{entity?.name || '-'}</div>
+                          ) : (
+                              <div className={w.clientSearch}>
+                                  <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar por nombre o CUIT..." minChars={0} variant="side" />
+                              </div>
+                          )}
+                      </div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Punto de venta</label>
+                          {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{pv}</div> : (
+                              <select className={`${s.sideSelect} ${w.sideSelect}`} value={pv} onChange={(e) => setPv(e.target.value)}>
+                                  {pointsOfSale.map(p => <option key={p.pv} value={p.pv}>{p.pv}</option>)}
+                              </select>
+                          )}
+                      </div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Número de orden</label>
+                          {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{number}</div> : (
+                              <input className={`${s.sideInput} ${w.sideInput}`} value={number} onChange={e => setNumber(e.target.value)} onBlur={() => setNumber(padNumber(number))} />
+                          )}
+                      </div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Fecha</label>
+                          {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{date ? (date.includes('T') ? new Date(date).toLocaleDateString('es-AR') : date.split('-').reverse().join('/')) : '-'}</div> : (
+                              <input type="date" className={`${s.sideInput} ${w.sideInput}`} value={date} onChange={e => setDate(e.target.value)} />
+                          )}
+                      </div>
+                  </div>
+
+                  {/* Bloque Comercial */}
+                  <div className={`${s.sideBlock} ${w.sideBlock}`}>
+                      <div className={`${s.sideBlockTitle} ${w.sideBlockTitle}`}><ShoppingBag size={12}/> Condiciones comerciales</div>
+
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Depósito</label>
+                          {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{warehouses.find(w => w.id === warehouseId)?.name || warehouseId}</div> : (
+                              <select className={`${s.sideSelect} ${w.sideSelect}`} value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
+                                  <option value="">Seleccionar...</option>
+                                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                              </select>
+                          )}
+                      </div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Vendedor</label>
+                          {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{sellers.find(sl => sl.id === salespersonId)?.name || 'Ninguno'}</div> : (
+                              <select className={`${s.sideSelect} ${w.sideSelect}`} value={salespersonId} onChange={e => setSalespersonId(e.target.value)}>
+                                  <option value="">Ninguno</option>
+                                  {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
+                              </select>
+                          )}
+                      </div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Comisión %</label>
+                          <div className={`${s.sideInput} ${w.sideInput}`}>
+                              {salespersonId ? '2.00%' : '0.00%'}
+                          </div>
+                      </div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Centro de costo</label>
+                          {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{ctroCosto === '1' ? 'CC1' : 'CC2'}</div> : (
+                              <select className={`${s.sideSelect} ${w.sideSelect}`} value={ctroCosto} onChange={e => setCtroCosto(e.target.value)}>
+                                  <option value="1">CC1</option>
+                                  <option value="2">CC2</option>
+                              </select>
+                          )}
+                      </div>
+                      <div className={`${s.sideField} ${w.sideField}`}>
+                          <label>Condición de venta</label>
+                          {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div> : (
+                              <select className={`${s.sideSelect} ${w.sideSelect}`} value={selectedConditionId} onChange={e => setSelectedConditionId(e.target.value)}>
+                                  {saleConditions.map(c => <option key={c.id} value={c.id}>{c.description}</option>)}
+                              </select>
+                          )}
+                      </div>
+                      <div className={w.currencyRow}>
+                          <div className={`${s.sideField} ${w.sideField}`}>
+                              <label>Moneda</label>
+                              {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`} style={{ width: '60%' }}>{currency}</div> : (
+                                  <select className={`${s.sideSelect} ${w.sideSelect}`} value={currency} onChange={e => setCurrency(e.target.value)}>
+                                      <option value="USD">USD</option>
+                                      <option value="ARS">ARS</option>
+                                  </select>
+                              )}
+                          </div>
+                          <div className={`${s.sideField} ${w.sideField}`} style={{ flex: 1 }}>
+                              <label>Tipo de cambio</label>
+                              {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`} style={{ width: '50%' }}>{exchangeRate}</div> : (
+                                  <input type="number" className={`${s.sideInput} ${w.sideInput}`} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
+                              )}
+                          </div>
+                      </div>
+                  </div>
+              </div>
+              <section className={w.notesTabPanel} style={{display: salesTab === 'notes' ? undefined : 'none'}} aria-label="Observaciones de la orden">
+                  <h3>Observaciones de la orden</h3>
+                  <p>Indicaciones de entrega, acuerdos con el cliente u otras aclaraciones.</p>
+                  <div className={`${s.sideBlock} ${w.sideBlock}`} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', gap: 6, height: 80, flexShrink: 0 }}>
+                      <div className={`${s.sideBlockTitle} ${w.sideBlockTitle}`} style={{ margin: 0, padding: 0 }}><FileText size={12}/> OBSERVACIONES</div>
                       {isReadOnly ? (
                           <div style={{ flex: 1, overflowY: 'auto', fontSize: 11, color: '#475569', whiteSpace: 'pre-wrap', lineHeight: 1.4, padding: '2px 4px' }}>
                               {observations || 'Sin observaciones'}
                           </div>
                       ) : (
                           <textarea
-                              className={s.sideInput}
-                              style={{ flex: 1, resize: 'none', width: '100%', padding: '6px 8px', textAlign: 'left', lineHeight: 1.4, background: '#fff', border: '1px solid #cbd5e1' }}
+                              className={`${s.sideInput} ${w.sideInput}`}
+                              style={{ flex: 1, resize: 'none', width: '100%', padding: '6px 8px', textAlign: 'left', lineHeight: 1.4 }}
                               value={observations}
                               onChange={e => setObservations(e.target.value)}
                               placeholder="Añadir observaciones..."
                           />
                       )}
                   </div>
-              </div>
-
-              {/* Columna Derecha: Panel Lateral Administrativo */}
-              <div className={s.rightCol}>
-                  {/* Bloque Cliente */}
-                  <div className={s.sideBlock}>
-                      <div className={s.sideBlockTitle}><User size={12}/> CLIENTE</div>
-                      <div className={s.sideField}>
-                          <label>NOMBRE</label>
-                          {isReadOnly ? (
-                              <div className={s.sideInput}>{entity?.name || '-'}</div>
-                          ) : (
-                              <div style={{ width: '60%' }}>
-                                  <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="side" />
-                              </div>
-                          )}
-                      </div>
-                      <div className={s.sideField}>
-                          <label>PTO. VENTA</label>
-                          {isReadOnly ? <div className={s.sideInput}>{pv}</div> : (
-                              <select className={s.sideSelect} value={pv} onChange={(e) => setPv(e.target.value)}>
-                                  {pointsOfSale.map(p => <option key={p.pv} value={p.pv}>{p.pv}</option>)}
-                              </select>
-                          )}
-                      </div>
-                      <div className={s.sideField}>
-                          <label>NÚMERO</label>
-                          {isReadOnly ? <div className={s.sideInput}>{number}</div> : (
-                              <input className={s.sideInput} value={number} onChange={e => setNumber(e.target.value)} onBlur={() => setNumber(padNumber(number))} />
-                          )}
-                      </div>
-                      <div className={s.sideField}>
-                          <label>FECHA</label>
-                          {isReadOnly ? <div className={s.sideInput}>{date ? (date.includes('T') ? new Date(date).toLocaleDateString('es-AR') : date.split('-').reverse().join('/')) : '-'}</div> : (
-                              <input type="date" className={s.sideInput} value={date} onChange={e => setDate(e.target.value)} />
-                          )}
-                      </div>
-                  </div>
-
-                  {/* Bloque Comercial */}
-                  <div className={s.sideBlock}>
-                      <div className={s.sideBlockTitle}><ShoppingBag size={12}/> COMERCIAL</div>
-
-                      <div className={s.sideField}>
-                          <label>DEPÓSITO</label>
-                          {isReadOnly ? <div className={s.sideInput}>{warehouses.find(w => w.id === warehouseId)?.name || warehouseId}</div> : (
-                              <select className={s.sideSelect} value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
-                                  <option value="">Seleccionar...</option>
-                                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-                              </select>
-                          )}
-                      </div>
-                      <div className={s.sideField}>
-                          <label>VENDEDOR</label>
-                          {isReadOnly ? <div className={s.sideInput}>{sellers.find(sl => sl.id === salespersonId)?.name || 'Ninguno'}</div> : (
-                              <select className={s.sideSelect} value={salespersonId} onChange={e => setSalespersonId(e.target.value)}>
-                                  <option value="">Ninguno</option>
-                                  {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
-                              </select>
-                          )}
-                      </div>
-                      <div className={s.sideField}>
-                          <label>COMISIÓN %</label>
-                          <div className={s.sideInput} style={{ background: '#f8fafc', color: salespersonId ? '#1e293b' : '#94a3b8' }}>
-                              {salespersonId ? '2.00%' : '0.00%'}
-                          </div>
-                      </div>
-                      <div className={s.sideField}>
-                          <label>C. COSTO</label>
-                          {isReadOnly ? <div className={s.sideInput}>{ctroCosto === '1' ? 'CC1' : 'CC2'}</div> : (
-                              <select className={s.sideSelect} value={ctroCosto} onChange={e => setCtroCosto(e.target.value)}>
-                                  <option value="1">CC1</option>
-                                  <option value="2">CC2</option>
-                              </select>
-                          )}
-                      </div>
-                      <div className={s.sideField}>
-                          <label>CONDICIÓN</label>
-                          {isReadOnly ? <div className={s.sideInput}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div> : (
-                              <select className={s.sideSelect} value={selectedConditionId} onChange={e => setSelectedConditionId(e.target.value)}>
-                                  {saleConditions.map(c => <option key={c.id} value={c.id}>{c.description}</option>)}
-                              </select>
-                          )}
-                      </div>
-                      <div style={{ display: 'flex', gap: 8 }}>
-                          <div className={s.sideField} style={{ flex: 1 }}>
-                              <label>MONEDA</label>
-                              {isReadOnly ? <div className={s.sideInput} style={{ width: '60%' }}>{currency}</div> : (
-                                  <select className={s.sideSelect} style={{ width: '60%' }} value={currency} onChange={e => setCurrency(e.target.value)}>
-                                      <option value="USD">USD</option>
-                                      <option value="ARS">ARS</option>
-                                  </select>
-                              )}
-                          </div>
-                          <div className={s.sideField} style={{ flex: 1 }}>
-                              <label>T. CAMBIO</label>
-                              {isReadOnly ? <div className={s.sideInput} style={{ width: '50%' }}>{exchangeRate}</div> : (
-                                  <input type="number" className={s.sideInput} style={{ width: '50%' }} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
-                              )}
-                          </div>
-                      </div>
-                  </div>
-              </div>
+              </section>
           </div>
 
-          {/* Secondary Bottom Tray - Relaciones y Estado */}
-          <div className={s.relationsBar}>
-              
+          {/* Seguimiento y resumen histórico, disponibles al desplegar */}
+          <section className={w.documentsTabPanel} style={{display: salesTab === "docs" ? undefined : "none"}} aria-label="Documentos asociados">
+              <div className={w.documentsIntro}>
+                  <strong>Documentos asociados y seguimiento</strong>
+                  <span>Orden · Remitos · Facturas · Cobros · Comisiones</span>
+              </div>
+          <div className={`${s.relationsBar} ${w.relationsBar}`}>
+
               {/* OV */}
-              <div className={s.relationCard} onClick={() => setDrawerState({ open: true, type: 'OV' })}>
-                  <div className={s.nodeTitle} style={{ color: '#2563eb' }}>ORDEN DE VENTA</div>
-                  <div className={s.nodeBadge}>● Documento Actual</div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a', marginTop: 'auto' }}>{pv}-{number}</div>
-                  <div className={s.nodeMetric}>{new Date(date + 'T00:00:00').toLocaleDateString()}</div>
+              <div className={`${s.relationCard} ${w.relationCard}`} onClick={() => setDrawerState({ open: true, type: 'OV' })}>
+                  <div className={`${s.nodeTitle} ${w.nodeTitle}`} style={{ color: '#2563eb' }}>ORDEN DE VENTA</div>
+                  <div className={`${s.nodeBadge} ${w.nodeBadge}`}>● Documento Actual</div>
+                  <div className={`${s.nodeMetric} ${w.nodeMetric}`} style={{ color: '#0f172a', marginTop: 'auto' }}>{pv}-{number}</div>
+                  <div className={`${s.nodeMetric} ${w.nodeMetric}`}>{new Date(date + 'T00:00:00').toLocaleDateString()}</div>
               </div>
 
               <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
               {/* REMITO */}
-              <div className={s.relationCard} onClick={() => setDrawerState({ open: true, type: 'REMITO' })}>
-                  <div className={s.nodeTitle} style={{ color: progress.delivered > 0 ? '#0ea5e9' : '#0b132b' }}>REMITO</div>
-                  <div className={s.nodeStatus} style={{ color: progress.delivered >= 100 ? '#10b981' : progress.delivered > 0 ? '#f97316' : '#eab308' }}>
+              <div className={`${s.relationCard} ${w.relationCard}`} onClick={() => setDrawerState({ open: true, type: 'REMITO' })}>
+                  <div className={`${s.nodeTitle} ${w.nodeTitle}`} style={{ color: progress.delivered > 0 ? '#0ea5e9' : '#0b132b' }}>REMITO</div>
+                  <div className={`${s.nodeStatus} ${w.nodeStatus}`} style={{ color: progress.delivered >= 100 ? '#10b981' : progress.delivered > 0 ? '#f97316' : '#eab308' }}>
                     {progress.delivered >= 100 ? 'Completado' : progress.delivered > 0 ? 'Parcial' : 'Pendiente'}
                   </div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{deliveryNotes.length} remitos &middot; {Math.round(progress.delivered)}%</div>
-                  {nextLogicalAction === 'REMITO' && <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenRemitoModal(); }}>Generar</button>}
+                  <div className={`${s.nodeMetric} ${w.nodeMetric}`} style={{ color: '#0f172a' }}>{deliveryNotes.length} remitos &middot; {Math.round(progress.delivered)}%</div>
+                  {nextLogicalAction === 'REMITO' && <button className={`${s.relationAction} ${w.relationAction}`} onClick={(e) => { e.stopPropagation(); handleOpenRemitoModal(); }}>Generar</button>}
               </div>
 
               <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
               {/* FACTURA */}
-              <div className={s.relationCard} onClick={() => setDrawerState({ open: true, type: 'FACTURA' })}>
-                  <div className={s.nodeTitle} style={{ color: progress.invoiced > 0 ? '#f97316' : '#0b132b' }}>FACTURA</div>
-                  <div className={s.nodeStatus} style={{ color: progress.invoiced >= 100 ? '#10b981' : progress.invoiced > 0 ? '#f97316' : '#eab308' }}>
+              <div className={`${s.relationCard} ${w.relationCard}`} onClick={() => setDrawerState({ open: true, type: 'FACTURA' })}>
+                  <div className={`${s.nodeTitle} ${w.nodeTitle}`} style={{ color: progress.invoiced > 0 ? '#f97316' : '#0b132b' }}>FACTURA</div>
+                  <div className={`${s.nodeStatus} ${w.nodeStatus}`} style={{ color: progress.invoiced >= 100 ? '#10b981' : progress.invoiced > 0 ? '#f97316' : '#eab308' }}>
                     {progress.invoiced >= 100 ? 'Completado' : progress.invoiced > 0 ? 'Parcial' : 'Pendiente'}
                   </div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{invoices.length} facturas &middot; {Math.round(progress.invoiced)}%</div>
-                  {nextLogicalAction === 'FACTURA' && <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); setShowInvoiceModal(true); }}>Generar</button>}
+                  <div className={`${s.nodeMetric} ${w.nodeMetric}`} style={{ color: '#0f172a' }}>{invoices.length} facturas &middot; {Math.round(progress.invoiced)}%</div>
+                  {nextLogicalAction === 'FACTURA' && <button className={`${s.relationAction} ${w.relationAction}`} onClick={(e) => { e.stopPropagation(); setShowInvoiceModal(true); }}>Generar</button>}
               </div>
 
               <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
               {/* COBRO */}
-              <div className={s.relationCard} onClick={() => setDrawerState({ open: true, type: 'COBRO' })}>
-                  <div className={s.nodeTitle} style={{ color: progress.paid > 0 ? '#10b981' : '#0b132b' }}>COBRO</div>
-                  <div className={s.nodeStatus} style={{ color: progress.paid >= 100 ? '#10b981' : progress.paid > 0 ? '#f97316' : '#eab308' }}>
+              <div className={`${s.relationCard} ${w.relationCard}`} onClick={() => setDrawerState({ open: true, type: 'COBRO' })}>
+                  <div className={`${s.nodeTitle} ${w.nodeTitle}`} style={{ color: progress.paid > 0 ? '#10b981' : '#0b132b' }}>COBRO</div>
+                  <div className={`${s.nodeStatus} ${w.nodeStatus}`} style={{ color: progress.paid >= 100 ? '#10b981' : progress.paid > 0 ? '#f97316' : '#eab308' }}>
                     {progress.paid >= 100 ? 'Completado' : progress.paid > 0 ? 'Parcial' : 'Pendiente'}
                   </div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{invoices.filter(i => i.status === 'PAID' || i.status === 'CLOSED').length} recibos &middot; {Math.round(progress.paid)}%</div>
-                  {nextLogicalAction === 'COBRO' && <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Registrar</button>}
+                  <div className={`${s.nodeMetric} ${w.nodeMetric}`} style={{ color: '#0f172a' }}>{invoices.filter(i => i.status === 'PAID' || i.status === 'CLOSED').length} recibos &middot; {Math.round(progress.paid)}%</div>
+                  {nextLogicalAction === 'COBRO' && <button className={`${s.relationAction} ${w.relationAction}`} onClick={(e) => { e.stopPropagation(); handleOpenInvoiceModal(); }}>Registrar</button>}
               </div>
 
               <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
               {/* COMISIÓN */}
-              <div className={s.relationCard} onClick={() => setDrawerState({ open: true, type: 'COMISION' })}>
-                  <div className={s.nodeTitle} style={{ color: salespersonId ? '#8b5cf6' : '#0b132b' }}>COMISIÓN</div>
-                  <div className={s.nodeStatus} style={{ color: salespersonId ? '#10b981' : '#eab308' }}>
+              <div className={`${s.relationCard} ${w.relationCard}`} onClick={() => setDrawerState({ open: true, type: 'COMISION' })}>
+                  <div className={`${s.nodeTitle} ${w.nodeTitle}`} style={{ color: salespersonId ? '#8b5cf6' : '#0b132b' }}>COMISIÓN</div>
+                  <div className={`${s.nodeStatus} ${w.nodeStatus}`} style={{ color: salespersonId ? '#10b981' : '#eab308' }}>
                     {salespersonId ? 'Calculada' : 'Pendiente'}
                   </div>
-                  <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{salespersonId ? '2.00%' : '0%'}</div>
-                  {nextLogicalAction === 'COMISION' && <button className={s.relationAction} onClick={(e) => { e.stopPropagation(); }}>Liquidar</button>}
+                  <div className={`${s.nodeMetric} ${w.nodeMetric}`} style={{ color: '#0f172a' }}>{salespersonId ? '2.00%' : '0%'}</div>
+                  {nextLogicalAction === 'COMISION' && <button className={`${s.relationAction} ${w.relationAction}`} onClick={(e) => { e.stopPropagation(); }}>Liquidar</button>}
               </div>
           </div>
           {/* Operational Summary */}
-          <div className={s.summaryPanel}>
+          <div className={`${s.summaryPanel} ${w.summaryPanel}`}>
               <div className={s.summaryItem}>
-                  <div className={s.summaryLabel}>CLIENTE</div>
-                  <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
+                  <div className={`${s.summaryLabel} ${w.summaryLabel}`}>CLIENTE</div>
+                  <div className={`${s.summaryValue} ${w.summaryValue}`} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
               </div>
               <div className={s.summaryItem}>
-                  <div className={s.summaryLabel}>CONDICIÓN</div>
-                  <div className={s.summaryValue}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div>
+                  <div className={`${s.summaryLabel} ${w.summaryLabel}`}>CONDICIÓN</div>
+                  <div className={`${s.summaryValue} ${w.summaryValue}`}>{saleConditions.find(c => c.id === selectedConditionId)?.description || '-'}</div>
               </div>
               <div className={s.summaryItem}>
-                  <div className={s.summaryLabel}>ITEMS</div>
-                  <div className={s.summaryValue}>{items.length} ({orderedLts.toFixed(1)} u.)</div>
+                  <div className={`${s.summaryLabel} ${w.summaryLabel}`}>ITEMS</div>
+                  <div className={`${s.summaryValue} ${w.summaryValue}`}>{items.length} ({orderedLts.toFixed(1)} u.)</div>
               </div>
               <div className={s.summaryItem}>
-                  <div className={s.summaryLabel}>ESTADO</div>
-                  <div className={s.summaryValue} style={{ color: nextLogicalAction ? '#f97316' : '#10b981' }}>
+                  <div className={`${s.summaryLabel} ${w.summaryLabel}`}>ESTADO</div>
+                  <div className={`${s.summaryValue} ${w.summaryValue}`} style={{ color: nextLogicalAction ? '#f97316' : '#10b981' }}>
                       {nextLogicalAction ? 'Pend. ' + nextLogicalAction.charAt(0) + nextLogicalAction.slice(1).toLowerCase() : 'Completado'}
                   </div>
               </div>
               <div className={s.summaryItem}>
-                  <div className={s.summaryLabel}>VENDEDOR</div>
-                  <div className={s.summaryValue}>{sellers.find(sl => sl.id === salespersonId)?.name || 'Ninguno'}</div>
+                  <div className={`${s.summaryLabel} ${w.summaryLabel}`}>VENDEDOR</div>
+                  <div className={`${s.summaryValue} ${w.summaryValue}`}>{sellers.find(sl => sl.id === salespersonId)?.name || 'Ninguno'}</div>
               </div>
               <div className={s.summaryItem}>
-                  <div className={s.summaryLabel}>COMISIÓN</div>
-                  <div className={s.summaryValue}>{salespersonId ? '2.00%' : '0%'}</div>
+                  <div className={`${s.summaryLabel} ${w.summaryLabel}`}>COMISIÓN</div>
+                  <div className={`${s.summaryValue} ${w.summaryValue}`}>{salespersonId ? '2.00%' : '0%'}</div>
               </div>
               <div className={s.summaryItem}>
-                  <div className={s.summaryLabel}>MODIFICACIÓN</div>
-                  <div className={s.summaryValue}>{new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</div>
+                  <div className={`${s.summaryLabel} ${w.summaryLabel}`}>MODIFICACIÓN</div>
+                  <div className={`${s.summaryValue} ${w.summaryValue}`}>{new Date().toLocaleString('es-AR', { dateStyle: 'short', timeStyle: 'short' })}</div>
               </div>
           </div>
-
+          </section>
 
           {/* Footer with Totals */}
-          <div className={s.footerCompact}>
-              <div className={s.footerCompactItem}>
-                  <span className={s.footerCompactLabel}>NETO GRAVADO</span>
-                  <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
+          <div className={`${s.footerCompact} ${w.footerCompact}`}>
+              <div className={`${s.footerCompactItem} ${w.footerCompactItem}`}>
+                  <span className={`${s.footerCompactLabel} ${w.footerCompactLabel}`}>NETO GRAVADO</span>
+                  <span className={`${s.footerCompactValue} ${w.footerCompactValue}`}>{fmt(totals.net)}</span>
               </div>
-              <div className={s.footerCompactItem}>
-                  <span className={s.footerCompactLabel}>IVA DETERMINADO</span>
-                  <span className={s.footerCompactValue}>{fmt(totals.vat)}</span>
+              <div className={`${s.footerCompactItem} ${w.footerCompactItem}`}>
+                  <span className={`${s.footerCompactLabel} ${w.footerCompactLabel}`}>IVA DETERMINADO</span>
+                  <span className={`${s.footerCompactValue} ${w.footerCompactValue}`}>{fmt(totals.vat)}</span>
               </div>
-              <div className={s.footerCompactItem}>
-                  <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>TOTAL CARTERA</span>
-                  <span className={s.footerCompactTotal}>{fmt(totals.total)}</span>
+              <div className={`${s.footerCompactItem} ${w.footerCompactItem}`}>
+                  <span className={`${s.footerCompactLabel} ${w.footerCompactLabel}`} style={{ color: 'var(--primary)' }}>TOTAL DE LA ORDEN</span>
+                  <span className={`${s.footerCompactTotal} ${w.footerCompactTotal}`}>{fmt(totals.total)}</span>
+              </div>
+              <div className={w.saveArea}>
+{isReadOnly ? (
+                    <button
+                      className={`${s.saveBtn} ${w.saveBtn}`}
+                      style={{ background: '#64748b', cursor: 'pointer' }}
+                      onClick={() => {
+                        if (hasProgress) {
+                          showToast("Atención: esta orden tiene remitos o facturas vinculadas. Edite con cuidado.", "warning");
+                        }
+                        setIsReadOnly(false);
+                      }}
+                      title="Activar modo edición"
+                    >
+                        <Pencil size={16} />
+                        {hasProgress ? 'Bloqueado' : 'Editar'}
+                    </button>
+                  ) : (
+                    <button className={`${s.saveBtn} ${w.saveBtn}`} onClick={handleSave} disabled={saving}>
+                        {saving ? <div className={s.spinnerSmall} /> : <Save size={16} />}
+                        {saving ? "Guardando..." : "Guardar"}
+                    </button>
+                  )}
               </div>
           </div>
       </div>
@@ -1345,15 +1358,15 @@ export default function SalesOrderForm(props) {
               {items.map(item => {
                 const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || item._unit_content || 1);
                 const unitLabel = item._unit_label || item.unit_of_measure || 'LT';
-                
+
                 const orderedBaseQty = parseFloat(item.qty || 0);
                 const deliveredBaseQty = parseFloat(item.qty_delivered || 0);
                 const pendingBaseQty = Math.max(0, orderedBaseQty - deliveredBaseQty);
-                
+
                 const orderedPackages = Number((orderedBaseQty / factor).toFixed(2));
                 const deliveredPackages = Number((deliveredBaseQty / factor).toFixed(2));
                 const pendingPackages = Number((pendingBaseQty / factor).toFixed(2));
-                
+
                 const currentQty = remitoQtys[item.id] !== undefined ? remitoQtys[item.id] : pendingPackages;
                 const isSelected = currentQty > 0;
 
@@ -1552,9 +1565,9 @@ export default function SalesOrderForm(props) {
         </Modal>
       {/* Link Manager Modal */}
       {linkManagerDoc && (
-          <Modal 
-            open={!!linkManagerDoc} 
-            title={`Gestión de Vínculo: ${linkManagerDoc.type === 'REMITO' ? 'Remito' : 'Factura'} #${linkManagerDoc.number}`} 
+          <Modal
+            open={!!linkManagerDoc}
+            title={`Gestión de Vínculo: ${linkManagerDoc.type === 'REMITO' ? 'Remito' : 'Factura'} #${linkManagerDoc.number}`}
             onClose={() => setLinkManagerDoc(null)}
             wide
           >
@@ -1574,7 +1587,7 @@ export default function SalesOrderForm(props) {
                           </div>
                       </div>
                   </div>
-                  
+
                   <div style={{ borderRadius: 16, border: '1px solid #e2e8f0', overflow: 'hidden', marginBottom: 24 }}>
                       {/* Header */}
                       <div style={{ display: 'grid', gridTemplateColumns: '2fr 110px 110px 110px 140px', gap: 12, padding: '10px 16px', background: '#f8fafc', borderBottom: '2px solid #e2e8f0', fontSize: 10, fontWeight: 900, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', alignItems: 'center' }}>
@@ -1613,9 +1626,9 @@ export default function SalesOrderForm(props) {
                                   </div>
 
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
-                                      <input 
-                                        type="number" 
-                                        value={l.newQty} 
+                                      <input
+                                        type="number"
+                                        value={l.newQty}
                                         min={0}
                                         max={l.originalQty}
                                         onChange={(e) => {
@@ -1632,7 +1645,7 @@ export default function SalesOrderForm(props) {
                           );
                       })}
                   </div>
-                  
+
                   {/* Footer actions */}
                   <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 16 }}>
                     <button onClick={() => setLinkManagerDoc(null)} style={{ padding: '10px 22px', borderRadius: 12, border: '1.5px solid #e2e8f0', background: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 13 }}>Cancelar</button>
@@ -1648,8 +1661,8 @@ export default function SalesOrderForm(props) {
       )}
         {mode === 'edit' && (
             <>
-                <ManualLinkDeliveryNoteModal 
-                    open={isManualLinkModalOpen} 
+                <ManualLinkDeliveryNoteModal
+                    open={isManualLinkModalOpen}
                     onClose={() => setIsManualLinkModalOpen(false)}
                     orderId={id}
                     entityId={entity?.id}
@@ -1657,8 +1670,8 @@ export default function SalesOrderForm(props) {
                     onLinked={fetchSalesOrder}
                 />
 
-                <ManualLinkInvoiceModal 
-                    open={isManualInvoiceLinkOpen} 
+                <ManualLinkInvoiceModal
+                    open={isManualInvoiceLinkOpen}
                     onClose={() => setIsManualInvoiceLinkOpen(false)}
                     orderId={id}
                     entityId={entity?.id}

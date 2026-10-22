@@ -24,6 +24,8 @@ def create_product(data: product_schemas.ProductCreate, db: Session = Depends(ge
             raise HTTPException(status_code=409, detail=f"SKU '{data.sku}' ya existe")
 
     product_data = data.model_dump()
+    # La habilitación operativa requiere un proceso administrativo separado.
+    product_data["operational_enabled"] = False
     # Si es servicio, limpiar stock_account_code (opcional, lógica de negocio)
     if data.is_service:
         product_data["stock_account_code"] = None
@@ -41,6 +43,7 @@ def list_products(
     category_id: Optional[str] = None, # Filter by Rubro
     subcategory_id: Optional[str] = None, 
     active: Optional[bool] = None,
+    operational_enabled: Optional[bool] = None,
     warehouse_id: Optional[str] = None, # Filtro por depósito
     search: Optional[str] = Query(None, alias="q"),
     sort_by: str = "name", # name, sku, stock
@@ -62,6 +65,9 @@ def list_products(
         
     if active is not None:
         q = q.filter(Product.active == active)
+
+    if operational_enabled is not None:
+        q = q.filter(Product.operational_enabled == operational_enabled)
         
     if search:
         # Search by Name, SKU, or Active Principle
@@ -245,6 +251,8 @@ def update_product(product_id: str, data: product_schemas.ProductUpdate, db: Ses
         raise HTTPException(status_code=404, detail="Producto no encontrado")
 
     update_data = data.model_dump(exclude_unset=True)
+    # Impedir cambios de habilitación desde la edición general.
+    update_data.pop("operational_enabled", None)
 
     # Validar SKU único si se cambia
     if "sku" in update_data and update_data["sku"]:

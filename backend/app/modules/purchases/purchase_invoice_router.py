@@ -380,6 +380,30 @@ def load_purchase_invoice(data: purchase_invoice_schemas.AIPurchaseInvoiceLoader
         
         total_amount_ars = total_amount * exchange_rate if currency == models.CurrencyType.USD else total_amount
 
+        # Exigir habilitación operativa para productos importados.
+        from app.modules.inventory.product_operational import require_operational_product
+
+        for item in data.items:
+            if item.matched_product_id:
+                require_operational_product(db, item.matched_product_id)
+
+        # FASE4_DUPLICATE_PURCHASE_INVOICE_GUARD
+        # Impedir duplicar el mismo comprobante del proveedor.
+        duplicate = db.query(models.Document).filter(
+            models.Document.entity_id == entity.id,
+            models.Document.doc_type == models.DocumentType.PURCHASE_INVOICE,
+            models.Document.number == full_number,
+        ).first()
+
+        if duplicate:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"Ya existe la factura de compra {full_number} "
+                    f"para este proveedor (ID: {duplicate.id})"
+                ),
+            )
+
         db_doc = models.Document(
             entity_id=entity.id,
             doc_type=models.DocumentType.PURCHASE_INVOICE,
@@ -393,6 +417,25 @@ def load_purchase_invoice(data: purchase_invoice_schemas.AIPurchaseInvoiceLoader
         )
         db.add(db_doc)
         db.flush()
+
+        # FASE4C_ACCOUNTING_INTEGRATION
+        from app.modules.accounting.document_guards import require_accounting
+
+        # FASE4G_RECEIPT_INVOICE_LINK
+        from decimal import Decimal
+        from app.db.models.commercial_models import (
+            PurchaseOrder, PurchaseOrderLine,
+            DeliveryNote, DeliveryNoteLine,
+            InvoiceDeliveryNoteLink
+        )
+
+        linked_orders = set()
+        linked_notes = set()
+        pending_order_qty = {}
+        pending_note_qty = {}
+
+        def qty_decimal(value):
+            return Decimal(str(value or 0))
 
         # 3. Crear líneas
         from app.db.models.commercial_models import PurchaseOrderLine, OrderStatus
@@ -409,32 +452,197 @@ def load_purchase_invoice(data: purchase_invoice_schemas.AIPurchaseInvoiceLoader
             account_code = None
             product = None
             source_oc_line_id = None
+
+            # Conciliar únicamente referencias explícitas.
+            source_dn_line_id = item.source_dn_line_id
+            source_oc_line_id = item.source_purchase_line_id
+
+            if bool(source_dn_line_id) != bool(source_oc_line_id):
+                raise HTTPException(
+                    400,
+                    "Para facturar una recepción se requieren "
+                    "la línea de OC y la línea de remito"
+                )
+
+            if source_dn_line_id:
+                if not item.matched_product_id:
+                    raise HTTPException(
+                        400, "La línea vinculada requiere producto identificado"
+                    )
+
+                oc_line = db.get(PurchaseOrderLine, source_oc_line_id)
+                dn_line = db.get(DeliveryNoteLine, source_dn_line_id)
+
+                if not oc_line or not dn_line:
+                    raise HTTPException(
+                        400, "Línea de OC o remito inexistente"
+                    )
+
+                order = db.get(PurchaseOrder, oc_line.order_id)
+                note = db.get(DeliveryNote, dn_line.delivery_note_id)
+
+                if not order or not note:
+                    raise HTTPException(
+                        400, "Orden o remito inexistente"
+                    )
+
+                if (
+                    str(order.entity_id) != str(entity.id)
+                    or str(note.entity_id) != str(entity.id)
+                ):
+                    raise HTTPException(
+                        400, "Proveedor distinto al de la factura"
+                    )
+
+                if (
+                    str(note.purchase_order_id) != str(order.id)
+                    or str(dn_line.source_purchase_line_id) != str(oc_line.id)
+                ):
+                    raise HTTPException(
+                        400, "El remito no corresponde a la línea de OC"
+                    )
+
+                if (
+                    str(oc_line.product_id) != str(item.matched_product_id)
+                    or str(dn_line.product_id) != str(item.matched_product_id)
+                ):
+                    raise HTTPException(
+                        400, "Producto distinto al recibido"
+                    )
+
+                if (
+                    getattr(note.note_type, "value", note.note_type) != "PURCHASE"
+                    or getattr(note.status, "value", note.status)
+                    not in ("DISPATCHED", "PARTIAL", "INVOICED")
+                ):
+                    raise HTTPException(
+                        400, "El remito no está habilitado para facturación"
+                    )
+
+                # FASE4G5_UNIT_VALIDATION
+                product_stock = db.get(
+                    models.Product, item.matched_product_id
+                )
+                if not product_stock:
+                    raise HTTPException(
+                        400, "Producto de stock inexistente"
+                    )
+
+                stock_unit = (
+                    product_stock.unit_of_measure or ""
+                ).strip().upper()
+
+                invoice_unit = (
+                    item.unit or ""
+                ).strip().upper()
+
+                aliases = {
+                    "L": "LT", "LTS": "LT", "LITRO": "LT",
+                    "LITROS": "LT",
+                    "KGS": "KG", "KILO": "KG",
+                    "KILOS": "KG", "KILOGRAMO": "KG",
+                    "KILOGRAMOS": "KG",
+                    "UNIDAD": "UN", "UNIDADES": "UN",
+                    "UNID": "UN", "UND": "UN",
+                }
+
+                stock_unit = aliases.get(stock_unit, stock_unit)
+                invoice_unit = aliases.get(invoice_unit, invoice_unit)
+
+                commercial_qty = qty_decimal(item.quantity)
+                if commercial_qty <= 0:
+                    raise HTTPException(
+                        400, "Cantidad comercial inválida"
+                    )
+
+                if item.stock_quantity is not None:
+                    requested = qty_decimal(item.stock_quantity)
+                elif stock_unit and invoice_unit == stock_unit:
+                    requested = commercial_qty
+                else:
+                    raise HTTPException(
+                        400,
+                        "La unidad de la factura no coincide con "
+                        "la unidad de stock. Indicar stock_quantity "
+                        "para conciliar la presentación."
+                    )
+
+                if requested <= 0:
+                    raise HTTPException(
+                        400, "Cantidad de stock inválida"
+                    )
+
+                # La equivalencia explícita se contrasta con
+                # el contenido del envase cuando corresponde.
+                if item.stock_quantity is not None:
+                    presentation_unit = invoice_unit in (
+                        "BIDON", "BIDONES",
+                        "BOLSA", "BOLSAS",
+                        "CAJA", "CAJAS",
+                        "ENVASE", "ENVASES",
+                    )
+                    if presentation_unit:
+                        factor = qty_decimal(
+                            product_stock.quantity_per_container
+                        )
+                        if factor <= 0:
+                            raise HTTPException(
+                                400, "Presentación sin factor válido"
+                            )
+                        expected = commercial_qty * factor
+                        if abs(requested - expected) > Decimal("0.0001"):
+                            raise HTTPException(
+                                400,
+                                "stock_quantity no coincide con "
+                                "la cantidad por envase del producto"
+                            )
+
+                # Cantidades expresadas en la misma unidad de stock.
+                # No convertir envases automáticamente.
+                note_used = pending_note_qty.get(dn_line.id, Decimal(0))
+                order_used = pending_order_qty.get(oc_line.id, Decimal(0))
+
+                note_available = (
+                    qty_decimal(dn_line.qty)
+                    - qty_decimal(dn_line.qty_invoiced)
+                    - note_used
+                )
+                order_available = (
+                    qty_decimal(oc_line.qty_received)
+                    - qty_decimal(oc_line.qty_invoiced)
+                    - order_used
+                )
+
+                if requested > note_available or requested > order_available:
+                    raise HTTPException(
+                        400,
+                        "Cantidad superior al saldo recibido "
+                        "y pendiente de facturar"
+                    )
+
+                pending_note_qty[dn_line.id] = note_used + requested
+                pending_order_qty[oc_line.id] = order_used + requested
+                linked_orders.add(order.id)
+                linked_notes.add(note.id)
+
+
             
             if item.matched_product_id:
                 product = db.query(models.Product).filter(models.Product.id == item.matched_product_id).first()
                 if product:
-                    account_code = product.purchase_account_code
+                    account_code = None
+                    if product.purchase_account_id:
+                        purchase_account = db.get(
+                            Account, product.purchase_account_id
+                        )
+                        if purchase_account and purchase_account.active:
+                            account_code = purchase_account.code
                     # Si el producto tiene un tamaño de envase, usar esto para calcular cantidad en envases
-                    if product.quantity_per_container and product.quantity_per_container > 0:
-                        qty = qty / product.quantity_per_container
-                        unit = "ENVASE"
+                    # Conservar la cantidad y unidad originales del comprobante.
+                    # La conversión a unidades de stock requiere conciliación explícita.
                     
-                    # --- VINCULO AUTOMATICO CON OC ---
-                    # Buscar una OC abierta del mismo proveedor que tenga este producto pendiente
-                    # Priorizamos la OC más vieja
-                    oc_match = db.query(PurchaseOrderLine).join(models.PurchaseOrder).filter(
-                        models.PurchaseOrder.entity_id == entity.id,
-                        models.PurchaseOrder.status.in_([OrderStatus.CONFIRMED, OrderStatus.PARTIALLY_DELIVERED, OrderStatus.PARTIALLY_INVOICED]),
-                        PurchaseOrderLine.product_id == product.id,
-                        PurchaseOrderLine.qty_invoiced < PurchaseOrderLine.qty
-                    ).order_by(models.PurchaseOrder.date.asc()).first()
-                    
-                    if oc_match:
-                        source_oc_line_id = oc_match.id
-                        # Incrementar qty_invoiced en la OC
-                        oc_match.qty_invoiced = float(oc_match.qty_invoiced or 0) + float(qty)
-                        db.flush()
-                        recalc_purchase_order_status(db, oc_match.order_id)
+                    # Vinculación automática con OC suspendida:
+                    # no modificar qty_invoiced sin verificar unidades y saldo.
 
             def _infer_account_code_purchase(description: str, db: Session) -> str:
                 txt = (description or "").lower()
@@ -466,10 +674,21 @@ def load_purchase_invoice(data: purchase_invoice_schemas.AIPurchaseInvoiceLoader
             if not account_code:
                 account_code = _infer_account_code_purchase(item.raw_description, db)
 
+            account = db.query(Account).filter(
+                Account.code == account_code,
+                Account.active.is_(True)
+            ).first()
+            if not account:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Cuenta contable inexistente o inactiva: {account_code}"
+                )
+
             db_line = models.DocumentLine(
                 document_id=db_doc.id,
                 product_id=item.matched_product_id,
                 source_purchase_line_id=source_oc_line_id,
+                source_dn_line_id=source_dn_line_id,
                 description=item.raw_description,
                 qty=qty,
                 unit_price=item.unit_price or 0.0,
@@ -478,10 +697,53 @@ def load_purchase_invoice(data: purchase_invoice_schemas.AIPurchaseInvoiceLoader
                 vat_amount=vat_amount,
                 total_amount=round(net + vat_amount, 2),
                 line_order=item.line_no,
-                account_code=account_code
+                accounting_account_id=account.id
             )
             db.add(db_line)
 
+        # Actualizar los saldos de las recepciones facturadas.
+        for line_id, amount in pending_note_qty.items():
+            line = db.get(DeliveryNoteLine, line_id)
+            line.qty_invoiced = (
+                qty_decimal(line.qty_invoiced) + amount
+            )
+
+        for line_id, amount in pending_order_qty.items():
+            line = db.get(PurchaseOrderLine, line_id)
+            line.qty_invoiced = (
+                qty_decimal(line.qty_invoiced) + amount
+            )
+
+        for note_id in linked_notes:
+            db.add(InvoiceDeliveryNoteLink(
+                id=generate_uuid(),
+                document_id=db_doc.id,
+                delivery_note_id=note_id,
+            ))
+
+        # Comprobar importes antes de registrar deuda y asiento.
+        from decimal import Decimal, ROUND_HALF_UP
+
+        def money(value):
+            return Decimal(str(value or 0)).quantize(
+                Decimal("0.01"), rounding=ROUND_HALF_UP
+            )
+
+        db.flush()
+        total_lines = sum(
+            (money(line.total_amount) for line in db_doc.lines),
+            Decimal("0.00")
+        )
+        if abs(total_lines - money(db_doc.total_amount)) > Decimal("0.01"):
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"Total de líneas ({total_lines}) distinto del "
+                    f"total de factura ({money(db_doc.total_amount)})"
+                )
+            )
+
+        require_accounting(db, db_doc)
         db.commit()
         db.refresh(db_doc)
         
@@ -492,7 +754,11 @@ def load_purchase_invoice(data: purchase_invoice_schemas.AIPurchaseInvoiceLoader
             "warnings": data.warnings
         }
 
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
+        db.rollback()
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))

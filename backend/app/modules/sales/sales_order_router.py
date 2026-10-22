@@ -181,6 +181,30 @@ def create_sales_order(
     db: Session = Depends(get_db),
     current_user: User = Depends(check_permission("sales_orders", "create"))
 ):
+    # Validar productos antes de crear la orden.
+    for line in data.lines:
+        if not line.product_id:
+            continue
+
+        product = db.query(Product).filter(
+            Product.id == line.product_id
+        ).first()
+
+        if not product:
+            raise HTTPException(
+                status_code=404,
+                detail="Producto no encontrado"
+            )
+
+        if not product.active or not product.operational_enabled:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    f"El producto '{product.name}' no está habilitado "
+                    "para operar. Revisá su configuración."
+                )
+            )
+
     # 0. Validar Entidad
     entity = db.query(models.Entity).filter(models.Entity.id == data.entity_id).first()
     if not entity:
@@ -201,25 +225,17 @@ def create_sales_order(
     if not pv:
         pv = "0001"
     
-    # Auto-assign number if missing
-    import sqlalchemy.exc
-    max_retries = 2
-    for attempt in range(max_retries):
-        if not order_data.get("number"):
-            order_data["number"] = _generate_next_number(pv, db)
-            
-        db_order = SalesOrder(**order_data, status=OrderStatus.CONFIRMED)
-        db.add(db_order)
-        
-        try:
-            db.flush()
-            break # No collision
-        except sqlalchemy.exc.IntegrityError:
-            db.rollback()
-            if attempt == max_retries - 1:
-                raise HTTPException(status_code=400, detail="Error de colisión al generar número.")
-            # Clear number to retry
-            order_data["number"] = None
+    # La numeración automática se reserva en la misma transacción de la OV.
+    auto_number = not order_data.get("number")
+    if auto_number:
+        order_data["number"] = numbering_service.reserve_next_number(db, pv, "OV")
+    else:
+        existing = db.query(SalesOrder.id).filter(SalesOrder.number == order_data["number"]).first()
+        if existing:
+            raise HTTPException(status_code=409, detail="Ya existe una OV con ese número")
+    db_order = SalesOrder(**order_data, status=OrderStatus.CONFIRMED)
+    db.add(db_order)
+    db.flush()
 
 
     # Crear líneas con cálculo automático
@@ -257,8 +273,7 @@ def create_sales_order(
         data={"total": db_order.total_amount}
     )
     
-    # Incrementar contador si aplica
-    numbering_service.increment_last_number(db, pv, "OV")
+    # La reserva automática ya avanzó el contador en esta transacción.
     db.commit()
     db.refresh(db_order)
     return db_order
@@ -860,6 +875,42 @@ def update_sales_order(
 
     update_data = data.model_dump(exclude_unset=True)
     lines_data = update_data.pop("lines", None)
+
+    # Validar productos nuevos o cambiados antes de modificar la OV.
+    if lines_data is not None:
+        existing = {
+            str(line.id): str(line.product_id)
+            for line in order.lines
+        }
+        for item in lines_data:
+            line_id = str(item.get("id") or "")
+            product_id = item.get("product_id")
+
+            if not product_id:
+                raise HTTPException(
+                    status_code=400,
+                    detail="La línea debe tener un producto"
+                )
+
+            # Conservar líneas históricas sin cambiar su producto.
+            if line_id in existing and existing[line_id] == str(product_id):
+                continue
+
+            product = db.query(Product).filter(
+                Product.id == product_id
+            ).first()
+
+            if not product:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Producto no encontrado"
+                )
+
+            if not product.active or not product.operational_enabled:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Producto no habilitado: {product.name}"
+                )
 
     # Campos editables incluso con remitos activos
     safe_fields = {"sale_condition_id", "due_date", "currency", "exchange_rate", "vendedor"}

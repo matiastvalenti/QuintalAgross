@@ -1,0 +1,541 @@
+/* QUINTAL_SALES_WORKSPACE_V4
+   Rediseño REAL del formulario: información primero, productos a ancho completo,
+   seguimiento plegable y total + acción siempre accesibles. No afecta otros módulos.
+*/
+.workspace {
+  --ov-bg:#101729; --ov-panel:#202c46; --ov-control:#151f35;
+  --ov-line:#364562; --ov-text:#f8fafc; --ov-muted:#bac6da;
+  --ov-primary:#6955cf;
+  --text:var(--ov-text); --text-primary:var(--ov-text);
+  --text-secondary:var(--ov-muted); --muted:var(--ov-muted);
+  --primary:var(--ov-primary); --primary-hover:#806de1;
+  --border-color:var(--ov-line); --border-light:var(--ov-line);
+  --bg-page:var(--ov-bg); --panel-bg:var(--ov-panel); --panel-2:var(--ov-control);
+  width:100%; max-width:none; min-width:0; height:100%; min-height:0;
+  margin:0; padding:20px 24px 22px; box-sizing:border-box;
+  background:var(--ov-bg); color:var(--ov-text);
+  display:flex; flex-direction:column; gap:16px;
+  overflow-x:hidden; overflow-y:auto; border:0; border-radius:0; box-shadow:none;
+  container-type:inline-size;
+  scrollbar-color:#435273 transparent;
+}
+.workspace :global(button) {font-family:inherit;}
+.workspace .headerLine {
+  min-height:52px; margin:0 !important; padding:0 0 14px !important;
+  border-bottom:1px solid var(--ov-line) !important;
+  display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:12px;
+}
+.workspace .compactHeaderTitle {min-width:0;}
+.workspace .compactHeaderTitle > div {flex-wrap:wrap;}
+.workspace .compactHeaderTitle h1 {
+  font-size:11px !important; font-weight:800 !important;
+  letter-spacing:.095em; text-transform:uppercase;
+  color:#bfb2ff !important;
+}
+.workspace .headerMeta {display:flex;flex-wrap:wrap;color:var(--ov-muted);gap:8px;font-size:12px;}
+.workspace .headerActions {display:flex;align-items:center;gap:8px;}
+.workspace .actionGroup {
+  display:flex; gap:3px; align-items:center; background:#202c46;
+  border:1px solid var(--ov-line); border-radius:10px; padding:3px;
+}
+.workspace .actionBtn {background:transparent;border:0;color:#bac6da;border-radius:7px;padding:9px;}
+.workspace .actionBtn:hover:not(:disabled) {background:#344363;color:#fff;box-shadow:none;}
+.workspace .actionBtn:disabled {opacity:.35;cursor:not-allowed;}
+.workspace .readOnlyBadge {background:#322b59;color:#d5ccff;border:1px solid #584b97;}
+
+/* El contenido de .leftCol y .rightCol se integra en una sola grilla.
+   Mantiene todos los inputs, callbacks y tablas de React intactos. */
+.workspace .bodyTwoColumns {
+  display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);
+  gap:14px 16px; align-items:stretch; min-width:0;
+}
+.workspace .leftCol,.workspace .rightCol {display:contents;}
+.workspace .rightCol > .sideBlock,
+.workspace .leftCol > .searchRibbon,
+.workspace .leftCol > .bentoContainer,
+.workspace .leftCol > .productHeading,
+.workspace .leftCol > .optionalSection {min-width:0;}
+.workspace .rightCol > .sideBlock:first-child {order:1;grid-column:1;}
+.workspace .rightCol > .sideBlock:nth-child(2) {order:2;grid-column:2;}
+.workspace .rightCol > .sideBlock {
+  display:grid; grid-template-columns:repeat(2,minmax(0,1fr));
+  align-content:start; align-items:start; gap:12px 14px;
+  background:var(--ov-panel); border:1px solid var(--ov-line);
+  border-radius:14px; padding:18px;
+}
+.workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(3,minmax(0,1fr));}
+.workspace .sideBlockTitle {
+  grid-column:1/-1; font-size:11px; font-weight:850; letter-spacing:.06em;
+  color:#c4b5fd; margin:0 0 3px; padding:0;
+  display:flex; align-items:center; gap:7px;
+}
+.workspace .sideBlockTitle svg {color:#b6a6ff;}
+.workspace .rightCol .sideField {
+  display:flex;flex-direction:column; align-items:stretch;gap:6px;
+  margin:0; min-width:0; height:auto;
+}
+.workspace .rightCol .sideField label {
+  font-size:10px;letter-spacing:.055em;font-weight:750;
+  text-transform:uppercase;color:#aebdd7;line-height:1.4;
+}
+.workspace .rightCol .sideField > div,
+.workspace .rightCol .sideField > div[class] {min-width:0;max-width:100%;width:100%;}
+.clientSearch {width:100%;min-width:0;}
+.currencyRow {display:grid;grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:9px;min-width:0;}
+.workspace .rightCol .sideInput,
+.workspace .rightCol .sideSelect,
+.workspace .rightCol .sideField input,
+.workspace .rightCol .sideField select,
+.workspace .rightCol .sideField button {
+  width:100% !important;max-width:100% !important;min-width:0;
+  height:40px; min-height:40px;
+  background:var(--ov-control);color:var(--ov-text);
+  border:1px solid var(--ov-line);border-radius:9px;
+  padding:8px 11px;box-sizing:border-box;
+  font-size:13px;font-weight:650;line-height:1.35;
+  text-align:left;text-align-last:auto;
+}
+.workspace .rightCol .sideField button {cursor:pointer;text-align:left;}
+.workspace .rightCol .sideSelect {text-align-last:left;}
+.workspace input::placeholder,.workspace textarea::placeholder {color:#9eafca;opacity:1;}
+.workspace input:focus-visible,.workspace select:focus-visible,
+.workspace textarea:focus-visible,.workspace button:focus-visible,
+.workspace summary:focus-visible {
+  outline:2px solid #a99aff;outline-offset:2px;
+}
+.workspace select,.workspace input[type="date"] {color-scheme:dark;}
+.workspace .sideField input:disabled,.workspace .sideField select:disabled {opacity:.6;}
+.workspace .sideField .sideInput:not(input):not(select) {display:flex;align-items:center;}
+.workspace .currencyRow .sideField {min-width:0;}
+
+/* Productos: la sección central ocupa TODO el ancho */
+.productHeading {
+  order:3;grid-column:1/-1;display:flex;align-items:end;justify-content:space-between;
+  gap:16px;margin:7px 0 -3px;
+}
+.productHeading h2 {margin:0;color:#f8fafc;font-weight:800;font-size:17px;letter-spacing:-.02em;}
+.productHeading p {margin:4px 0 0;color:#aab9d2;font-size:12px;}
+.itemsCount {background:#322b59;border:1px solid #55478d;color:#d2c8ff;
+  border-radius:999px;padding:5px 11px;font-size:11px;font-weight:800;white-space:nowrap;}
+.workspace .leftCol > .searchRibbon {
+  order:4;grid-column:1/-1;margin:0;padding:7px;
+  background:var(--ov-panel);border:1px solid var(--ov-line);
+  border-radius:12px; box-shadow:none;z-index:10;
+}
+.workspace .leftCol > .searchRibbon > div {min-width:0;}
+.workspace .leftCol > .bentoContainer {
+  order:5;grid-column:1/-1;
+  height:auto !important; min-height:105px !important;
+  flex:none !important;max-height:none;
+  background:var(--ov-panel);border:1px solid var(--ov-line);
+  border-radius:13px;overflow:hidden;
+}
+.workspace .itemsList {max-height:420px;min-height:0;overflow:auto;}
+.workspace .tableHeader {background:#17223b;min-width:1000px; height:auto;min-height:39px;}
+.workspace .tableRow {background:#202c46;border-bottom:1px solid var(--ov-line);min-width:1000px;}
+.workspace .th {color:#b4c3dc;}
+.workspace .tableInput {background:#141e34;color:#f8fafc;border:1px solid #3a4966;}
+.workspace .tableHeader + .itemsList {overflow-x:auto;}
+
+/* Información secundaria: no ensancha ni empuja la tabla */
+.optionalSection {
+  order:6;grid-column:1/-1;border:1px solid var(--ov-line);
+  border-radius:12px;background:#1a2740;overflow:hidden;
+}
+.optionalSection > summary,.traceDetails > summary {
+  list-style:none;display:flex;align-items:center;justify-content:space-between;
+  gap:12px; padding:13px 16px;cursor:pointer;
+  color:#e1e7f4;font-weight:750;font-size:12px;
+}
+.optionalSection > summary::-webkit-details-marker,.traceDetails > summary::-webkit-details-marker {display:none;}
+.optionalSection > summary::before,.traceDetails > summary::before {
+  content:'▸';color:#b6a6ff;font-size:16px;margin-right:2px;
+}
+.optionalSection[open] > summary::before,.traceDetails[open] > summary::before {content:'▾';}
+.optionalSection > summary {justify-content:flex-start;}
+.optionalSection > summary span {margin-left:auto;color:#a8b8d0;font-size:11px;font-weight:550;}
+.workspace .optionalSection > .sideBlock {
+  display:flex;flex-direction:column;gap:8px;height:auto !important;
+  padding:0 16px 14px !important;margin:0;border:0;background:transparent;
+}
+.workspace .optionalSection .sideBlockTitle {display:none;}
+.workspace .optionalSection textarea {
+  width:100%;min-height:80px!important;resize:vertical!important;
+  background:#131d33;color:#f8fafc;border:1px solid var(--ov-line);
+  padding:12px 14px!important; border-radius:9px;font-size:13px;
+}
+.traceDetails {
+  background:#1a2740;border:1px solid var(--ov-line);
+  border-radius:12px;overflow:hidden;flex-shrink:0;
+}
+.traceDetails > summary {justify-content:flex-start;}
+.traceDetails > summary small {margin-left:auto;color:#aab9d2;font-size:11px;font-weight:500;}
+.workspace .relationsBar {
+  display:flex;align-items:stretch;gap:10px;overflow-x:auto;
+  border:0;border-radius:0;border-top:1px solid var(--ov-line);
+  background:#1a2740;margin:0;padding:14px;min-height:0;height:auto;
+}
+.workspace .relationCard {
+  background:#202c46;border:1px solid var(--ov-line);border-radius:10px;
+  min-width:165px;min-height:88px;padding:11px;flex:1;cursor:pointer;
+}
+.workspace .relationCard:hover {background:#2a3959;border-color:#8876eb;}
+.workspace .nodeTitle,.workspace .nodeMetric {color:#f8fafc!important;}
+.workspace .nodeStatus {color:#eab308;}
+.workspace .nodeBadge {background:#382f60;color:#ded5ff;}
+.workspace .relationAction {background:#6955cf;color:white;}
+.workspace .summaryPanel {
+  border:0;border-top:1px solid var(--ov-line);background:#1a2740;
+  padding:13px 16px;gap:12px; margin:0;
+}
+.workspace .summaryLabel {color:#a9b9d2;}
+.workspace .summaryValue {color:#edf2fa;}
+
+/* Barra inferior: TOTAL y GUARDAR en el mismo lugar; no tapa campos. */
+.workspace .footerCompact {
+  position:sticky;bottom:0;z-index:20;display:flex;justify-content:flex-end;
+  align-items:center;flex-wrap:wrap;gap:16px 26px;
+  min-height:68px;height:auto;flex-shrink:0;
+  padding:12px 18px;margin:0;
+  background:#192640f5;border:1px solid #3b4b6b;border-radius:13px;
+  box-shadow:0 -9px 28px #0a1224bb;
+  backdrop-filter:blur(12px);
+}
+.workspace .footerCompactLabel {font-size:10px;font-weight:750;color:#9db0ce;letter-spacing:.045em;}
+.workspace .footerCompactValue {font-size:14px;font-weight:750;color:#e9eef7;}
+.workspace .footerCompactTotal {font-size:22px;font-weight:850;letter-spacing:-.035em;color:#c4b5fd;}
+.saveArea {border-left:1px solid var(--ov-line);padding-left:20px;display:flex;align-items:center;}
+.workspace .saveBtn {
+  min-height:44px;min-width:148px;justify-content:center;
+  background:#6955cf;color:white;border:0;border-radius:10px;
+  padding:11px 18px;font-size:13px;font-weight:800;
+}
+.workspace .saveBtn:hover {background:#806de1;}
+.workspace .saveBtn:disabled {opacity:.55;cursor:wait;}
+
+@container (max-width:1100px) {
+  .workspace .bodyTwoColumns {grid-template-columns:1fr;}
+  .workspace .rightCol > .sideBlock:first-child,
+  .workspace .rightCol > .sideBlock:nth-child(2) {grid-column:1/-1;}
+}
+@container (max-width:780px) {
+  .workspace {padding:14px 12px 20px;gap:12px;}
+  .workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .workspace .footerCompact {gap:12px;justify-content:space-between;}
+  .saveArea {border:0;padding:0;}
+  .traceDetails > summary small {display:none;}
+}
+@container (max-width:530px) {
+  .workspace .rightCol > .sideBlock,
+  .workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(2,minmax(0,1fr));padding:13px;}
+  .workspace .headerLine {align-items:flex-start;}
+  .workspace .headerActions {width:100%;}
+  .workspace .footerCompact {align-items:center;}
+  .workspace .footerCompactItem:nth-child(1),
+  .workspace .footerCompactItem:nth-child(2) {display:none;}
+  .saveArea .saveBtn {min-width:110px;}
+}
+.workspace.workspaceStandalone {height:auto;min-height:100vh;overflow:visible;}
+
+
+/* QUINTAL_V5_CARGA_RAPIDA */
+/* Mejoras de uso: jerarquía clara, legibilidad y sin pasos adicionales. */
+.workspace {gap:12px;padding:16px 22px 18px;}
+.quickHelp {
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:#172440;border:1px solid #364967;border-left:3px solid #8977ed;
+  border-radius:10px;padding:11px 14px;color:#e0e8f6;font-size:13px;
+  line-height:1.5;
+}
+.quickHelp strong {font-size:11px;color:#c9bcff;white-space:nowrap;}
+.workspace .bodyTwoColumns {gap:12px 14px;}
+.workspace .rightCol > .sideBlock {padding:15px 17px;gap:10px 14px;}
+.workspace .rightCol > .sideBlock:first-child {grid-template-columns:repeat(4,minmax(0,1fr));}
+.workspace .rightCol > .sideBlock:first-child > .sideBlockTitle {grid-column:1/-1;}
+.workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(2) {grid-column:span 2;}
+.workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(3),
+.workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(4),
+.workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(5) {grid-column:span 1;}
+.workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(4,minmax(0,1fr));}
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideBlockTitle {grid-column:1/-1;}
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(2),
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(6) {grid-column:span 2;}
+.workspace .rightCol > .sideBlock:nth-child(2) > .currencyRow {grid-column:span 2;}
+.workspace .sideBlockTitle {font-size:12px;letter-spacing:0;text-transform:none;}
+.workspace .rightCol .sideField label {font-size:11px;letter-spacing:0;text-transform:none;color:#c1cee4;}
+.workspace .rightCol .sideInput,.workspace .rightCol .sideSelect,
+.workspace .rightCol .sideField input,.workspace .rightCol .sideField select,
+.workspace .rightCol .sideField button {font-size:14px;min-height:43px;height:43px;}
+.workspace .productHeading {margin-top:4px;}
+.workspace .leftCol > .bentoContainer {min-height:78px!important;}
+.workspace .footerCompact {box-shadow:none;min-height:62px;padding:10px 16px;}
+.workspace .footerCompactTotal {font-size:24px;}
+@container (max-width:850px) {
+ .quickHelp {flex-direction:column;align-items:flex-start;gap:3px;}
+ .workspace .rightCol > .sideBlock:first-child,
+ .workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(2),
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(2),
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(6),
+ .workspace .rightCol > .sideBlock:nth-child(2) > .currencyRow {grid-column:span 2;}
+}
+@container (max-width:520px) {
+ .workspace {padding:12px;}
+ .workspace .rightCol > .sideBlock:first-child > .sideField {grid-column:span 2!important;}
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField {grid-column:span 2!important;}
+ .workspace .footerCompactTotal {font-size:19px;}
+}
+
+
+/* QUINTAL_V6_SOLAPAS: carga administrativa en una sola pantalla */
+.workspace {gap:10px;padding:13px 20px 18px;}
+.workspace .quickHelp {padding:7px 11px;font-size:12px;}
+.workspace .bodyTwoColumns {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.45fr);gap:10px 12px;align-items:start;}
+.workspace .leftCol {display:block;grid-column:1/-1;order:4;min-width:0;}
+.workspace .rightCol {display:contents;}
+.workspace .rightCol > .sideBlock:first-child {grid-column:1;order:1;}
+.workspace .rightCol > .sideBlock:nth-child(2) {grid-column:2;order:2;}
+.workspace .rightCol > .sideBlock {padding:11px 13px;gap:8px 10px;border-radius:11px;}
+.workspace .rightCol > .sideBlock:first-child {grid-template-columns:repeat(4,minmax(0,1fr));}
+.workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(2) {grid-column:span 2;}
+.workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(5) {grid-column:span 2;}
+.workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(6,minmax(0,1fr));}
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(2) {grid-column:span 3;}
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(3) {grid-column:span 2;}
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(4) {grid-column:span 1;}
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(5) {grid-column:span 2;}
+.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(6) {grid-column:span 2;}
+.workspace .rightCol > .sideBlock:nth-child(2) > .currencyRow {grid-column:span 2;}
+.workspace .rightCol .sideField label {font-size:10px;}
+.workspace .rightCol .sideInput,.workspace .rightCol .sideSelect,.workspace .rightCol .sideField input,.workspace .rightCol .sideField select,.workspace .rightCol .sideField button {min-height:36px;height:36px;font-size:12px;padding:6px 9px;}
+.workspace .sideBlockTitle {font-size:12px;}
+.salesTabs {order:3;grid-column:1/-1;display:flex;gap:5px;border-bottom:1px solid #384764;min-width:0;overflow-x:auto;margin-top:3px;}
+.salesTabs button {display:flex;align-items:center;gap:8px;white-space:nowrap;background:transparent;color:#aebdd6;border:0;border-bottom:2px solid transparent;padding:10px 14px;font-size:13px;font-weight:750;cursor:pointer;}
+.salesTabs button:hover {color:#fff;background:#202d47;}
+.salesTabs button.salesTabActive {color:#d0c5ff;border-bottom-color:#8b78ee;background:#242d4d;}
+.salesTabs button span {font-size:10px;color:#c9bcff;}
+.workspace .productHeading {margin-top:0;}
+.workspace .leftCol > .bentoContainer {min-height:100px!important;}
+.notesTabPanel {order:5;grid-column:1/-1;background:#202c46;border:1px solid #364562;border-radius:12px;padding:16px;min-height:150px;}
+.notesTabPanel h3 {font-size:14px;color:#f1f5fc;margin:0 0 4px;}
+.notesTabPanel p {font-size:12px;color:#b6c4db;margin:0 0 12px;}
+.notesTabPanel > div {height:auto!important;min-height:125px;}
+.notesTabPanel textarea {min-height:110px!important;resize:vertical!important;color:#f8fafc!important;background:#151f35!important;}
+.documentsTabPanel {background:#202c46;border:1px solid #364562;border-radius:12px;padding:15px;min-width:0;}
+.documentsIntro {display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;margin-bottom:12px;color:#e8eafd;font-size:13px;}
+.documentsIntro span {color:#aebdd6;font-size:11px;}
+.workspace .documentsTabPanel .relationsBar {margin:0;}
+.workspace .documentsTabPanel .summaryPanel {margin-top:12px;}
+@container (max-width:950px) {
+ .workspace .bodyTwoColumns {grid-template-columns:minmax(0,1fr);}
+ .workspace .rightCol > .sideBlock:first-child,.workspace .rightCol > .sideBlock:nth-child(2) {grid-column:1/-1;}
+ .workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(6,minmax(0,1fr));}
+}
+@container (max-width:620px) {
+ .workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField,.workspace .rightCol > .sideBlock:nth-child(2) > .currencyRow {grid-column:span 1!important;}
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(2),.workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(6) {grid-column:span 2!important;}
+ .workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(2),.workspace .rightCol > .sideBlock:first-child > .sideField:nth-child(5) {grid-column:span 2;}
+ .workspace .salesTabs button {font-size:12px;padding:9px 10px;}
+}
+
+
+/* QUINTAL_V7_LIMPIEZA — menos ruido visual, carga administrativa más rápida */
+.workspace {gap:9px;padding:11px 18px 16px;}
+.workspace .headerLine {min-height:37px;padding-bottom:8px!important;}
+.workspace .bodyTwoColumns {gap:7px 10px;}
+.workspace .rightCol > .sideBlock {padding:10px 12px 11px;gap:6px 9px;box-shadow:none;}
+.workspace .rightCol > .sideBlock:first-child {grid-template-columns:repeat(4,minmax(0,1fr));}
+.workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(6,minmax(0,1fr));}
+.workspace .sideBlockTitle {margin-bottom:3px;font-size:12px;}
+.workspace .rightCol .sideField label {font-size:10px;text-transform:none;letter-spacing:0;}
+.workspace .rightCol .sideInput,
+.workspace .rightCol .sideSelect,
+.workspace .rightCol .sideField input,
+.workspace .rightCol .sideField select,
+.workspace .rightCol .sideField button {height:34px;min-height:34px;}
+.workspace .salesTabs {margin-top:2px;}
+.workspace .salesTabs button {padding:9px 12px;}
+.workspace .leftCol {gap:7px;}
+.workspace .searchRibbon {margin-top:0;margin-bottom:0;}
+.workspace .leftCol > .bentoContainer {min-height:0!important;flex:0 0 auto!important;}
+.emptyProducts {min-height:43px;padding:12px 16px;display:flex;align-items:center;justify-content:center;text-align:center;color:#aebbd0;font-size:12px;}
+.workspace .footerCompact {min-height:59px;padding:9px 15px;}
+.workspace .footerCompactTotal {font-size:23px;}
+@container (max-width:950px) {
+ .workspace .bodyTwoColumns {grid-template-columns:minmax(0,1fr);}
+ .workspace .rightCol > .sideBlock:first-child,
+ .workspace .rightCol > .sideBlock:nth-child(2) {grid-column:1/-1;}
+}
+@container (max-width:520px) {
+ .workspace {padding:10px;}
+ .workspace .rightCol > .sideBlock:first-child {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .workspace .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(2,minmax(0,1fr));}
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField,
+ .workspace .rightCol > .sideBlock:nth-child(2) > .currencyRow {grid-column:span 1!important;}
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(2),
+ .workspace .rightCol > .sideBlock:nth-child(2) > .sideField:nth-child(6) {grid-column:span 2!important;}
+}
+
+/* QUINTAL_V8_GRILLA_SCROLL — zona fija y desplazamiento interno en ambos ejes */
+.workspace .leftCol {min-height:0;}
+.workspace .leftCol > .bentoContainer {
+  height:clamp(290px, 39vh, 480px) !important;
+  min-height:290px !important;
+  max-height:480px !important;
+  flex:0 0 auto !important;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden !important;
+}
+.productsGridViewport {
+  width:100%;height:100%;min-height:0;
+  overflow:auto;
+  overscroll-behavior:contain;
+  scrollbar-gutter:stable;
+}
+.workspace .productsGridViewport .tableHeader {
+  position:sticky;top:0;z-index:3;
+  min-width:1120px;width:100%;box-sizing:border-box;
+  border-radius:0;
+  background:#17233d;
+  box-shadow:0 1px 0 #405171;
+}
+.workspace .productsGridViewport .itemsList {
+  height:auto !important;max-height:none !important;min-height:0 !important;
+  overflow:visible !important;flex:none !important;
+  padding-right:0;
+}
+.workspace .productsGridViewport .tableRow {
+  min-width:1120px;width:100%;box-sizing:border-box;
+}
+.workspace .leftCol > .bentoContainer .emptyProducts {
+  width:100%;height:100%;min-height:0;
+  display:flex;align-items:center;justify-content:center;
+  color:#aebbd0;font-size:13px;
+}
+.workspace .searchRibbon {flex:0 0 auto;}
+@container (max-width:800px) {
+  .workspace .leftCol > .bentoContainer {
+    height:clamp(250px, 34vh, 380px) !important;
+    min-height:250px !important;
+  }
+}
+
+/* QUINTAL_V9_SOLO_SCROLL_PRODUCTOS
+   La ventana se ajusta al alto disponible. Únicamente la grilla de
+   productos desplaza sus filas; cabecera, solapas y totales permanecen fijos.
+*/
+.workspace:not(.workspaceStandalone) {
+  height:100% !important;
+  min-height:0 !important;
+  max-height:100% !important;
+  overflow:hidden !important;
+  display:flex !important;
+  flex-direction:column !important;
+}
+.workspace:not(.workspaceStandalone) .headerLine {
+  flex:0 0 auto;
+}
+.workspace:not(.workspaceStandalone) .bodyTwoColumns {
+  flex:1 1 0 !important;
+  min-height:0 !important;
+  height:0;
+  overflow:hidden;
+  display:grid;
+  grid-template-rows:auto auto minmax(0,1fr);
+  align-content:stretch;
+}
+.workspace:not(.workspaceStandalone) .rightCol > .sideBlock:first-child,
+.workspace:not(.workspaceStandalone) .rightCol > .sideBlock:nth-child(2) {
+  grid-row:1;
+  min-height:0;
+}
+.workspace:not(.workspaceStandalone) .salesTabs {
+  grid-row:2;
+  min-height:0;
+  align-self:stretch;
+}
+.workspace:not(.workspaceStandalone) .leftCol {
+  grid-row:3;
+  grid-column:1/-1;
+  height:100%;
+  min-height:0 !important;
+  max-height:100%;
+  display:flex;
+  flex-direction:column;
+  overflow:hidden;
+}
+.workspace:not(.workspaceStandalone) .leftCol > .searchRibbon {
+  flex:0 0 auto !important;
+}
+.workspace:not(.workspaceStandalone) .leftCol > .bentoContainer {
+  flex:1 1 0 !important;
+  height:0 !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow:hidden !important;
+}
+.workspace:not(.workspaceStandalone) .productsGridViewport {
+  height:100%;
+  min-height:0;
+  overflow:auto !important;
+  overscroll-behavior:contain;
+}
+.workspace:not(.workspaceStandalone) .notesTabPanel,
+.workspace:not(.workspaceStandalone) .documentsTabPanel {
+  grid-row:3;
+  grid-column:1/-1;
+  min-height:0;
+  max-height:100%;
+  overflow:auto;
+}
+.workspace:not(.workspaceStandalone) .footerCompact {
+  flex:0 0 auto !important;
+  position:relative;
+  bottom:auto;
+  margin-top:0;
+  z-index:5;
+}
+/* En ventanas estrechas las dos tarjetas superiores ocupan filas separadas. */
+@container (max-width:950px) {
+  .workspace:not(.workspaceStandalone) .bodyTwoColumns {
+    grid-template-rows:auto auto auto minmax(0,1fr);
+  }
+  .workspace:not(.workspaceStandalone) .rightCol > .sideBlock:first-child {grid-row:1;}
+  .workspace:not(.workspaceStandalone) .rightCol > .sideBlock:nth-child(2) {grid-row:2;}
+  .workspace:not(.workspaceStandalone) .salesTabs {grid-row:3;}
+  .workspace:not(.workspaceStandalone) .leftCol,
+  .workspace:not(.workspaceStandalone) .notesTabPanel,
+  .workspace:not(.workspaceStandalone) .documentsTabPanel {grid-row:4;}
+}
+
+
+/* OV: campos numéricos legibles sobre fondo oscuro; anula reglas heredadas. */
+.workspace input.tableInput[type="number"],
+.workspace input.tableInput[type="text"] {
+  background: #141e34 !important;
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc;
+  border: 1px solid #40516f !important;
+  color-scheme: dark;
+}
+.workspace input.tableInput[type="number"]:focus,
+.workspace input.tableInput[type="text"]:focus {
+  border-color: #9c8af6 !important;
+  outline: 2px solid rgba(156,138,246,.2);
+}
+.workspace input.tableInput[readonly] {
+  background: #263149 !important;
+  color: #b6c4dc !important;
+  -webkit-text-fill-color: #b6c4dc;
+  cursor: default;
+}
+.workspace input.tableInput::placeholder {color:#8c9bb6 !important; -webkit-text-fill-color:#8c9bb6;}
+/* Costo: conservar señal visual de campo sensible, sin fondo blanco. */
+.workspace input.tableInput[title*="costo"] {
+  background: #332a20 !important;
+  color: #ffdf9e !important;
+  -webkit-text-fill-color: #ffdf9e;
+  border-color: #9b7638 !important;
+}

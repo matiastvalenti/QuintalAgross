@@ -73,6 +73,7 @@ class ProductCreate(BaseModel):
     
     is_service: bool = False
     active: bool = True
+    operational_enabled: bool = False
 
     @field_validator("name")
     @classmethod
@@ -101,6 +102,7 @@ class ProductUpdate(BaseModel):
     stock_account_id: Optional[str] = None
     is_service: Optional[bool] = None
     active: Optional[bool] = None
+    operational_enabled: Optional[bool] = None
 
 
 # ── Response ──
@@ -129,6 +131,7 @@ class ProductResponse(BaseModel):
     stock_account_id: Optional[str] = None
     is_service: bool
     active: bool
+    operational_enabled: bool = False
     min_stock: float = 0.0
 
     # Stock info (populated in router)

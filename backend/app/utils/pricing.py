@@ -20,19 +20,18 @@ def calculate_line_totals(
     ser asignado a un modelo de Base de Datos.
     """
     
-    # Si hay package_size > 1 (leído del producto), la cantidad ingresada
-    # es en realidad la cantidad de envases (qty_packages).
-    # Nota: package_size = 1 es el default y equivale a "sin envase".
-    if package_size is not None and float(package_size) > 1:
-        if qty_packages is None or float(qty_packages) == 0:
-            # El frontend no envió qty_packages: tomamos la qty enviada como "qty_packages"
-            qty_packages = float(fallback_qty) if fallback_qty else 0.0
-            
-        total_units = float(qty_packages) * float(package_size)
-        used_qty_packages = float(qty_packages)
-        used_package_size = float(package_size)
+    # Contrato: fallback_qty ya esta expresada en unidades fisicas (LT/KG/UNI).
+    # Solo convertir cuando qty_packages fue suministrado explicitamente.
+    size = float(package_size) if package_size is not None else None
+    if size is not None and size > 1:
+        if qty_packages is not None:
+            used_qty_packages = float(qty_packages)
+            total_units = used_qty_packages * size
+        else:
+            total_units = float(fallback_qty) if fallback_qty else 0.0
+            used_qty_packages = round(total_units / size, 6)
+        used_package_size = size
     else:
-        # Sin envase (o product sin package_size configurado)
         total_units = float(fallback_qty) if fallback_qty else 0.0
         used_qty_packages = None
         used_package_size = None

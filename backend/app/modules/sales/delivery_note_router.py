@@ -1,3 +1,4 @@
+from app.modules.inventory.product_operational import require_operational_product
 """
 Remitos (DeliveryNote) — Router completo.
 Flujo: OV → Remito(s) parciales → Confirmar (stock OUT) → Editar/Anular con reversión.
@@ -396,6 +397,10 @@ def create_direct_delivery_note(
     Crea un Remito Directo sin OV previa.
     Genera automáticamente una OV (CONFIRMED) con numeración estándar y source=AUTO_REMITO.
     """
+    # Validar productos antes de crear el remito y la OV automática.
+    for line in data.lines:
+        require_operational_product(db, line.product_id)
+
     if not data.lines:
         raise HTTPException(status_code=400, detail="El remito debe tener al menos una línea")
 
@@ -406,7 +411,7 @@ def create_direct_delivery_note(
 
     # 2. Crear OV Automática
     # Usar numeración estándar "0001-XXXXXXXX"
-    ov_number = _get_next_ov_number(db)
+    ov_number = numbering_service.reserve_next_number(db, "0001", "OV")
     
     total_ov = Decimal(0)
     lines_data = []
@@ -474,8 +479,7 @@ def create_direct_delivery_note(
     _recalc_total(new_ov, db)
     db.flush()
 
-    # Incrementar contador OV
-    numbering_service.increment_last_number(db, "0001", "OV")
+    # OV reservada en la misma transacción; no incrementar de nuevo.
 
     # 2. Crear Remito vinculado
     # Validar número o generar correlativo
@@ -486,7 +490,7 @@ def create_direct_delivery_note(
             if len(pv_remito) > 5: pv_remito = "0001" # Safety
         except: pass
         
-    dn_number = data.number or _get_next_dn_number(db, pv_remito)
+    dn_number = data.number or numbering_service.reserve_next_number(db, pv_remito, "RE")
 
     dn = DeliveryNote(
         entity_id=data.entity_id,
@@ -618,10 +622,11 @@ def create_delivery_note_from_ov(
     order.due_date = use_due_date
     db.flush()
 
+    dn_number = data.number or numbering_service.reserve_next_number(db, "0001", "RE")
     dn = DeliveryNote(
         entity_id=order.entity_id,
         warehouse_id=data.warehouse_id,
-        number=data.number,
+        number=dn_number,
         note_type=OrderType.SALE,
         delivery_type=DeliveryNoteType.STANDARD,
         sales_order_id=order.id,
@@ -695,9 +700,7 @@ def create_delivery_note_from_ov(
     dn.total_cost = sum(float(l.total_cost or 0) for l in dn.lines)
     dn.margin_amount = float(sum(float(l.net_amount or 0) for l in dn.lines)) - dn.total_cost
 
-    if data.number and "-" in data.number:
-        pv_re = data.number.split("-")[0]
-        numbering_service.increment_last_number(db, pv_re, "RE")
+    # Remito reservado si fue automático; número manual no altera el contador.
 
     _recalc_dn_commission(dn, db) # Requerido para ver comisiones en el reporte
 
@@ -764,7 +767,7 @@ def create_delivery_note_from_oc(
             final_number = f"{pv_re}-{int(final_number):08d}"
         except: pass
     elif not final_number:
-        final_number = _get_next_dn_number(db, pv_re)
+        final_number = numbering_service.reserve_next_number(db, pv_re, "RE")
     logger.debug(f"Final number: {final_number}")
 
     # Check for duplicates to avoid 500 IntegrityError
@@ -826,7 +829,7 @@ def create_delivery_note_from_oc(
             "qty": line_data.qty,
             "unit_price": Decimal(str(oc_line.unit_price or 0)),
             "discount_pct": Decimal(str(oc_line.discount_pct or 0)),
-            "vat_rate": Decimal(str(oc_line.vat_rate or 0.21)),
+            "vat_rate": Decimal(str(0.21 if oc_line.vat_rate is None else oc_line.vat_rate)),
             "product_id": oc_line.product_id
         }, db=db)
         unit_price_dec = Decimal(str(oc_line.unit_price or 0))
@@ -850,10 +853,7 @@ def create_delivery_note_from_oc(
 
     db.flush()
 
-    # Incrementar contador RE si aplica
-    if dn.number and "-" in dn.number:
-        pv_val = dn.number.split("-")[0]
-        numbering_service.increment_last_number(db, pv_val, "RE")
+    # Los números externos no incrementan el contador; los automáticos ya se reservaron.
 
     # Impactar stock y actualizar estado OC
     _apply_stock_impact(db, dn)
@@ -1877,6 +1877,7 @@ def create_invoice_from_delivery_note(
     pv: Optional[str] = None,
     doc_type: str = "FA",
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Genera una factura (Document) a partir de todas las líneas del remito.
     - `doc_type` por defecto 'FA' (Factura A). Para Factura B usar 'FB'.
@@ -1902,16 +1903,20 @@ def create_invoice_from_delivery_note(
                 continue
 
             # Ensure we only invoice what is pending
+            original_qty = Decimal(str(l.qty or 0))
+            if original_qty <= 0:
+                raise HTTPException(status_code=400, detail="Cantidad inválida en el remito")
+            ratio = pending_qty / original_qty
             qty = float(pending_qty)
             unit_price = float(l.unit_price or 0.0)
-            net_amount = float(l.net_amount or 0.0)
+            net_amount = float(Decimal(str(l.net_amount or 0)) * ratio)
             vat_rate = float(l.vat_rate or 0.0)
-            vat_amount = float(l.vat_amount or 0.0)
-            total = float(l.total_amount or (net_amount + vat_amount))
+            vat_amount = float(Decimal(str(l.vat_amount or 0)) * ratio)
+            total = float(Decimal(str(l.total_amount or (Decimal(str(l.net_amount or 0)) + Decimal(str(l.vat_amount or 0))))) * ratio)
             total_amount += total
 
             doc_lines.append(document_schemas.DocumentLineCreate(
-                description=desc,
+                description=l.description or "",
                 product_id=l.product_id,
                 qty=qty,
                 unit_price=unit_price,
@@ -1926,13 +1931,14 @@ def create_invoice_from_delivery_note(
 
         # Número de factura y Punto de Venta
         pv_code = pv or (dn.number.split("-")[0] if dn.number and "-" in dn.number else "0001")
-        invoice_number = number or numbering_service.get_next_number(db, pv_code, doc_type)
+        is_purchase = dn.note_type == OrderType.PURCHASE
+        if is_purchase and not number:
+            raise HTTPException(status_code=400, detail="Indique el número de factura del proveedor")
+        invoice_number = number or f"{pv_code}-AUTO"
 
         # Mapeo de doc_type string ("FA", "FB", etc) a Enum + Linea (A, B)
         # Esto es crucial para que el listado muestre el tipo correcto y el numbering funcione en la próxima
         line_code = "A"
-        is_purchase = dn.note_type == OrderType.PURCHASE
-        
         if doc_type == "FA":
             enum_type = db_models.DocumentType.PURCHASE_INVOICE if is_purchase else db_models.DocumentType.INVOICE
             line_code = "A"
@@ -1970,14 +1976,14 @@ def create_invoice_from_delivery_note(
         )
 
         # Reutilizamos la función existente para crear documentos
-        created = create_doc_func(doc_create, db)
+        created = create_doc_func(doc_create, db, current_user=current_user)
 
-        # Incrementar numeración en config si usamos numeración automática
-        if not number:
-            numbering_service.increment_last_number(db, pv_code, doc_type)
-        
-        db.commit() # Asegurar que el incremento se persiste
+        # create_document reservó y confirmó el número de factura.
+        db.commit()
         return created
+    except HTTPException:
+        db.rollback()
+        raise
     except Exception as e:
         db.rollback()
         traceback.print_exc()
@@ -1996,6 +2002,7 @@ def get_pending_invoice_delivery_notes(entity_id: str, db: Session = Depends(get
 def create_invoice_from_multiple_delivery_notes(
     data: dn_schemas.MultiDeliveryNoteInvoiceCreate,
     db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     """Genera una sola factura consolidando varios remitos."""
     try:
@@ -2014,7 +2021,7 @@ def create_invoice_from_multiple_delivery_notes(
         for dn in dns:
             for l in dn.lines:
                 # Solo facturar lo que no se facturó
-                pending_qty = Decimal(str(l.qty)) - Decimal(str(l.qty_invoiced))
+                pending_qty = Decimal(str(l.qty)) - Decimal(str(l.qty_invoiced or 0))
                 if pending_qty <= 0:
                     continue
                 
@@ -2041,12 +2048,7 @@ def create_invoice_from_multiple_delivery_notes(
                     source_dn_line_id=l.id
                 ))
                 
-                # Update line
-                l.qty_invoiced = float(Decimal(str(l.qty_invoiced)) + pending_qty)
-            
-            # Update DN status
-            dn.status = DeliveryNoteStatus.INVOICED
-            _log_history(db, dn.id, "FACTURACION", f"Facturado por consolidación masiva", current_user=None)
+            # Las cantidades y estados los actualiza create_document al facturar.
 
         if not doc_lines:
             raise HTTPException(status_code=400, detail="No hay ítems pendientes de facturación en los remitos seleccionados")
@@ -2054,7 +2056,7 @@ def create_invoice_from_multiple_delivery_notes(
         # Configuración básica de la factura
         dn_ref = dns[0] # Usar TC y moneda del primero como base
         pv_code = data.pv or (dn_ref.number.split("-")[0] if dn_ref.number and "-" in dn_ref.number else "0001")
-        invoice_number = data.number or numbering_service.get_next_number(db, pv_code, data.doc_type)
+        invoice_number = data.number or f"{pv_code}-AUTO"
 
         # Mapeo a Enum DocumentType (simplificado, se puede extender)
         enum_type = db_models.DocumentType.INVOICE
@@ -2075,17 +2077,14 @@ def create_invoice_from_multiple_delivery_notes(
         )
 
         # Crear Documento
-        created = create_doc_func(doc_create, db)
+        created = create_doc_func(doc_create, db, current_user=current_user)
 
         # Vincular
         for dn in dns:
             link = InvoiceDeliveryNoteLink(document_id=created.id, delivery_note_id=dn.id)
             db.add(link)
 
-        # Incrementar numbering
-        if not data.number:
-            numbering_service.increment_last_number(db, pv_code, data.doc_type)
-
+        # create_document reservó el correlativo.
         db.commit()
         return created
 

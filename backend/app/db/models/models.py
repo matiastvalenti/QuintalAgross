@@ -264,22 +264,32 @@ class Vehicle(Base):
 class Document(Base):
     __tablename__ = "documents"
     __table_args__ = (
-        # Uniqueness rule: doc_type + line (fiscal letter A/B/C) + number.
-        # 'number' already contains the sales point prefix (e.g. '0003-00000001'),
-        # so no separate sales_point column is needed in the constraint.
-        # Different doc types CAN share the same number: INVOICE-A 0003-00000001
-        # and DEBIT_NOTE-A 0003-00000001 are valid (independent sequences per type).
-        # Different letters of the same type also have independent sequences:
-        # INVOICE-A 0003-00000001 and INVOICE-B 0003-00000001 are valid.
-        # We use func.coalesce(line, "") so that documents without a fiscal letter,
-        # such as RECEIPT/PAYMENT, are also protected against duplicates, since in 
-        # SQLite NULL != NULL in unique indexes.
+        # Comprobantes de proveedores: numeración independiente por proveedor.
         Index(
-            "uq_documents_type_line_number", 
-            "doc_type", 
-            func.coalesce(column("line"), ""), 
-            "number", 
-            unique=True
+            "uq_documents_purchase_supplier_type_line_number",
+            "entity_id",
+            "doc_type",
+            func.coalesce(column("line"), ""),
+            "number",
+            unique=True,
+            sqlite_where=column("doc_type").in_([
+                "PURCHASE_INVOICE",
+                "PURCHASE_DEBIT_NOTE",
+                "PURCHASE_CREDIT_NOTE",
+            ]),
+        ),
+        # Conservar la protección original para ventas y otros documentos.
+        Index(
+            "uq_documents_type_line_number",
+            "doc_type",
+            func.coalesce(column("line"), ""),
+            "number",
+            unique=True,
+            sqlite_where=~column("doc_type").in_([
+                "PURCHASE_INVOICE",
+                "PURCHASE_DEBIT_NOTE",
+                "PURCHASE_CREDIT_NOTE",
+            ]),
         ),
     )
 

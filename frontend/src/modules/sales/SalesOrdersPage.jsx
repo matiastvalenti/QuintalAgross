@@ -135,12 +135,27 @@ export default function SalesOrdersPage({ isWindow }) {
   const entityName = (id) => entities.find(e => e.id === id)?.name || id?.slice(0, 8);
   const warehouseName = (id) => warehouses.find(w => String(w.id) === String(id))?.name || "-";
   
+  // quintal-hybrid-phase1: por defecto dentro del ERP.
   const handleOpenNew = () => {
-      openNuevaOrdenVenta();
+      openWindow('sales-order', { mode: 'new' }, {
+          title: 'Nueva Orden de Venta',
+          width: 1280,
+          height: 820,
+          minWidth: 720,
+          minHeight: 480,
+          singletonKey: 'sales-order-new',
+      });
   };
 
   const handleOpenDetail = (id, number) => {
-      openEditOrdenVenta(id);
+      openWindow('sales-order', { mode: 'edit', id }, {
+          title: `Orden de Venta ${number || id}`,
+          width: 1280,
+          height: 820,
+          minWidth: 720,
+          minHeight: 480,
+          singletonKey: `sales-order-${id}`,
+      });
   };
 
   const confirmOV = async (id) => {
@@ -416,6 +431,7 @@ export default function SalesOrdersPage({ isWindow }) {
     ) : sorted.length === 0 ? (
       <tr>
         <td colSpan="8">
+          <div className={s.salesEmptyState}>
           <EmptyState 
               icon={Layers} 
               title="Sin órdenes coincidentes"
@@ -423,6 +439,7 @@ export default function SalesOrdersPage({ isWindow }) {
               actionLabel="Nueva Orden"
               onAction={handleOpenNew}
           />
+          </div>
         </td>
       </tr>
     ) : (
@@ -503,6 +520,7 @@ export default function SalesOrdersPage({ isWindow }) {
 
   return (
     <DocumentListPage 
+      theme="quintal"
       title="Libro de Órdenes"
       breadcrumbs={[{ label: 'Suite Comercial' }, { label: 'Órdenes de Venta' }]}
       kpis={kpis}

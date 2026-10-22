@@ -40,6 +40,34 @@ def apply_manually(req: ApplicationRequest, db: Session = Depends(get_db), curre
     if from_doc.entity_id != to_doc.entity_id:
         raise HTTPException(status_code=400, detail="Los documentos pertenecen a distintas entidades")
 
+    # FASE3_GUARD_MANUAL: validar antes de crear la imputación.
+    from app.db.models.models import DocumentType, DocumentStatus
+    from app.modules.accounting.document_status_service import get_document_balance_info
+    if from_doc.id == to_doc.id:
+        raise HTTPException(400, "No se puede imputar un documento contra sí mismo")
+    if from_doc.doc_type not in (DocumentType.RECEIPT, DocumentType.CREDIT_NOTE):
+        raise HTTPException(400, "El origen debe ser un recibo o una nota de crédito")
+    if to_doc.doc_type not in (DocumentType.INVOICE, DocumentType.DEBIT_NOTE):
+        raise HTTPException(400, "El destino debe ser una factura o una nota de débito")
+    if from_doc.status in (DocumentStatus.CANCELLED, DocumentStatus.DRAFT) or to_doc.status in (DocumentStatus.CANCELLED, DocumentStatus.DRAFT):
+        raise HTTPException(400, "No se pueden imputar documentos anulados o en borrador")
+    if not (0 < req.amount < float('inf')):
+        raise HTTPException(400, "El importe debe ser positivo y finito")
+    from_currency = getattr(from_doc.currency, 'value', str(from_doc.currency))
+    to_currency = getattr(to_doc.currency, 'value', str(to_doc.currency))
+    if from_currency == 'USD' and to_currency == 'ARS':
+        raise HTTPException(400, "La imputación USD a ARS no está habilitada")
+    tc = req.exchange_rate if req.exchange_rate is not None else (from_doc.exchange_rate or 1.0)
+    if not (0 < tc < float('inf')):
+        raise HTTPException(400, "El tipo de cambio debe ser positivo y finito")
+    origin_available = get_document_balance_info(from_doc, db)['balance']
+    destination_pending = get_document_balance_info(to_doc, db)['balance']
+    origin_consumed = req.amount * tc if from_currency == 'ARS' and to_currency == 'USD' else req.amount
+    if req.amount > destination_pending + 0.000001:
+        raise HTTPException(400, f"El importe supera la deuda pendiente ({destination_pending:.2f})")
+    if origin_consumed > origin_available + 0.000001:
+        raise HTTPException(400, f"El importe supera el crédito disponible ({origin_available:.2f})")
+
     # 2. Calcular remanente disponible en Origen (Crédito)
     # Sumar aplicaciones ya hechas desde este origen
     # Nota: Usamos la lógica de _recalc_document_status para saber el 'usage'

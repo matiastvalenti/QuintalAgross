@@ -1,3 +1,5 @@
+from collections import defaultdict
+from app.modules.inventory.product_operational import require_operational_product
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -15,6 +17,7 @@ from app.modules.auth.auth_router import check_permission, get_current_user
 from app.db.models.auth_models import User
 from pydantic import BaseModel
 from app.modules.sales.sales_utils import recalc_purchase_order_status
+from app.modules.sales.delivery_note_router import _apply_stock_impact, _reverse_stock_impact
 
 router = APIRouter(prefix="/delivery-notes", tags=["Purchase Delivery Notes"])
 
@@ -46,8 +49,62 @@ def get_purchase_delivery_note(id: str, db: Session = Depends(get_db)):
     note = db.query(DeliveryNote).options(joinedload(DeliveryNote.lines)).filter(DeliveryNote.id == id).first()
     return note
 
+
+def _validate_purchase_stock_movements(db: Session, dn: DeliveryNote):
+    """Bloquea reversiones si no existe trazabilidad física completa."""
+    from collections import defaultdict
+    from decimal import Decimal
+    from app.db.models.commercial_models import StockMovement, StockItem
+
+    expected = defaultdict(lambda: Decimal("0"))
+    actual = defaultdict(lambda: Decimal("0"))
+
+    for line in dn.lines:
+        if not line.product_id:
+            raise HTTPException(
+                409, "El remito tiene líneas sin producto. Requiere revisión."
+            )
+        expected[str(line.product_id)] += Decimal(str(line.qty or 0))
+
+    movements = (
+        db.query(StockMovement, StockItem)
+        .join(StockItem, StockMovement.stock_item_id == StockItem.id)
+        .filter(
+            StockMovement.reference_id == dn.id,
+            StockMovement.reference_type.in_(["DELIVERY_NOTE", "REVERSAL"]),
+        )
+        .all()
+    )
+
+    if not movements:
+        raise HTTPException(
+            409,
+            "Este remito no tiene movimientos de stock registrados. "
+            "Debe regularizarse antes de editarlo o anularlo."
+        )
+
+    for movement, stock_item in movements:
+        if stock_item.warehouse_id != dn.warehouse_id:
+            raise HTTPException(
+                409, "Los movimientos no coinciden con el depósito del remito."
+            )
+        actual[str(stock_item.product_id)] += Decimal(str(movement.qty or 0))
+
+    if dict(actual) != dict(expected):
+        raise HTTPException(
+            409,
+            "Los movimientos de stock no coinciden con las cantidades "
+            "del remito. Operación bloqueada para evitar inconsistencias."
+        )
+
 @router.post("/")
 def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    # Validar productos de líneas nuevas antes de crear el remito.
+    for line in payload.get("lines", []):
+        product_id = line.get("product_id")
+        if product_id and float(line.get("qty") or 0) > 0:
+            require_operational_product(db, product_id)
+
     # Basic validation
     entity_id = payload.get("entity_id")
     warehouse_id = payload.get("warehouse_id")
@@ -71,7 +128,7 @@ def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), 
         warehouse_id=warehouse_id,
         number=number,
         date=date_val,
-        status=DeliveryNoteStatus.CONFIRMED, # Los remitos de compra entran confirmados por defecto o en borrador si se desea, usamos CONFIRMED por simplicidad
+        status=DeliveryNoteStatus.DISPATCHED, # Los remitos de compra entran confirmados por defecto o en borrador si se desea, usamos CONFIRMED por simplicidad
         note_type=OrderType.PURCHASE,
         purchase_order_id=payload.get("sourceId"),
         origin_reference=payload.get("origin_reference"),
@@ -96,12 +153,51 @@ def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), 
         # Verify and update OC line if linked
         if src_line_id and not str(src_line_id).startswith("0."):
             oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == src_line_id).first()
+            if not oc_line:
+                raise HTTPException(400, 'La línea de OC vinculada no existe')
             if oc_line:
+                # FASE4_OC_LINK_GUARD_V2
+                order = db.query(PurchaseOrder).filter(
+                    PurchaseOrder.id == oc_line.order_id
+                ).first()
+
+                if not order:
+                    raise HTTPException(
+                        400, "La orden de compra no existe"
+                    )
+
+                if str(order.entity_id) != str(dn.entity_id):
+                    raise HTTPException(
+                        400, "El proveedor no coincide con la OC"
+                    )
+
+                if (
+                    ldata.get("product_id")
+                    and str(oc_line.product_id) != str(ldata["product_id"])
+                ):
+                    raise HTTPException(
+                        400, "El producto no coincide con la OC"
+                    )
+
+                if order.status == OrderStatus.CANCELLED:
+                    raise HTTPException(
+                        400, "No se puede recibir una OC anulada"
+                    )
+
+                if (
+                    dn.purchase_order_id
+                    and str(dn.purchase_order_id) != str(order.id)
+                ):
+                    raise HTTPException(
+                        400, "No se pueden mezclar distintas OC en un remito"
+                    )
+
+                dn.purchase_order_id = order.id
+
                 qty_pending = float(oc_line.qty) - float(oc_line.qty_received or 0)
                 if qty > qty_pending + 0.01: # Small tolerance
-                    raise HTTPException(400, f"No se puede recibir más cantidad ({qty}) que la pendiente ({qty_pending}) para el producto {oc_line.name or oc_line.description}")
+                    raise HTTPException(400, f"No se puede recibir más cantidad ({qty}) que la pendiente ({qty_pending}) para el producto {oc_line.description or oc_line.product_id}")
                 
-                oc_line.qty_received = float(oc_line.qty_received or 0) + qty
                 updated_purchase_orders.add(oc_line.order_id)
                 dn.purchase_order_id = oc_line.order_id # Ensure header link
         
@@ -124,7 +220,8 @@ def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), 
         )
         db.add(line)
     
-    # TODO: stock entry for purchase delivery notes
+    db.flush()
+    _apply_stock_impact(db, dn)
     
     _log_history(db, dn.id, "CREADO", f"Remito de compra creado", current_user)
     
@@ -146,13 +243,38 @@ def update_purchase_delivery_note(id: str, payload: dict, db: Session = Depends(
     if dn.status in [DeliveryNoteStatus.CANCELLED, DeliveryNoteStatus.INVOICED]:
         raise HTTPException(400, f"No se puede modificar un remito en estado {dn.status}")
         
+    # Validar productos nuevos o aumentos antes de alterar el remito.
+    previous = defaultdict(float)
+    incoming = defaultdict(float)
+
+    for old_line in dn.lines:
+        previous[str(old_line.product_id)] += float(old_line.qty or 0)
+
+    for line in payload.get("lines", []):
+        qty = float(line.get("qty") or 0)
+        if qty <= 0:
+            continue
+
+        product_id = line.get("product_id")
+        if not product_id:
+            raise HTTPException(400, "La línea debe tener un producto")
+
+        incoming[str(product_id)] += qty
+
+    for product_id, qty in incoming.items():
+        if qty > previous.get(product_id, 0) + 0.000001:
+            require_operational_product(db, product_id)
+
+    # Revertir stock y contadores antes de reemplazar líneas.
+    _validate_purchase_stock_movements(db, dn)
+    _reverse_stock_impact(db, dn, generate_uuid())
+
     # Revert old lines qty from OC
     updated_purchase_orders = set()
     for old_line in dn.lines:
         if old_line.source_purchase_line_id:
             oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == old_line.source_purchase_line_id).first()
             if oc_line:
-                oc_line.qty_received = float(oc_line.qty_received or 0) - float(old_line.qty)
                 updated_purchase_orders.add(oc_line.order_id)
                 
     # Delete old lines
@@ -180,12 +302,51 @@ def update_purchase_delivery_note(id: str, payload: dict, db: Session = Depends(
         
         if src_line_id and not str(src_line_id).startswith("0."):
             oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == src_line_id).first()
+            if not oc_line:
+                raise HTTPException(400, 'La línea de OC vinculada no existe')
             if oc_line:
+                # FASE4_OC_LINK_GUARD_V2
+                order = db.query(PurchaseOrder).filter(
+                    PurchaseOrder.id == oc_line.order_id
+                ).first()
+
+                if not order:
+                    raise HTTPException(
+                        400, "La orden de compra no existe"
+                    )
+
+                if str(order.entity_id) != str(dn.entity_id):
+                    raise HTTPException(
+                        400, "El proveedor no coincide con la OC"
+                    )
+
+                if (
+                    ldata.get("product_id")
+                    and str(oc_line.product_id) != str(ldata["product_id"])
+                ):
+                    raise HTTPException(
+                        400, "El producto no coincide con la OC"
+                    )
+
+                if order.status == OrderStatus.CANCELLED:
+                    raise HTTPException(
+                        400, "No se puede recibir una OC anulada"
+                    )
+
+                if (
+                    dn.purchase_order_id
+                    and str(dn.purchase_order_id) != str(order.id)
+                ):
+                    raise HTTPException(
+                        400, "No se pueden mezclar distintas OC en un remito"
+                    )
+
+                dn.purchase_order_id = order.id
+
                 qty_pending = float(oc_line.qty) - float(oc_line.qty_received or 0)
                 if qty > qty_pending + 0.01:
                     raise HTTPException(400, f"No se puede recibir más cantidad ({qty}) que la pendiente ({qty_pending})")
                 
-                oc_line.qty_received = float(oc_line.qty_received or 0) + qty
                 updated_purchase_orders.add(oc_line.order_id)
                 
         line = DeliveryNoteLine(
@@ -207,6 +368,9 @@ def update_purchase_delivery_note(id: str, payload: dict, db: Session = Depends(
         )
         db.add(line)
         
+    db.flush()
+    _apply_stock_impact(db, dn)
+
     _log_history(db, dn.id, "MODIFICADO", "Remito de compra editado", current_user)
     
     db.flush()
@@ -234,10 +398,10 @@ def cancel_purchase_delivery_note(id: str, db: Session = Depends(get_db), curren
         if line.source_purchase_line_id:
             oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == line.source_purchase_line_id).first()
             if oc_line:
-                oc_line.qty_received = float(oc_line.qty_received or 0) - float(line.qty)
                 updated_purchase_orders.add(oc_line.order_id)
                 
-    # TODO: stock entry for purchase delivery notes (reversion)
+    _validate_purchase_stock_movements(db, dn)
+    _reverse_stock_impact(db, dn, generate_uuid())
     
     _log_history(db, dn.id, "ANULADO", "Remito anulado", current_user)
     

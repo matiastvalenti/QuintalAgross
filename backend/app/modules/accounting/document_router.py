@@ -560,9 +560,7 @@ def void_document(
                 
             letter = fx.line or "A"
             doc_tag = f"NC{letter}" if reverse_type == models.DocumentType.CREDIT_NOTE else f"ND{letter}"
-            new_num = numbering_service.get_next_number(db, sales_point, doc_tag)
-            
-            numbering_service.increment_last_number(db, sales_point, doc_tag)
+            new_num = numbering_service.reserve_next_number(db, sales_point, doc_tag)
             
             notes = f"Reversa por anulación de recibo. Cancela {fx.number} [ID:{fx.id}]"
             
@@ -731,6 +729,55 @@ def create_document(
 
     validate_invoice_origins(db, doc.doc_type, doc.entity_id, doc.lines)
 
+    # Habilitación operativa: controlar productos nuevos sin
+    # bloquear la facturación de operaciones históricas.
+    if doc.lines and not doc.is_initial_load and not (
+        doc.reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE
+    ):
+        from app.modules.inventory.product_operational import require_operational_product
+        from app.db.models.commercial_models import (
+            SalesOrderLine, PurchaseOrderLine
+        )
+
+        for line in doc.lines:
+            product_id = getattr(line, "product_id", None)
+            if not product_id:
+                continue
+
+            source_dn_id = getattr(line, "source_dn_line_id", None)
+            source_so_id = getattr(line, "source_sales_line_id", None)
+            source_po_id = getattr(line, "source_purchase_line_id", None)
+
+            historical = False
+
+            if source_dn_id:
+                source = db.query(DeliveryNoteLine).filter(
+                    DeliveryNoteLine.id == source_dn_id,
+                    DeliveryNoteLine.product_id == product_id
+                ).first()
+                historical = source is not None
+
+            if not historical and source_so_id:
+                source = db.query(SalesOrderLine).filter(
+                    SalesOrderLine.id == source_so_id,
+                    SalesOrderLine.product_id == product_id
+                ).first()
+                historical = source is not None
+
+            if not historical and source_po_id:
+                source = db.query(PurchaseOrderLine).join(
+                    models.PurchaseOrder,
+                    PurchaseOrderLine.order_id == models.PurchaseOrder.id
+                ).filter(
+                    PurchaseOrderLine.id == source_po_id,
+                    PurchaseOrderLine.product_id == product_id,
+                    models.PurchaseOrder.entity_id == doc.entity_id
+                ).first()
+                historical = source is not None
+
+            if not historical:
+                require_operational_product(db, product_id)
+
     # 0.0 Validar Diferencia de Cambio
     if doc.reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE:
         doc.is_exchange_difference = True
@@ -792,11 +839,9 @@ def create_document(
             pv_code = doc_number.split("-")[0]
         
         if not doc_number or "AUTO" in doc_number or doc_number.endswith("-"):
-            doc_number = numbering_service.get_next_number(db, pv_code, doc_tag)
-        
-        # Guardar para incrementar después del flush exitoso
-        pv_to_inc = pv_code
-        doc_tag_to_inc = doc_tag
+            doc_number = numbering_service.reserve_next_number(db, pv_code, doc_tag)
+        # Los números manuales no deben incrementar el contador automáticamente.
+
 
     if doc_number and doc_number.endswith("-00000000"):
         raise HTTPException(status_code=400, detail="El número de comprobante no puede ser 00000000. Genere un número válido.")
@@ -836,9 +881,7 @@ def create_document(
         # Log creation
         _log_history(db, db_doc.id, "CREACION", f"Documento {db_doc.doc_type} {db_doc.number} creado", current_user=current_user)
         
-        # Incrementar contador si aplica
-        if pv_to_inc and doc_tag_to_inc:
-            numbering_service.increment_last_number(db, pv_to_inc, doc_tag_to_inc)
+        # El contador se reservó de forma transaccional al generar el número.
 
 
         # Crear pagos si se proporcionan
@@ -953,7 +996,7 @@ def create_document(
                 qty = float(line_data.get("qty", 1.0) or 1.0)
                 unit_price = float(line_data.get("unit_price", 0.0) or 0.0)
                 discount_pct = float(line_data.get("discount_pct", 0.0) or 0.0)
-                vat_rate = float(line_data.get("vat_rate", 0.21) or 0.21)
+                vat_rate = float(0.21 if line_data.get("vat_rate") is None else line_data["vat_rate"])
 
                 qty_packages = line_data.get("qty_packages")
                 package_size = line_data.get("package_size")
@@ -1069,11 +1112,14 @@ def create_document(
                     dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == source_dn_line_id).first()
                     if dn_line:
                         from decimal import Decimal
-                        pending_dn = Decimal(str(dn_qty)) - Decimal(str(dn_qty_invoiced or 0))
+                        dn_qty = Decimal(str(dn_line.qty or 0))
+                        dn_qty_invoiced = Decimal(str(dn_line.qty_invoiced or 0))
+                        pending_dn = dn_qty - dn_qty_invoiced
                         if Decimal(str(qty)) > (pending_dn + Decimal('0.001')):
                             raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({qty}) supera lo pendiente en el remito ({pending_dn}).")
                             
-                        dn_qty_invoiced = Decimal(str(dn_qty_invoiced or 0)) + Decimal(str(qty))
+                        dn_line.qty_invoiced = dn_qty_invoiced + Decimal(str(qty))
+                        db.flush()
                         # Also update the origin Order Line (OV or OC)
                         if dn_line.source_sales_line_id:
                             from app.db.models.commercial_models import SalesOrderLine
@@ -1122,7 +1168,7 @@ def create_document(
                             
                             # Recalc line
                             discount = Decimal(str(ovl.discount_pct or 0))
-                            vat_rate = Decimal(str(ovl.vat_rate or 0.21))
+                            vat_rate = Decimal(str(0.21 if ovl.vat_rate is None else ovl.vat_rate))
                             qty = Decimal(str(ovl.qty))
                             sub = qty * new_price
                             bonif = sub * (discount / Decimal('100'))
@@ -1478,7 +1524,9 @@ def bulk_invoice_delivery_notes(
         validate_invoice_origins(db, req.doc_type, entity_id, delivery.lines)
 
     # 2. Generar Número de Documento
-    full_number = numbering_service.get_next_number(db, req.pv, req.doc_type.value if hasattr(req.doc_type, 'value') else str(req.doc_type))
+    if req.doc_type != models.DocumentType.INVOICE:
+        raise HTTPException(status_code=400, detail="La facturación masiva solo admite facturas de venta")
+    full_number = numbering_service.reserve_next_number(db, req.pv, f"F{req.letter.upper()}")
     
     # 3. Crear el Documento (Factura)
     new_doc = models.Document(
@@ -1526,7 +1574,7 @@ def bulk_invoice_delivery_notes(
             # Facturamos la cantidad completa del remito (o el remanente)
             # Todo el monto financiero se calcula en la moneda del Documento destino (Factura)
             subtotal = (qty_to_invoice * up).quantize(Decimal("0.01"))
-            vat_amount = (subtotal * Decimal(str(line.vat_rate or 0.21))).quantize(Decimal("0.01"))
+            vat_amount = (subtotal * Decimal(str(0.21 if line.vat_rate is None else line.vat_rate))).quantize(Decimal("0.01"))
             line_total = subtotal + vat_amount
 
             doc_line = models.DocumentLine(
@@ -1536,7 +1584,7 @@ def bulk_invoice_delivery_notes(
                 description=line.description or dn.number,
                 qty=float(qty_to_invoice),
                 unit_price=float(up),
-                vat_rate=float(line.vat_rate or 0.21),
+                vat_rate=float(0.21 if line.vat_rate is None else line.vat_rate),
                 net_amount=float(subtotal),
                 vat_amount=float(vat_amount),
                 total_amount=float(line_total),
@@ -1762,7 +1810,15 @@ def get_next_document_number(pv: str, doc_type: str, db: Session = Depends(get_d
     """
     doc_tag = doc_type
     if doc_type in ['INVOICE']: doc_tag = 'FA' # Default to FA for now or whatever doc_type is passed
-    if doc_type == 'PURCHASE_INVOICE': doc_tag = 'FC'
+    if doc_type in (
+        "PURCHASE_INVOICE",
+        "PURCHASE_CREDIT_NOTE",
+        "PURCHASE_DEBIT_NOTE",
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Los comprobantes de proveedores utilizan numeración externa.",
+        )
     # Use exact doc_type passed by frontend, since frontend can pass 'FA', 'FB', etc.
     if len(doc_type) <= 4:
         doc_tag = doc_type
@@ -2059,20 +2115,6 @@ def delete_application(id: str, db: Session = Depends(get_db), current_user: mod
 
 from app.modules.sales import numbering_service
 
-@router.get("/next-number")
-def get_next_document_number(pv: str, doc_type: str, db: Session = Depends(get_db)):
-    """
-    Retorna el próximo número sugerido para un comprobante y punto de venta.
-    """
-    doc_tag = doc_type
-    if doc_type in ['INVOICE']: doc_tag = 'FA' # Default to FA for now or whatever doc_type is passed
-    if doc_type == 'PURCHASE_INVOICE': doc_tag = 'FC'
-    # Use exact doc_type passed by frontend, since frontend can pass 'FA', 'FB', etc.
-    if len(doc_type) <= 4:
-        doc_tag = doc_type
-    
-    next_num = numbering_service.get_next_number(db, pv, doc_tag)
-    return {"next_number": next_num.split('-')[-1], "full_number": next_num}
 
 @router.put("/{id}", response_model=document_schemas.DocumentResponse, dependencies=[Depends(check_permission("sales_invoices", "edit"))])
 def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
@@ -2177,12 +2219,11 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                 elif doc.doc_type == models.DocumentType.DEBIT_NOTE: doc_tag = f"ND{letter}"
                 elif doc.doc_type == models.DocumentType.RECEIPT: doc_tag = "RECIBO"
                 elif doc.doc_type == models.DocumentType.PAYMENT: doc_tag = "PAGO"
-                elif doc.doc_type == models.DocumentType.PURCHASE_INVOICE: doc_tag = "FC"
+                # Facturas de proveedores: numeración externa, no generar FC.
 
                 if doc_tag:
-                    new_num = numbering_service.get_next_number(db, pv_code, doc_tag)
+                    new_num = numbering_service.reserve_next_number(db, pv_code, doc_tag)
                     update_data["number"] = new_num
-                    numbering_service.increment_last_number(db, pv_code, doc_tag)
 
             # Verificar duplicados tras posible auto-numeración
             final_num = update_data.get("number", data.number)
@@ -2210,6 +2251,29 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
             total_amount = update_data.get('total_amount', doc.total_amount)
             if total_amount <= 0:
                 raise HTTPException(status_code=400, detail="El importe de la diferencia de cambio debe ser mayor a 0.")
+
+        # Controlar productos nuevos o aumentos en borradores.
+        # Conservar cantidades históricas sin exigir rehabilitación.
+        if update_data.get("lines") is not None and reason_type != models.DocumentReasonType.EXCHANGE_DIFFERENCE:
+            from collections import defaultdict
+            from app.modules.inventory.product_operational import require_operational_product
+
+            previous_qty = defaultdict(float)
+            incoming_qty = defaultdict(float)
+
+            for old_line in doc.lines:
+                if old_line.product_id:
+                    previous_qty[str(old_line.product_id)] += float(old_line.qty or 0)
+
+            for new_line in update_data["lines"]:
+                product_id = new_line.get("product_id")
+                if not product_id:
+                    continue
+                incoming_qty[str(product_id)] += float(new_line.get("qty") or 0)
+
+            for product_id, qty in incoming_qty.items():
+                if qty > previous_qty.get(product_id, 0) + 0.000001:
+                    require_operational_product(db, product_id)
 
         lines_data = update_data.pop("lines", None)
         payments_data = update_data.pop("payments", None)
@@ -2259,7 +2323,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                 qty = float(line_dict.get("qty", 1.0) or 1.0)
                 unit_price = float(line_dict.get("unit_price", 0.0) or 0.0)
                 discount_pct = float(line_dict.get("discount_pct", 0.0) or 0.0)
-                vat_rate = float(line_dict.get("vat_rate", 0.21) or 0.21)
+                vat_rate = float(0.21 if line_dict.get("vat_rate") is None else line_dict["vat_rate"])
 
                 qty_packages = line_dict.get("qty_packages")
                 package_size = line_dict.get("package_size")
@@ -2393,91 +2457,29 @@ def annul_document(id: str, db: Session = Depends(get_db), current_user: models.
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
     
+    # No anular automáticamente comprobantes fiscales autorizados.
+    # La anulación fiscal requiere una NC válida y autorización real de ARCA.
+    if (
+        getattr(doc, "cae", None)
+        and doc.doc_type in (
+            models.DocumentType.INVOICE,
+            models.DocumentType.DEBIT_NOTE,
+            models.DocumentType.FCE_MIPYME,
+        )
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Anulación fiscal automática no disponible. "
+                "El comprobante original no fue modificado. "
+                "Se requiere un circuito autorizado por ARCA."
+            ),
+        )
+
     require_unapplied_draft(db, doc)
     was_draft = doc.is_draft
 
-    # --- LÓGICA DE ANULACIÓN FISCAL INTELIGENTE (OPCIÓN 2) ---
-    has_cae = bool(getattr(doc, "cae", None))
-    is_invoice_type = doc.doc_type in [models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE, models.DocumentType.FCE_MIPYME]
-    
     generated_nc_msg = ""
-    if has_cae and is_invoice_type:
-        from app.modules.sales import numbering_service
-        from app.db.models.models import DocumentType, DocumentStatus
-        
-        # 1. Determinar el tipo de NC compensatoria
-        nc_type = DocumentType.CREDIT_NOTE
-        # Determinar letra y PV (basado en el número actual: "A0003-00000123")
-        pv = "0003" # Default
-        if "-" in (doc.number or ""):
-            pv_part = doc.number.split("-")[0]
-            # La letra está al final del prefijo o al principio? Usualmente A, B, C etc.
-            # En este sistema parece que se maneja el PV limpio en numbering_service.
-            # Intentamos extraer PV numérico.
-            import re
-            pv_match = re.search(r'\d+', pv_part)
-            if pv_match: pv = pv_match.group().zfill(4)
-        
-        nc_number = numbering_service.get_next_number(db, pv, "CREDITO")
-        
-        # 2. Crear la Nota de Crédito (Cabecera Espejo)
-        new_nc = models.Document(
-            id=str(uuid.uuid4()),
-            entity_id=doc.entity_id,
-            doc_type=nc_type,
-            number=nc_number,
-            date=datetime.now(),
-            due_date=datetime.now(),
-            currency=doc.currency,
-            exchange_rate=doc.exchange_rate,
-            total_amount=doc.total_amount,
-            total_amount_ars=doc.total_amount_ars,
-            status=DocumentStatus.CLOSED, # Se cierra al nacer aplicada
-            notes=f"ANULACIÓN AUTOMÁTICA de {doc.doc_type} {doc.number}",
-            cae="SIM-NC-" + str(uuid.uuid4())[:8].upper(), # Simulación de CAE
-            cae_due_date=datetime.now() + timedelta(days=10),
-            created_by=current_user.username if current_user else "Sistema",
-            cost_center=doc.cost_center,
-            vendedor=doc.vendedor,
-            salesperson_id=doc.salesperson_id
-        )
-        db.add(new_nc)
-        db.flush()
-        
-        # 3. Clonar Líneas (Items espejo)
-        for line in doc.lines:
-            db.add(models.DocumentLine(
-                id=str(uuid.uuid4()),
-                document_id=new_nc.id,
-                product_id=line.product_id,
-                description=line.description,
-                qty=line.qty,
-                unit_price=line.unit_price,
-                discount_pct=line.discount_pct,
-                net_amount=line.net_amount,
-                vat_rate=line.vat_rate,
-                vat_amount=line.vat_amount,
-                total_amount=line.total_amount,
-                unit_cost=line.unit_cost,
-                total_cost=line.total_cost,
-                line_order=line.line_order,
-                account_code=line.account_code
-            ))
-            
-        # 4. Aplicar Financieramente (NC compensa Factura)
-        db.add(models.Application(
-            from_document_id=new_nc.id,
-            to_document_id=doc.id,
-            amount_applied=doc.total_amount,
-            amount_applied_ars=doc.total_amount_ars,
-            exchange_rate=doc.exchange_rate
-        ))
-        
-        # 5. Incrementar contador y Logear
-        numbering_service.increment_last_number(db, pv, "CREDITO")
-        _log_history(db, doc.id, "ANULACION_FISCAL", f"Se generó automáticamente la NC {new_nc.number} para anulación fiscal.", current_user=current_user)
-        require_accounting(db, new_nc)
-        generated_nc_msg = f". Se generó NC {new_nc.number} de anulación"
 
     # --- LÓGICA DE REVERSIÓN ESTÁNDAR ---
     # 1. Revertir stocks / remitos / órdenes si corresponde

@@ -197,7 +197,8 @@ export default function GrainSettlementModal(props) {
             total_kilos: form.total_kilos,
             price_per_ton: form.price_per_ton,
             sisa_status: form.sisa_status || '1',
-            has_broker: !!form.broker_id
+            has_broker: !!form.broker_id,
+            settlement_type: form.settlement_type
           };
           const data = await api.post('/grains/settlements/calculate', null, { params });
           setForm(f => ({

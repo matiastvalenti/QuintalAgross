@@ -1,3 +1,4 @@
+from app.modules.inventory.product_operational import require_operational_product
 """Endpoints for Complex Stock Actions (Adjustments, Transfers, Multi-line)."""
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session, joinedload
@@ -36,6 +37,9 @@ def _negative_stock_warnings(items):
 
 @router.post("/movements", status_code=201)
 def create_stock_movement(data: stock_schemas.StockMovementHeaderCreate, db: Session = Depends(get_db)):
+    # Validar productos antes de generar movimientos de stock.
+    for line_data in data.lines:
+        require_operational_product(db, line_data.product_id)
     """Create a new complex stock movement (multi-line)."""
     header = StockMovementHeader(
         number=data.number or f"ST-{str(uuid.uuid4())[:8]}",
@@ -230,6 +234,8 @@ def void_stock_movement(header_id: str, db: Session = Depends(get_db)):
 # ── Keep compatibility for old simple endpoints if needed ──
 @router.post("/adjust", status_code=201)
 def adjust_stock(data: stock_schemas.StockAdjustmentCreate, db: Session = Depends(get_db)):
+    # Validar producto antes del ajuste manual.
+    require_operational_product(db, data.product_id)
     """Legacy endpoint for single product adjust."""
     item = _get_or_create_stock_item(db, data.product_id, data.warehouse_id)
     item.qty_on_hand = Decimal(str(item.qty_on_hand)) + data.qty

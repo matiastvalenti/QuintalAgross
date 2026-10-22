@@ -45,6 +45,11 @@ class AICandidate(BaseModel):
     container_size: Optional[str] = None
 
 class AIItem(BaseModel):
+    # Referencias explícitas para conciliación OC -> remito -> factura.
+    source_purchase_line_id: Optional[str] = None
+    source_dn_line_id: Optional[str] = None
+    # Cantidad conciliada en la unidad de stock del producto.
+    stock_quantity: Optional[float] = None
     line_no: int
     raw_description: str
     supplier_item_code: Optional[str] = None

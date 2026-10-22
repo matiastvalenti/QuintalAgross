@@ -58,24 +58,37 @@ const NAV_GROUPS = [
         ]
       },
       {
-        label: 'Cereales', icon: Wheat, perm: 'sales_orders',
+        label: 'Cereales',
+        icon: Wheat,
         children: [
-          { label: 'Liq. Primarias (Compra)', to: '/cereales/liquidaciones-primarias', perm: 'sales_orders' },
-          { label: 'Liq. Secundarias (Venta)', to: '/cereales/liquidaciones-secundarias', perm: 'sales_orders' },
-          { label: 'Contratos', to: '/cereales/contratos', perm: 'sales_orders' },
-          { label: 'Movimientos', to: '/cereales/movimientos', perm: 'sales_orders' },
-          { label: 'Stock de Granos', to: '/cereales/stock', perm: 'sales_orders' },
+          {
+            label: 'Liq. Primarias (Compra)',
+            to: '/cereales/liquidaciones-primarias',
+            perm: 'grain_primary_settlements'
+          },
+          {
+            label: 'Liq. Secundarias (Venta)',
+            to: '/cereales/liquidaciones-secundarias',
+            perm: 'grain_secondary_settlements'
+          },
+          {
+            label: 'Contratos',
+            to: '/cereales/contratos',
+            perm: 'grain_contracts'
+          },
+          {
+            label: 'Movimientos',
+            to: '/cereales/movimientos',
+            perm: 'grain_movements'
+          },
+          {
+            label: 'Stock de Granos',
+            to: '/cereales/stock',
+            perm: 'grain_stock'
+          }
         ]
       },
-      {
-        label: 'Inventario', icon: Package, perm: 'items',
-        children: [
-          { label: 'Dashboard Ejecutivo', to: '/inventario/dashboard', perm: 'items' },
-          { label: 'Artículos', to: '/inventario/articulos', perm: 'items' },
-          { label: 'Depósitos', to: '/inventario/depositos', perm: 'items' },
-          { label: 'Movimientos / Ajustes', to: '/inventario/movimientos', perm: 'items' },
-        ]
-      }
+
     ]
   },
   {
@@ -260,7 +273,19 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
       <nav className={s.nav}>
         {NAV_GROUPS.map((group, gIdx) => {
           // Filtrar items permitidos
-          const allowedItems = group.items.filter(item => !item.perm || can(item.perm, 'view'));
+          const allowedItems = group.items.filter(item => {
+  const hasOwnPermission = !item.perm || can(item.perm, 'view');
+
+  if (!hasOwnPermission) return false;
+
+  if (item.children?.length) {
+    return item.children.some(
+      child => !child.perm || can(child.perm, 'view')
+    );
+  }
+
+  return true;
+});
           if (allowedItems.length === 0) return null;
 
           return (

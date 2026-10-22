@@ -470,3 +470,102 @@
 .invoicePaymentSub.warning {
   color: #d97706;
 }
+
+/* QUINTAL SALES THEME V1 - identidad visual del dashboard, opt-in */
+.quintalTheme {
+    --q-bg: #101729;
+    --q-panel: #202C46;
+    --q-accent: #6955CF;
+    --q-text: #F8FAFC;
+    --q-muted: #94A3B8;
+    --q-border: rgba(255,255,255,.10);
+    background: var(--q-bg);
+    color: var(--q-text);
+    font-family: Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+    padding: 24px 32px 48px;
+    gap: 20px;
+    box-sizing: border-box;
+}
+.quintalTheme .kpiRow { flex-wrap: wrap; gap: 14px; }
+.quintalTheme .kpiCard {
+    background: var(--q-panel);
+    border: 1px solid var(--q-border);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.12);
+    min-width: 175px;
+    padding: 18px 20px;
+}
+.quintalTheme .kpiHeader, .quintalTheme .kpiSub { color: var(--q-muted); }
+.quintalTheme .kpiValue {
+    color: var(--q-text);
+    font-family: Inter, system-ui, sans-serif;
+    font-size: 23px;
+    font-weight: 800;
+}
+.quintalTheme .toolbar, .quintalTheme .cardTable, .quintalTheme .paginationBar {
+    background: var(--q-panel);
+    border: 1px solid var(--q-border);
+    border-radius: 14px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.10);
+}
+.quintalTheme .searchWrap input, .quintalTheme .filterSelect, .quintalTheme .dateInput {
+    background: #151F35;
+    color: var(--q-text);
+    border: 1px solid var(--q-border);
+}
+.quintalTheme .searchWrap input::placeholder { color: var(--q-muted); }
+.quintalTheme .searchWrap input:focus, .quintalTheme .filterSelect:focus, .quintalTheme .dateInput:focus {
+    border-color: var(--q-accent);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(105,85,207,.20);
+}
+.quintalTheme .filterToggle, .quintalTheme .ghostBtn {
+    background: #19253C;
+    color: #CBD5E1;
+    border: 1px solid var(--q-border);
+}
+.quintalTheme .primaryCta, .quintalTheme .pageNum.active { background: var(--q-accent); color: white; }
+.quintalTheme .primaryCta:hover { background: #7B68DC; }
+.quintalTheme .th {
+    background: #172239;
+    color: #CBD5E1;
+    border-color: var(--q-border);
+}
+.quintalTheme .td { color: var(--q-text); border-color: var(--q-border); }
+.quintalTheme .row { background: var(--q-panel); }
+.quintalTheme .row:hover, .quintalTheme .rowSelected { background: #293956; }
+.quintalTheme .numberCell, .quintalTheme .totalCell { color: var(--q-text); }
+.quintalTheme .currencyLabel, .quintalTheme .userBadge { color: #CBD5E1; }
+.quintalTheme .paginationInfo, .quintalTheme .pageNum { color: var(--q-muted); }
+.quintalTheme .pageNum { border-color: var(--q-border); }
+.quintalTheme .compactFiltersRow { color: var(--q-text); }
+@media (max-width: 900px) {
+    .quintalTheme { padding: 16px; }
+    .quintalTheme .toolbarMain { flex-wrap: wrap; }
+    .quintalTheme .kpiCard { min-width: 145px; }
+}
+
+/* Quintal: estado vacío de Órdenes de Venta (no afecta otros módulos) */
+.salesEmptyState > div {
+  padding: 40px 24px !important;
+  background: #202c46 !important;
+  border: 1px dashed #3b4a6b !important;
+  border-radius: 16px !important;
+}
+.salesEmptyState > div > div:first-child {
+  background: #302b58 !important;
+  color: #b8aaff !important;
+  border: 1px solid #554a90;
+  padding: 18px !important;
+}
+.salesEmptyState > div > div:first-child svg {
+  color: #b8aaff !important;
+  stroke: currentColor;
+}
+.salesEmptyState h3 {
+  color: #f8fafc !important;
+}
+.salesEmptyState p {
+  color: #c2cee2 !important;
+  font-size: 14px !important;
+}

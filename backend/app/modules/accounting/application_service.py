@@ -60,8 +60,7 @@ def void_sales_application(db: Session, application_id: str, reason: str = None)
                 
             letter = original_fx_doc.line or "A"
             doc_tag = f"NC{letter}" if is_nd else f"ND{letter}"
-            doc_number = numbering_service.get_next_number(db, pv, doc_tag)
-            numbering_service.increment_last_number(db, pv, doc_tag)
+            doc_number = numbering_service.reserve_next_number(db, pv, doc_tag)
             
             notes = f"Reversa automática por anulación de aplicación. Cancela {original_fx_doc.doc_type.value} {original_fx_doc.number} [ID:{original_fx_doc.id}]"
             

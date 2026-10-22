@@ -189,7 +189,7 @@ def reject_cheque(cheque_id: int, rej: cheque_schemas.ChequeRejection, db: Sessi
             line_type = "B"
             
         doc_type_code = f"ND{line_type}"
-        next_num = numbering_service.get_next_number(db, pv, doc_type_code)
+        next_num = numbering_service.reserve_next_number(db, pv, doc_type_code)
         
         new_nd = models.Document(
             entity_id=ch.entity_id,
@@ -238,7 +238,7 @@ def reject_cheque(cheque_id: int, rej: cheque_schemas.ChequeRejection, db: Sessi
             new_nd.total_amount += vat_amt
             new_nd.total_amount_ars += vat_amt
             
-        numbering_service.increment_last_number(db, pv, doc_type_code)
+        # Numeración ya reservada en esta transacción.
         ch.nd_realizada = True
         nd_id = new_nd.id
 
@@ -268,7 +268,7 @@ def clear_cheque(cheque_id: int, clear_data: Optional[cheque_schemas.ChequeClear
             line_type = "B"
             
         doc_type_code = f"ND{line_type}"
-        next_num = numbering_service.get_next_number(db, pv, doc_type_code)
+        next_num = numbering_service.reserve_next_number(db, pv, doc_type_code)
         
         vat_amt = clear_data.nd_expenses * 0.21
         total_nd = clear_data.nd_expenses + vat_amt
@@ -302,7 +302,7 @@ def clear_cheque(cheque_id: int, clear_data: Optional[cheque_schemas.ChequeClear
             line_order=0
         ))
         
-        numbering_service.increment_last_number(db, pv, doc_type_code)
+        # Numeración ya reservada en esta transacción.
         nd_id = new_nd.id
         ch.notas = f"{ch.notas or ''} | {clear_data.reason} (ND: {next_num})".strip()
 

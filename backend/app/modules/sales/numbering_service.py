@@ -104,7 +104,62 @@ def increment_last_number(db: Session, pv_code: str, doc_type: str):
         PosDocumentConfig.document_type.in_(lookup_tags)
     ).with_for_update().first()
     if cfg:
-        cfg.last_number += 1
+        if not cfg.pos.active:
+            raise ValueError(
+                f"El punto de venta {pv_code} está inactivo y no puede emitir nuevos comprobantes."
+            )
+        db_last = _get_max_from_db(db, pv_code, doc_type)
+        cfg.last_number = max(cfg.last_number, db_last) + 1
         db.flush()
         return True
     return False
+
+
+def reserve_next_number(db: Session, pv_code: str, doc_type: str) -> str:
+    """Reserva un correlativo en la transacción ACTUAL (no hace commit).
+
+    El llamador debe guardar el documento y confirmar o revertir la misma sesión.
+    Las consultas de vista previa deben seguir usando get_next_number().
+    """
+    from sqlalchemy import update, func, case, select
+
+    pv_code = str(pv_code).strip().zfill(4)
+    aliases = [doc_type]
+    if doc_type in ("RE", "RM", "REMITO"):
+        aliases = ["RE", "RM", "REMITO"]
+    elif doc_type in ("PAGO", "ORDEN_PAGO"):
+        aliases = ["PAGO", "ORDEN_PAGO"]
+    elif doc_type == "RECIBO":
+        aliases = ["RECIBO", "RECEIPT"]
+
+    # Este SELECT es informativo; la serialización real sucede en el UPDATE.
+    pos = db.query(PointOfSale).filter(PointOfSale.pv == pv_code).one_or_none()
+    if pos is None:
+        raise ValueError(f"No existe el punto de venta {pv_code}")
+    if not pos.active:
+        raise ValueError(f"El punto de venta {pv_code} está inactivo")
+
+    configs = db.query(PosDocumentConfig).filter(
+        PosDocumentConfig.pos_id == pos.id,
+        PosDocumentConfig.document_type.in_(aliases),
+    ).order_by(PosDocumentConfig.document_type).all()
+    if len(configs) != 1:
+        raise ValueError(
+            f"Debe existir una única configuración para {doc_type} en PV {pv_code}; "
+            f"se encontraron {len(configs)}"
+        )
+    cfg = configs[0]
+    historic_max = _get_max_from_db(db, pv_code, doc_type)
+
+    # UPDATE ... RETURNING obtiene un valor único aun con emisores simultáneos.
+    # max() es función escalar de SQLite con dos argumentos.
+    stmt = (
+        update(PosDocumentConfig)
+        .where(PosDocumentConfig.id == cfg.id)
+        .values(last_number=func.max(PosDocumentConfig.last_number, historic_max) + 1)
+        .returning(PosDocumentConfig.last_number)
+    )
+    reserved = db.execute(stmt).scalar_one()
+    # Evitar que una instancia ORM precargada reescriba el contador reservado.
+    db.expire(cfg, ["last_number"])
+    return f"{pv_code}-{reserved:08d}"

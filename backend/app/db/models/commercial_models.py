@@ -181,6 +181,7 @@ class Product(Base):
 
     is_service = Column(Boolean, default=False)
     active = Column(Boolean, default=True)
+    operational_enabled = Column(Boolean, default=False)
 
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
