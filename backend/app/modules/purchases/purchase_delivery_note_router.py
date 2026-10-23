@@ -126,6 +126,8 @@ def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), 
         id=generate_uuid(),
         entity_id=entity_id,
         warehouse_id=warehouse_id,
+        salesperson_id=payload.get("salesperson_id") or None,
+        sale_condition_id=payload.get("sale_condition_id") or None,
         number=number,
         date=date_val,
         status=DeliveryNoteStatus.DISPATCHED, # Los remitos de compra entran confirmados por defecto o en borrador si se desea, usamos CONFIRMED por simplicidad
@@ -284,6 +286,8 @@ def update_purchase_delivery_note(id: str, payload: dict, db: Session = Depends(
     
     # Update header
     if "number" in payload: dn.number = payload["number"]
+    if "salesperson_id" in payload: dn.salesperson_id = payload["salesperson_id"] or None
+    if "sale_condition_id" in payload: dn.sale_condition_id = payload["sale_condition_id"] or None
     if "date" in payload and payload["date"]:
         try:
             dn.date = datetime.fromisoformat(payload["date"].replace("Z", "+00:00"))
