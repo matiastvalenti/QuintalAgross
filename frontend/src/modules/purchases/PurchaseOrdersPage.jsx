@@ -9,6 +9,7 @@ import t from '../../components/ui/Table.module.css';
 import s from '../../components/layout/DocumentListPage.module.css';
 import { openNuevaOrdenCompra, openEditOrdenCompra } from '../../utils/openStandaloneWindow';
 import { useToast } from '../../context/ToastContext';
+import { useWindow } from '../../context/WindowContext';
 import { TraceabilityProgress } from '../../components/ui/TraceabilityStatusBadge';
 import StatusBadge from '../../components/ui/StatusBadge';
 import api from '../../services/api';
@@ -63,6 +64,7 @@ export default function PurchaseOrdersPage() {
   const pageSize = 12;
   
   const { showToast } = useToast();
+  const { openWindow } = useWindow();
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -98,11 +100,25 @@ export default function PurchaseOrdersPage() {
   };
 
   const handleOpenNew = () => {
-    openNuevaOrdenCompra();
+    openWindow('purchase-order', { mode: 'new' }, {
+      title: 'Nueva Orden de Compra',
+      width: 1280,
+      height: 820,
+      minWidth: 720,
+      minHeight: 480,
+      singletonKey: 'purchase-order-new',
+    });
   };
 
   const handleOpenDetail = (id) => {
-    openEditOrdenCompra(id);
+    openWindow('purchase-order', { mode: 'edit', id }, {
+      title: 'Orden de Compra',
+      width: 1280,
+      height: 820,
+      minWidth: 720,
+      minHeight: 480,
+      singletonKey: `purchase-order-${id}`,
+    });
   };
 
   const handleDelete = async (id, number) => {
