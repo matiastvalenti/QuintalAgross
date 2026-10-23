@@ -126,11 +126,40 @@ export function useInternalCommercialDocuments() {
     return open("purchase-order", { mode: "edit", id }, `Orden de Compra ${id}`, `purchase-order-${id}`, options);
   };
 
+  const openNote = (purchase, debit, value = null, options = {}) => {
+    const id = options.mode === "edit" ? idOf(value) : null;
+    const invoiceId = !id && value && typeof value === "object" ? value.factura_id : null;
+    const docType = purchase
+      ? (debit ? "PURCHASE_DEBIT_NOTE" : "PURCHASE_CREDIT_NOTE")
+      : (debit ? "DEBIT_NOTE" : "CREDIT_NOTE");
+    const title = `${debit ? "Nota de Débito" : "Nota de Crédito"} de ${purchase ? "Compra" : "Venta"}`;
+    return open(purchase ? "purchase-invoice-form" : "invoice-form", {
+      mode: id ? "edit" : "new",
+      id: id || null,
+      initialDocType: docType,
+      initialSourceType: invoiceId ? "invoice" : null,
+      initialSourceId: invoiceId || null,
+    }, id ? `${title} ${id}` : `Nueva ${title}`,
+    `${docType.toLowerCase()}-${id || invoiceId || "new"}`, options);
+  };
+
+  const openNuevaNotaDebito = (params = {}, options = {}) => openNote(false, true, params, options);
+  const openEditNotaDebito = (value, options = {}) => openNote(false, true, value, { ...options, mode: "edit" });
+  const openNuevaNotaCredito = (params = {}, options = {}) => openNote(false, false, params, options);
+  const openEditNotaCredito = (value, options = {}) => openNote(false, false, value, { ...options, mode: "edit" });
+  const openNuevaNotaDebitoCompra = (params = {}, options = {}) => openNote(true, true, params, options);
+  const openEditNotaDebitoCompra = (value, options = {}) => openNote(true, true, value, { ...options, mode: "edit" });
+  const openNuevaNotaCreditoCompra = (params = {}, options = {}) => openNote(true, false, params, options);
+  const openEditNotaCreditoCompra = (value, options = {}) => openNote(true, false, value, { ...options, mode: "edit" });
+
   return {
     openNuevaFactura, openEditFactura,
     openNuevaFacturaCompra, openEditFacturaCompra,
     openNuevoRemito, openEditRemito,
     openNuevoRemitoEntrada, openEditRemitoEntrada,
     openEditOrdenVenta, openEditPurchaseOrder,
+    openNuevaNotaDebito, openEditNotaDebito, openNuevaNotaCredito, openEditNotaCredito,
+    openNuevaNotaDebitoCompra, openEditNotaDebitoCompra,
+    openNuevaNotaCreditoCompra, openEditNotaCreditoCompra,
   };
 }
