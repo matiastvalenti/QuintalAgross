@@ -1244,3 +1244,129 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* QUINTAL PURCHASE WORKSPACE — misma identidad visual que Orden de Venta.
+   Overrides limitados al formulario; no alteran reglas de negocio. */
+.formCard {
+  --bg-page: #101729;
+  --panel: #202c46;
+  --text: #f8fafc;
+  --text-secondary: #c2cee2;
+  --muted: #aebdd7;
+  --border-color: #354361;
+  --primary: #6955cf;
+  --primary-hover: #7b68dc;
+  --secondary: #c4b5fd;
+  --subtle: #354361;
+  background: #101729;
+  color: #f8fafc;
+  border: 1px solid #354361;
+  border-radius: 14px;
+  box-shadow: 0 18px 45px rgba(0,0,0,.22);
+  color-scheme: dark;
+}
+.formCardStandalone {
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 100vh;
+}
+.formCard .headerLine { border-color: #354361 !important; }
+.formCard .titleGroup h1,
+.formCard .compactHeaderTitle,
+.formCard .headerMeta { color: #f8fafc; }
+.formCard .bodyTwoColumns,
+.formCard .leftCol,
+.formCard .rightCol,
+.formCard .bentoContainer { background: #101729; }
+.formCard .sideBlock,
+.formCard .relationsBar,
+.formCard .relationCard,
+.formCard .summaryPanel,
+.formCard .footerCompact,
+.formCard .searchRibbon,
+.formCard .observationsPanel,
+.formCard .itemsPanel,
+.formCard .flowPanel,
+.formCard .balancePanel,
+.formCard .contextPanel,
+.formCard .clientPanel,
+.formCard .middleRightPanel,
+.formCard .bottomRightPanel,
+.formCard .formBlock,
+.formCard .productsPanelCompact,
+.formCard .accordion,
+.formCard .tabContent {
+  background: #202c46;
+  color: #f8fafc;
+  border-color: #354361;
+}
+.formCard .itemsList { background: #202c46; }
+.formCard .tableHeader,
+.formCard .panelTabs,
+.formCard .tabsBar { background: #172239; border-color: #354361; }
+.formCard .tableRow { background: #202c46; border-color: #354361; }
+.formCard .tableRow:hover { background: #293956; }
+.formCard .sideBlockTitle,
+.formCard .blockTitle,
+.formCard .panelTitle,
+.formCard .contextPanelTitle,
+.formCard .th,
+.formCard .nodeTitle,
+.formCard .footerCompactLabel,
+.formCard .summaryLabel,
+.formCard .sideField label,
+.formCard .field label,
+.formCard .clientField label,
+.formCard .commercialField label,
+.formCard .contextField label { color: #b8aaff; }
+.formCard .footerCompactValue,
+.formCard .summaryValue,
+.formCard .nodeMetric,
+.formCard .readonlyControl { color: #f8fafc; }
+.formCard .sideInput,
+.formCard .sideSelect,
+.formCard .tableInput,
+.formCard .input,
+.formCard .select,
+.formCard .contextSelect,
+.formCard .contextButton,
+.formCard .contextInput,
+.formCard .readonlyControl,
+.formCard .clientInput,
+.formCard .clientSelect,
+.formCard .commercialInput,
+.formCard .commercialSelect,
+.formCard .observationsTextarea,
+.formCard .obsInput,
+.formCard input:not([type="checkbox"]):not([type="radio"]),
+.formCard select,
+.formCard textarea {
+  background: #151f35;
+  border-color: #354361;
+  color: #f8fafc;
+  -webkit-text-fill-color: #f8fafc;
+  color-scheme: dark;
+}
+.formCard input::placeholder,
+.formCard textarea::placeholder { color: #94a3b8; -webkit-text-fill-color: #94a3b8; }
+.formCard input:focus,
+.formCard select:focus,
+.formCard textarea:focus { outline-color: #8b7be8; border-color: #8b7be8; }
+.formCard .saveBtn,
+.formCard .tabActive,
+.formCard .panelTabActive,
+.formCard .contextTabActive { background: #6955cf; color: #fff; border-color: #6955cf; }
+.formCard .saveBtn:hover { background: #7b68dc; }
+.formCard .actionGroup,
+.formCard .actionBtn,
+.formCard .relationAction,
+.formCard .contextTab { background: #19253c; color: #dbe4f5; border-color: #354361; }
+.formCard .actionBtn:hover,
+.formCard .relationAction:hover { background: #293956; border-color: #6955cf; }
+.formCard .nodeBadge { background: #302b58; color: #c4b5fd; }
+.formCard .footerCompactTotal { color: #c4b5fd; }
+.formCard .readOnlyBadge { background: #302b58; color: #c4b5fd; border-color: #55478d; }
+@media (max-width: 900px) {
+  .formCard { padding: 12px; }
+  .formCard .bodyTwoColumns { gap: 12px; }
+}
