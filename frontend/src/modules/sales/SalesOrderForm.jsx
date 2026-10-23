@@ -62,6 +62,7 @@ import ManualLinkDeliveryNoteModal from "./ManualLinkDeliveryNoteModal";
 import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
 import { useInternalCommercialDocuments } from "../common/useInternalCommercialDocuments";
 import OrderEmailDialog from "../common/OrderEmailDialog";
+import BnaDivisasRateField, { argentinaToday } from "../common/BnaDivisasRateField";
 
 export default function SalesOrderForm(props) {
   const {
@@ -89,8 +90,8 @@ export default function SalesOrderForm(props) {
   const [secondaryTab, setSecondaryTab] = useState('billing');
   const [saving, setSaving] = useState(false);
   // --- Header Data ---
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => argentinaToday());
+  const [dueDate, setDueDate] = useState(() => argentinaToday());
   const [ctroCosto, setCtroCosto] = useState(String(costCenter || 1));
   const [entity, setEntity] = useState(null);
   const [pv, setPv] = useState("0001");
@@ -176,7 +177,6 @@ export default function SalesOrderForm(props) {
   useEffect(() => {
     if (mode === "edit" && id) fetchSalesOrder(id);
     else if (mode === "new") {
-        fetchExchangeRate();
         fetchNextNumber(pv);
     }
   }, [mode, id, pv]);
@@ -368,17 +368,6 @@ export default function SalesOrderForm(props) {
       showToast("Error al cargar orden", "error");
     } finally {
       if (!silent) setLoading(false);
-    }
-  };
-
-  const fetchExchangeRate = async () => {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/accounting/fx/usd`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setExchangeRate(data.rate);
     }
   };
 
@@ -1126,12 +1115,22 @@ export default function SalesOrderForm(props) {
                                   </select>
                               )}
                           </div>
-                          <div className={`${s.sideField} ${w.sideField}`} style={{ flex: 1 }}>
-                              <label>Tipo de cambio</label>
-                              {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`} style={{ width: '50%' }}>{exchangeRate}</div> : (
-                                  <input type="number" className={`${s.sideInput} ${w.sideInput}`} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
-                              )}
-                          </div>
+                          {isReadOnly ? (
+                              <div className={`${s.sideField} ${w.sideField}`}>
+                                  <label>Tipo de cambio</label>
+                                  <div className={`${s.sideInput} ${w.sideInput}`}>{exchangeRate}</div>
+                              </div>
+                          ) : (
+                              <div className={w.fxOrderField}>
+                                  <BnaDivisasRateField
+                                      value={exchangeRate}
+                                      onChange={setExchangeRate}
+                                      date={date}
+                                      currency={currency}
+                                      isNew={mode === "new"}
+                                  />
+                              </div>
+                          )}
                       </div>
                   </div>
               </div>
