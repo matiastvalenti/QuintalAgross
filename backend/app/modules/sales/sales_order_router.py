@@ -1,3 +1,6 @@
+from app.modules.sales.sales_order_edit_rules import validate_sales_order_line_invoicing
+from app.modules.sales.sales_order_line_identity import validate_sales_order_line_ids
+from app.modules.sales.sales_order_edit_rules import validate_sales_order_line_edit, validate_sales_order_line_deletion
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func
@@ -21,7 +24,7 @@ from fastapi.responses import Response
 from app.modules.finance.pdf_export import export_document_to_pdf
 from app.modules.finance.mailer import send_email
 from pydantic import BaseModel
-from app.modules.inventory.stock_utils import reserve_stock, unreserve_stock
+from app.modules.inventory.stock_utils import reserve_stock, unreserve_stock, reserve_available_stock
 from app.modules.sales.sales_utils import recalc_sales_order_status, sync_sales_order_traceability, recalc_sales_order_traceability_strict
 
 class EmailPayload(BaseModel):
@@ -31,6 +34,7 @@ class EmailPayload(BaseModel):
 
 router = APIRouter(prefix="/sales-orders", tags=["Sales Orders"])
 
+from app.modules.inventory.reservation_reconciliation import reconcile_product_reservations
 def _generate_next_number(pv: str, db: Session) -> str:
     """Calcula el próximo número para OV."""
     return numbering_service.get_next_number(db, pv, "OV")
@@ -250,12 +254,20 @@ def create_sales_order(
         )
         db.add(db_line)
         
-        # 3. Reservar Stock si nace CONFIRMADA
-        if db_order.status == OrderStatus.CONFIRMED and db_order.warehouse_id:
-            # Reservamos segun qty (cantidad comercial)
-            reserve_stock(db, db_line.product_id, db_order.warehouse_id, db_line.qty)
-
+    # Guardar todas las líneas antes de conciliar.
     db.flush()
+
+    # Conciliar una sola vez por producto.
+    if db_order.status == OrderStatus.CONFIRMED and db_order.warehouse_id:
+        product_ids = {
+            line.product_id
+            for line in db_order.lines
+            if line.product_id
+        }
+        for product_id in sorted(product_ids):
+            reconcile_product_reservations(
+                db, product_id, db_order.warehouse_id
+            )
     db.refresh(db_order)
     _recalc_total(db_order, db)
     db_order.created_by = db_order.vendedor or "Admin"
@@ -283,54 +295,181 @@ def manual_link_remito(
     order_id: str,
     data: dn_schemas.ManualLinkRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
-    """
-    Vincula manualmente líneas de uno o más remitos a líneas de esta Orden de Venta.
-    Actualiza qty_delivered en la OV y source_sales_line_id en el Remito.
-    """
-    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
+    """Vincula remitos a una OV sin duplicar entregas ni reservas."""
+    from app.db.models.commercial_models import (
+        DeliveryNoteStatus,
+        OrderType,
+    )
+
+    order = db.query(SalesOrder).filter(
+        SalesOrder.id == order_id
+    ).first()
+
     if not order:
-        raise HTTPException(status_code=404, detail="Orden de Venta no encontrada")
+        raise HTTPException(
+            status_code=404,
+            detail="Orden de Venta no encontrada",
+        )
 
-    from app.db.models.commercial_models import DeliveryNoteStatus
-    from app.modules.inventory.stock_utils import unreserve_stock
+    if not order.warehouse_id:
+        raise HTTPException(
+            status_code=409,
+            detail="La OV no tiene depósito asignado",
+        )
 
-    for match in data.matches:
-        dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == match.dn_line_id).first()
-        ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == match.ov_line_id).first()
-        
-        if not dn_line or not ov_line:
-            continue
-            
-        if ov_line.order_id != order.id:
-            continue
+    affected_products = set()
+    processed_lines = set()
+    linked_count = 0
+    unchanged_count = 0
 
-        qty = Decimal(str(match.qty))
-        
-        # 1. Actualizar Remito
-        dn_line.source_sales_line_id = ov_line.id
-        
-        # 2. Vincular el Remito cabecera si es el primer vínculo o no tiene origen
-        dn = dn_line.delivery_note
-        if not dn.sales_order_id:
-            dn.sales_order_id = order.id
-            dn.origin_reference = order.number
+    try:
+        for match in data.matches:
+            if match.dn_line_id in processed_lines:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Una línea de remito aparece repetida",
+                )
 
-        # 3. Solo actualizar qty_delivered si el remito ya impactó stock (está despachado)
-        if dn.status == DeliveryNoteStatus.DISPATCHED:
-            ov_line.qty_delivered = Decimal(str(ov_line.qty_delivered or 0)) + qty
-            # Si el remito ya está despachado, debemos descontar stock reservado en la OV
-            if order.warehouse_id:
-                unreserve_stock(db, ov_line.product_id, order.warehouse_id, qty)
-        
-        _log_history(db, order.id, "VINCULO", f"Remito {dn.number} vinculado manualmente ({qty} u.)", current_user=current_user)
+            processed_lines.add(match.dn_line_id)
 
-    db.commit()
-    _recalc_status(db, order.id)
-    db.commit()
-    
-    return {"status": "ok", "message": "Vínculos establecidos correctamente"}
+            dn_line = db.query(DeliveryNoteLine).filter(
+                DeliveryNoteLine.id == match.dn_line_id
+            ).first()
+
+            ov_line = db.query(SalesOrderLine).filter(
+                SalesOrderLine.id == match.ov_line_id
+            ).first()
+
+            if not dn_line or not ov_line:
+                raise HTTPException(
+                    status_code=404,
+                    detail="Línea de remito u OV inexistente",
+                )
+
+            if ov_line.order_id != order.id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="La línea no pertenece a esta OV",
+                )
+
+            dn = dn_line.delivery_note
+
+            if dn is None:
+                raise HTTPException(
+                    status_code=409,
+                    detail="El remito no tiene cabecera válida",
+                )
+
+            if dn.note_type != OrderType.SALE:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Solo se pueden vincular remitos de venta",
+                )
+
+            if dn.status not in (
+                DeliveryNoteStatus.DRAFT,
+                DeliveryNoteStatus.DISPATCHED,
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="El estado del remito no permite vincularlo",
+                )
+
+            if dn.warehouse_id != order.warehouse_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="El depósito del remito no coincide con la OV",
+                )
+
+            if dn.entity_id != order.entity_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="El cliente del remito no coincide con la OV",
+                )
+
+            if dn.sales_order_id not in (None, order.id):
+                raise HTTPException(
+                    status_code=409,
+                    detail="El remito pertenece a otra OV",
+                )
+
+            if dn_line.product_id != ov_line.product_id:
+                raise HTTPException(
+                    status_code=409,
+                    detail="El producto del remito no coincide con la OV",
+                )
+
+            qty = Decimal(str(match.qty))
+            remito_qty = Decimal(str(dn_line.qty or 0))
+
+            if qty <= 0 or qty != remito_qty:
+                raise HTTPException(
+                    status_code=409,
+                    detail="La cantidad vinculada debe coincidir "
+                           "con la línea completa del remito",
+                )
+
+            if dn_line.source_sales_line_id:
+                if dn_line.source_sales_line_id == ov_line.id:
+                    unchanged_count += 1
+                    continue
+
+                raise HTTPException(
+                    status_code=409,
+                    detail="La línea ya está vinculada a otra línea de OV",
+                )
+
+            delivered = Decimal(str(ov_line.qty_delivered or 0))
+            ordered = Decimal(str(ov_line.qty or 0))
+
+            if dn.status == DeliveryNoteStatus.DISPATCHED:
+                if delivered + qty > ordered:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="La entrega supera la cantidad de la OV",
+                    )
+
+                ov_line.qty_delivered = delivered + qty
+
+            dn_line.source_sales_line_id = ov_line.id
+
+            if not dn.sales_order_id:
+                dn.sales_order_id = order.id
+                dn.origin_reference = order.number
+
+            affected_products.add(ov_line.product_id)
+            linked_count += 1
+
+            _log_history(
+                db,
+                order.id,
+                "VINCULO",
+                f"Remito {dn.number} vinculado ({qty} u.)",
+                current_user=current_user,
+            )
+
+        db.flush()
+
+        for product_id in sorted(affected_products):
+            reconcile_product_reservations(
+                db, product_id, order.warehouse_id
+            )
+
+        _recalc_status(db, order.id)
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "status": "ok",
+        "linked_count": linked_count,
+        "unchanged_count": unchanged_count,
+        "message": "Vínculos procesados correctamente",
+    }
 
 
 
@@ -873,8 +1012,37 @@ def update_sales_order(
     if not order:
         raise HTTPException(status_code=404, detail="OV no encontrada")
 
+    old_wh_id = order.warehouse_id
+    old_products = {line.product_id for line in order.lines if line.product_id}
+
     update_data = data.model_dump(exclude_unset=True)
+
+    if (
+        "warehouse_id" in update_data
+        and update_data["warehouse_id"] != old_wh_id
+        and any(
+            line.qty_delivered and line.qty_delivered > 0
+            for line in order.lines
+        )
+    ):
+        raise HTTPException(
+            status_code=409,
+            detail="No se puede cambiar el depósito de una OV con entregas",
+        )
     lines_data = update_data.pop("lines", None)
+
+    # Rechazar identificadores ajenos o repetidos antes de editar.
+    if lines_data is not None:
+        try:
+            validate_sales_order_line_ids(
+                [line.id for line in order.lines],
+                lines_data,
+            )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=str(exc),
+            ) from exc
 
     # Validar productos nuevos o cambiados antes de modificar la OV.
     if lines_data is not None:
@@ -928,17 +1096,7 @@ def update_sales_order(
     # Propagar campos compartidos a remitos DRAFT vinculados
     propagate_fields = safe_fields & set(update_data.keys())
     
-    # Manejar cambio de depósito (Reservaciones)
-    old_wh_id = order.warehouse_id
-    new_wh_id = update_data.get("warehouse_id", old_wh_id)
-    wh_changed = old_wh_id != new_wh_id
-
-    if order.status == OrderStatus.CONFIRMED and wh_changed:
-        # Mover reservas del viejo al nuevo
-        for line in order.lines:
-            if old_wh_id: unreserve_stock(db, line.product_id, old_wh_id, line.qty)
-            if new_wh_id: reserve_stock(db, line.product_id, new_wh_id, line.qty)
-
+    # Las reservas se recalculan después de actualizar todas las líneas.
     if header_only and propagate_fields:
         for dn in order.delivery_notes:
             if dn.status == DeliveryNoteStatus.DRAFT:
@@ -963,18 +1121,47 @@ def update_sales_order(
                 incoming_ids.add(str(lid))
                 db_line = existing_lines[str(lid)]
                 
-                # Update reservation if quantity changed
-                if was_confirmed and order.warehouse_id and float(db_line.qty) != float(calc["qty"]):
-                    diff = float(calc["qty"]) - float(db_line.qty)
-                    if diff > 0:
-                        reserve_stock(db, db_line.product_id, order.warehouse_id, Decimal(str(diff)))
-                    else:
-                        unreserve_stock(db, db_line.product_id, order.warehouse_id, Decimal(str(abs(diff))))
+                try:
+                    validate_sales_order_line_edit(
+                        db_line.product_id,
+                        db_line.qty_delivered,
+                        calc["product_id"],
+                        calc["qty"],
+                    )
+                    validate_sales_order_line_invoicing(
+                        db_line.product_id,
+                        db_line.qty_invoiced,
+                        calc["product_id"],
+                        calc["qty"],
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400, detail=str(exc)
+                    ) from exc
                 
+                # Los movimientos históricos no se editan desde la OV.
+                calc.pop("qty_delivered", None)
+                calc.pop("qty_invoiced", None)
+
                 for k, v in calc.items():
                     setattr(db_line, k, v)
                 db_line.line_order = line_order_val
             else:
+                # Validar cantidades de las líneas nuevas.
+                try:
+                    validate_sales_order_line_edit(
+                        calc["product_id"], 0,
+                        calc["product_id"], calc["qty"],
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400, detail=str(exc)
+                    ) from exc
+
+                # Las líneas nuevas no pueden declarar movimientos previos.
+                calc.pop("qty_delivered", None)
+                calc.pop("qty_invoiced", None)
+
                 # Create NEW line
                 db_line = SalesOrderLine(
                     order_id=order.id,
@@ -982,20 +1169,39 @@ def update_sales_order(
                     line_order=line_order_val,
                 )
                 db.add(db_line)
-                if was_confirmed and order.warehouse_id:
-                    reserve_stock(db, db_line.product_id, order.warehouse_id, db_line.qty)
+
 
         # Remove deleted lines
         for old_line in order.lines:
             if str(old_line.id) not in incoming_ids:
-                if was_confirmed and order.warehouse_id:
-                    unreserve_stock(db, old_line.product_id, order.warehouse_id, old_line.qty)
+                try:
+                    validate_sales_order_line_deletion(
+                        old_line.qty_delivered,
+                        old_line.qty_invoiced,
+                    )
+                except ValueError as exc:
+                    raise HTTPException(
+                        status_code=400, detail=str(exc)
+                    ) from exc
                 db.delete(old_line)
 
     db.flush()
     db.refresh(order)
     _recalc_total(order, db)
     recalc_sales_order_status(db, order.id)
+
+    # Conciliar productos anteriores y actuales en ambos depósitos.
+    current_products = {
+        line.product_id for line in order.lines if line.product_id
+    }
+    affected_products = old_products | current_products
+    affected_warehouses = {
+        wh for wh in (old_wh_id, order.warehouse_id) if wh
+    }
+
+    for warehouse_id in sorted(affected_warehouses):
+        for product_id in sorted(affected_products):
+            reconcile_product_reservations(db, product_id, warehouse_id)
     
     order.updated_by = order.vendedor or "Admin"
     _log_history(db, order.id, "MODIFICACION", "Cambios en cabecera o ítems", current_user=current_user)
@@ -1031,10 +1237,20 @@ def confirm_sales_order(order_id: str, db: Session = Depends(get_db), current_us
 
     order.status = OrderStatus.CONFIRMED
     
-    # Reservar Stock
+    # Conciliar reservas según stock físico y órdenes pendientes.
+    db.flush()
+
     if order.warehouse_id:
-        for line in order.lines:
-            reserve_stock(db, line.product_id, order.warehouse_id, line.qty)
+        product_ids = {
+            line.product_id
+            for line in order.lines
+            if line.product_id
+        }
+
+        for product_id in sorted(product_ids):
+            reconcile_product_reservations(
+                db, product_id, order.warehouse_id
+            )
             
     _log_history(db, order.id, "CONFIRMACION", f"Estado cambiado a {OrderStatus.CONFIRMED.value}", current_user=current_user)
     db.commit()
@@ -1053,12 +1269,22 @@ def cancel_sales_order(order_id: str, db: Session = Depends(get_db), current_use
     if order.status not in (OrderStatus.DRAFT, OrderStatus.CONFIRMED):
         raise HTTPException(status_code=409, detail=f"No se puede cancelar una OV en estado {order.status.value}")
 
-    # Liberar reservas si estaba confirmada
-    if order.status == OrderStatus.CONFIRMED and order.warehouse_id:
-        for line in order.lines:
-            unreserve_stock(db, line.product_id, order.warehouse_id, line.qty)
+    # Cancelar y recalcular todas las reservas afectadas.
+    warehouse_id = order.warehouse_id
+    product_ids = {
+        line.product_id
+        for line in order.lines
+        if line.product_id
+    }
 
     order.status = OrderStatus.CANCELLED
+    db.flush()
+
+    if warehouse_id:
+        for product_id in sorted(product_ids):
+            reconcile_product_reservations(
+                db, product_id, warehouse_id
+            )
     _log_history(db, order.id, "CANCELACION", "Orden anulada", current_user=current_user)
     db.commit()
     db.refresh(order)
@@ -1069,46 +1295,168 @@ def cancel_sales_order(order_id: str, db: Session = Depends(get_db), current_use
 # DELETE
 # ═══════════════════════════════════════════
 @router.delete("/{order_id}", dependencies=[Depends(check_permission("sales_orders", "delete"))])
-def delete_sales_order(order_id: str, db: Session = Depends(get_db)):
-    """Borra una OV siempre y cuando no tenga remitos enlazados."""
-    order = db.query(SalesOrder).filter(SalesOrder.id == order_id).first()
-    if not order:
-        raise HTTPException(status_code=404, detail="OV no encontrada")
+def delete_sales_order(
+    order_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Elimina una OV sin movimientos, con auditoría y conciliación."""
+    from app.modules.sales.sales_order_delete_rules import (
+        validate_sales_order_deletion,
+    )
+    from app.modules.sales.sales_order_delete_audit import (
+        register_sales_order_deletion,
+    )
 
-    # Verificar vínculos (Remitos)
-    if order.delivery_notes and len(order.delivery_notes) > 0:
+    order = db.query(SalesOrder).filter(
+        SalesOrder.id == order_id
+    ).first()
+
+    if not order:
         raise HTTPException(
-            status_code=409, 
-            detail="No se puede eliminar la Orden de Venta porque tiene remitos asociados. Anule los remitos primero."
+            status_code=404,
+            detail="OV no encontrada",
         )
 
-    # Las líneas se borran por cascade="all, delete-orphan"
-    db.delete(order)
-    db.commit()
-    return {"ok": True, "message": "Orden de Venta eliminada correctamente"}
+    try:
+        validate_sales_order_deletion(db, order)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=409,
+            detail=str(exc),
+        ) from exc
+
+    warehouse_id = order.warehouse_id
+    product_ids = {
+        line.product_id
+        for line in order.lines
+        if line.product_id
+    }
+
+    try:
+        register_sales_order_deletion(
+            db, order, current_user
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=403,
+            detail=str(exc),
+        ) from exc
+
+    try:
+        db.delete(order)
+        db.flush()
+
+        if warehouse_id:
+            for product_id in sorted(product_ids):
+                reconcile_product_reservations(
+                    db, product_id, warehouse_id
+                )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "ok": True,
+        "message": "Orden de Venta eliminada correctamente",
+    }
 
 
 # ═══════════════════════════════════════════
 # PURGE UNLINKED (Cleanup)
 # ═══════════════════════════════════════════
 @router.post("/purge-unlinked", dependencies=[Depends(check_permission("sales_orders", "delete"))])
-def purge_unlinked_sales_orders(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    """Elimina todas las OV que no tengan remitos asociados y estén en estado DRAFT o CONFIRMED."""
-    # Buscar OVs sin remitos
-    # Usamos una subquery para mayor eficiencia
-    subq = db.query(DeliveryNote.sales_order_id).filter(DeliveryNote.sales_order_id.isnot(None))
-    
-    orders_to_delete = db.query(SalesOrder).filter(
-        SalesOrder.id.notin_(subq),
-        SalesOrder.status.in_([OrderStatus.DRAFT, OrderStatus.CONFIRMED])
-    ).all()
-    
-    count = len(orders_to_delete)
-    for o in orders_to_delete:
-        db.delete(o)
-    
-    db.commit()
-    return {"ok": True, "message": f"Se eliminaron {count} órdenes de venta sin vínculos."}
+def purge_unlinked_sales_orders(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Elimina OV sin movimientos, preservando auditoría y reservas."""
+    from app.modules.sales.sales_order_delete_rules import (
+        validate_sales_order_deletion,
+    )
+    from app.modules.sales.sales_order_delete_audit import (
+        register_sales_order_deletion,
+    )
+
+    subq = (
+        db.query(DeliveryNote.sales_order_id)
+        .filter(DeliveryNote.sales_order_id.isnot(None))
+    )
+
+    orders = (
+        db.query(SalesOrder)
+        .filter(
+            SalesOrder.id.notin_(subq),
+            SalesOrder.status.in_(
+                [OrderStatus.DRAFT, OrderStatus.CONFIRMED]
+            ),
+        )
+        .order_by(SalesOrder.date.asc(), SalesOrder.id.asc())
+        .all()
+    )
+
+    deleted = []
+    skipped = []
+    affected = set()
+
+    try:
+        for order in orders:
+            try:
+                validate_sales_order_deletion(db, order)
+            except ValueError as exc:
+                skipped.append({
+                    "order_id": order.id,
+                    "number": order.number,
+                    "reason": str(exc),
+                })
+                continue
+
+            register_sales_order_deletion(
+                db, order, current_user
+            )
+
+            if order.warehouse_id:
+                for line in order.lines:
+                    if line.product_id:
+                        affected.add((
+                            line.product_id,
+                            order.warehouse_id,
+                        ))
+
+            deleted.append({
+                "order_id": order.id,
+                "number": order.number,
+            })
+
+            db.delete(order)
+
+        db.flush()
+
+        for product_id, warehouse_id in sorted(affected):
+            reconcile_product_reservations(
+                db, product_id, warehouse_id
+            )
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "ok": True,
+        "deleted_count": len(deleted),
+        "skipped_count": len(skipped),
+        "deleted": deleted,
+        "skipped": skipped,
+        "message": (
+            f"Se eliminaron {len(deleted)} órdenes de venta. "
+            f"Se conservaron {len(skipped)} órdenes protegidas."
+        ),
+    }
 
 
 # ═══════════════════════════════════════════

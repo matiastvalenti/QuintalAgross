@@ -14,7 +14,7 @@ from app.modules.accounting.fx_service import generate_fx_adjustment
 from app.modules.accounting.document_status_service import recalc_document_status as _recalc_document_status, is_cancelled_status as _is_cancelled_status
 import uuid
 from app.db.models.commercial_models import (
-    Account, generate_uuid, DeliveryNote, DeliveryNoteStatus, 
+    Account, generate_uuid, DeliveryNote, DeliveryNoteStatus,
     DeliveryNoteLine, InvoiceDeliveryNoteLink, Product, Container,
     SalesOrder, SalesOrderLine, PurchaseOrder, PurchaseOrderLine
 )
@@ -75,7 +75,7 @@ def _log_history(db: Session, doc_id: str, action: str, details: Optional[str] =
         details=details
     )
     db.add(history)
-    
+
 def _recalc_document_commission(doc: Document, db: Session):
     """
     Recalcula la comisión del documento:
@@ -84,7 +84,7 @@ def _recalc_document_commission(doc: Document, db: Session):
     """
     if not doc:
         return
-        
+
     # 1. Calcular Monto a Pagar (Accrual)
     # Solo recalcular automáticamente si el monto es exactamente 0 (asume intervención manual si es > 0)
     sp = None
@@ -100,7 +100,7 @@ def _recalc_document_commission(doc: Document, db: Session):
 
     if sp:
         pct_val = float(sp.commission_pct or 0.0)
-            
+
         if sp.commission_type == 'fixed':
             total_net = sum(float(l.net_amount or 0) for l in doc.lines)
             doc.commission_amount = round(float(total_net) * (pct_val / 100.0), 2)
@@ -127,18 +127,18 @@ def _recalc_document_commission(doc: Document, db: Session):
     total_paid = db.query(func.sum(CommissionPayment.applied_amount)).filter(
         or_(
             CommissionPayment.document_id == doc.id,
-            CommissionPayment.delivery_note_id == doc.id 
+            CommissionPayment.delivery_note_id == doc.id
         )
     ).scalar() or 0.0
-    
+
     doc.commission_paid_amount = float(total_paid)
-    
+
     # Marcamos como paga si el total pagado iguala o supera el monto a pagar (con margen)
     if (doc.commission_amount or 0) > 0:
         doc.commission_paid = float(total_paid) >= (float(doc.commission_amount) - 0.01)
     else:
         doc.commission_paid = False
-    
+
     db.flush()
 
 def _sanitize_document_for_response(doc, db: Session = None):
@@ -148,7 +148,7 @@ def _sanitize_document_for_response(doc, db: Session = None):
     if getattr(doc, "total_amount_ars", None) is None: doc.total_amount_ars = 0.0
     if getattr(doc, "total_amount", None) is None: doc.total_amount = 0.0
     if getattr(doc, "exchange_rate", None) is None: doc.exchange_rate = 1.0
-    
+
     doc.sales_orders = getattr(doc, "sales_orders", [])
     doc.delivery_notes = getattr(doc, "delivery_notes", [])
     doc.amount_applied = 0.0
@@ -161,7 +161,7 @@ def _sanitize_document_for_response(doc, db: Session = None):
         doc.pending_amount = 0.0
     else:
         doc.pending_amount = max(float(getattr(doc, "total_amount", 0) or 0) - total_applied, 0.0)
-    
+
     if db is not None:
         from app.modules.sales.delivery_allocation import invoice_delivery_progress
         doc.delivery_status, doc.delivery_quantities = invoice_delivery_progress(db, doc)
@@ -234,11 +234,11 @@ def _sanitize_document_for_response(doc, db: Session = None):
         if getattr(line, "vat_amount", None) is None: line.vat_amount = 0.0
         if getattr(line, "total_amount", None) is None: line.total_amount = 0.0
         if getattr(line, "vat_rate", None) is None: line.vat_rate = 0.21
-        
+
         # Inyectar info de producto para equivalencias (ahora gestionado por Pydantic via joinedload)
         if getattr(line, "product", None):
-             # Ensure Pydantic sees it. If validation_alias is product_info, 
-             # we can just leave it to default to the field name 'product' 
+             # Ensure Pydantic sees it. If validation_alias is product_info,
+             # we can just leave it to default to the field name 'product'
              # since it's already an attribute of line.
              pass
         # No need for manual product_info injection as the schema is updated
@@ -248,27 +248,27 @@ def _sanitize_document_for_response(doc, db: Session = None):
         if use_db:
             from sqlalchemy.orm import joinedload
             from app.db.models.commercial_models import (
-                SalesOrder, SalesOrderLine, OrderStatus, DeliveryNote, 
+                SalesOrder, SalesOrderLine, OrderStatus, DeliveryNote,
                 DeliveryNoteLine, DeliveryNoteStatus, SalesOrderHistory,
                 PurchaseOrder, PurchaseOrderLine, InvoiceDeliveryNoteLink
             )
             from app.modules.sales.sales_utils import recalc_sales_order_status, recalc_purchase_order_status
             so_lines = [l.source_sales_line_id for l in doc.lines if getattr(l, "source_sales_line_id", None)]
-            
+
             doc.sales_orders = []
             doc.delivery_notes = []
-            
+
             if so_lines:
                 sales_orders = use_db.query(SalesOrder).join(SalesOrderLine).filter(SalesOrderLine.id.in_(so_lines)).distinct().all()
                 doc.sales_orders = [{"id": so.id, "number": so.number, "date": so.date.isoformat() if so.date else None, "status": so.status} for so in sales_orders]
-            
+
             # 1. Por vínculos a nivel ítem (si existen)
             dn_item_ids = [l.source_dn_line_id for l in doc.lines if getattr(l, "source_dn_line_id", None)]
             dn_ids = set()
             if dn_item_ids:
                 dn_from_items = use_db.query(DeliveryNote.id).join(DeliveryNoteLine).filter(DeliveryNoteLine.id.in_(dn_item_ids)).all()
                 for (did,) in dn_from_items: dn_ids.add(did)
-            
+
             # 2. Por tabla puente global (InvoiceDeliveryNoteLink) - El vínculo más común
             bridge_links = use_db.query(DeliveryNote.id).join(InvoiceDeliveryNoteLink).filter(InvoiceDeliveryNoteLink.document_id == doc.id).all()
             for (did,) in bridge_links: dn_ids.add(did)
@@ -293,7 +293,7 @@ def _sanitize_document_for_response(doc, db: Session = None):
 
             # 5. Calcular porcentajes de progreso para el documento actual (Traceabilidad)
             total_qty = sum(float(l.qty or 0) for l in doc.lines)
-            
+
             # Un documento de tipo factura ya está "facturado" al 100%
             if doc.doc_type in [models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE, models.DocumentType.FCE_MIPYME, models.DocumentType.PURCHASE_INVOICE]:
                 doc.invoiced_pct = 100.0
@@ -314,7 +314,7 @@ def _sanitize_document_for_response(doc, db: Session = None):
             else:
                 doc.invoiced_pct = 0.0
                 doc.delivered_pct = 100.0 if dn_ids else 0.0
-            
+
             # Pago basado en aplicaciones recibidas
             total_paid = sum([float(app.amount_applied or 0) for app in getattr(doc, "applied_by", [])])
             if doc.total_amount > 0:
@@ -330,7 +330,7 @@ def _sanitize_document_for_response(doc, db: Session = None):
                 delivery_notes = use_db.query(DeliveryNote).options(joinedload(DeliveryNote.entity)).filter(DeliveryNote.id.in_(list(dn_ids))).all()
                 doc.delivery_notes = []
                 for dn in delivery_notes:
-                    # Simplificación: un remito individual está 100% entregado por definición, 
+                    # Simplificación: un remito individual está 100% entregado por definición,
                     # pero puede estar facturado o no.
                     dn_doc = use_db.query(models.Document).filter(models.Document.number == dn.number).first()
                     dn_paid_pct = 0.0
@@ -339,16 +339,16 @@ def _sanitize_document_for_response(doc, db: Session = None):
                         dn_paid_pct = (dn_total_paid / dn_doc.total_amount * 100) if dn_doc.total_amount > 0 else 0.0
 
                     doc.delivery_notes.append({
-                        "id": dn.id, 
-                        "number": dn.number, 
-                        "date": dn.date.isoformat() if dn.date else None, 
+                        "id": dn.id,
+                        "number": dn.number,
+                        "date": dn.date.isoformat() if dn.date else None,
                         "status": dn.status,
                         "entity_name": dn.entity.name if dn.entity else "S/D",
                         "delivered_pct": 100.0,
                         "invoiced_pct": 100.0 if dn.status == DeliveryNoteStatus.INVOICED else 50.0 if dn.status == DeliveryNoteStatus.PARTIAL else 0.0,
                         "paid_pct": dn_paid_pct
                     })
-            
+
             if doc.sales_orders:
                 # Enriquecer pedidos con porcentajes reales si es posible
                 for so_dict in doc.sales_orders:
@@ -387,19 +387,19 @@ class VoidRequest(BaseModel):
 
 @router.post("/{document_id}/void")
 def void_document(
-    document_id: str, 
+    document_id: str,
     payload: VoidRequest = None,
-    db: Session = Depends(get_db), 
+    db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     try:
         doc = db.query(models.Document).filter(models.Document.id == document_id).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
-            
+
         if doc.doc_type != models.DocumentType.RECEIPT:
             raise HTTPException(status_code=400, detail="Solo se pueden anular recibos a través de este endpoint")
-            
+
         if _is_cancelled_status(doc.status):
             return {
                 "ok": True,
@@ -409,40 +409,40 @@ def void_document(
                 "reverted_applications": [],
                 "warnings": ["El recibo ya se encontraba anulado."]
             }
-            
+
         reason = payload.reason if payload else "Anulación desde pantalla de recibos"
-        
+
         # 1. Cargar aplicaciones donde este recibo es el origen
         applications = db.query(models.Application).filter(
             models.Application.from_document_id == document_id
         ).all()
-        
+
         invoice_ids = [app.to_document_id for app in applications if app.to_document_id]
-        
+
         # FIND FX NOTES BEFORE DELETING APPLICATIONS
         import re
         from app.modules.sales import numbering_service
-        
+
         fx_notes_candidatas = db.query(models.Document).filter(
             models.Document.reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE,
             models.Document.entity_id == doc.entity_id,
             models.Document.status != models.DocumentStatus.CANCELLED,
             models.Document.doc_type.in_([models.DocumentType.DEBIT_NOTE, models.DocumentType.CREDIT_NOTE])
         ).all()
-        
+
         fx_notes_exact = []
         fx_notes_fallback = []
-        
+
         for fx in fx_notes_candidatas:
             if f"[ID:{document_id}]" in (fx.notes or ""):
                 fx_notes_exact.append(fx)
             elif fx.source_invoice_id in invoice_ids:
                 fx_notes_fallback.append(fx)
-                
+
         # Si hay coincidencias exactas por ID, usamos esas (pueden ser varias si cobró varias facturas).
         # Si no hay exactas, y hay EXACTAMENTE UNA por fallback, usamos esa.
         # Si hay ms de una por fallback y ninguna exacta, no podemos asegurar cul es, as que no revertimos y agregamos warning.
-        
+
         fx_notes = fx_notes_exact
         warning_multiple_fx = False
         if not fx_notes_exact:
@@ -450,11 +450,11 @@ def void_document(
                 fx_notes = fx_notes_fallback
             elif len(fx_notes_fallback) > 1:
                 warning_multiple_fx = True
-        
-        
+
+
         reverted_applications = []
         affected_docs = set()
-        
+
         for app in applications:
             to_doc = app.to_document
             if to_doc:
@@ -465,16 +465,16 @@ def void_document(
                     "amount": app.amount_applied,
                     "currency": str(to_doc.currency.value if hasattr(to_doc.currency, 'value') else to_doc.currency),
                 })
-                
+
                 # Auditoría en el comprobante afectado antes de borrar
                 _log_history(
-                    db=db, 
-                    doc_id=to_doc.id, 
-                    action="Aplicación Revertida", 
+                    db=db,
+                    doc_id=to_doc.id,
+                    action="Aplicación Revertida",
                     details=f"Se revierte aplicación desde Recibo {doc.number} por {app.amount_applied} USD/ARS por anulación del recibo. Relación eliminada por limitación técnica. Motivo: {reason}",
                     current_user=current_user
                 )
-                
+
             # Auditoría en el recibo mismo para esta aplicación
             _log_history(
                 db=db,
@@ -483,9 +483,9 @@ def void_document(
                 details=f"Se elimina relación con {to_doc.number if to_doc else 'Desconocido'} por {app.amount_applied}. Limitación técnica. Motivo: {reason}",
                 current_user=current_user
             )
-            
+
             db.delete(app)
-            
+
         # 2. Registrar en historial del recibo principal que fue anulado
         _log_history(
             db=db,
@@ -494,13 +494,13 @@ def void_document(
             details=f"El recibo fue anulado. Motivo: {reason}",
             current_user=current_user
         )
-        
+
         # 3. Marcar el recibo como CANCELLED
         doc.status = models.DocumentStatus.CANCELLED
-        
+
         # Guardamos cambios pendientes para que _recalc sume sin las aplicaciones
         db.flush()
-        
+
         for fx in fx_notes:
             if fx.doc_type == models.DocumentType.CREDIT_NOTE:
                 for allocation in db.query(models.Application).filter_by(from_document_id=fx.id, to_document_id=fx.source_invoice_id).all():
@@ -511,10 +511,10 @@ def void_document(
         # 4. Recalcular saldo de facturas afectadas
         for affected in affected_docs:
             _recalc_document_status(affected, db)
-            
+
         # 5. Reverse any FX Notes generated by this receipt (fx_notes found earlier)
         fx_reversals_created = []
-        
+
         for fx in fx_notes:
             existing = db.query(models.Document).filter(
                 models.Document.reason_type == models.DocumentReasonType.EXCHANGE_DIFFERENCE,
@@ -522,26 +522,26 @@ def void_document(
             ).first()
             if existing:
                 continue
-                
+
             reverse_type = models.DocumentType.CREDIT_NOTE if fx.doc_type == models.DocumentType.DEBIT_NOTE else models.DocumentType.DEBIT_NOTE
-            
+
             def is_valid_sales_point(value):
                 if value is None: return False
                 v = str(value).strip()
                 return v.isdigit() and len(v) == 4 and v != "0000"
-            
+
             sales_point = None
-            
+
             # 1. Try FX note
             if fx.number:
                 parts = fx.number.split("-")
                 pv_part = parts[-2] if len(parts) >= 2 else parts[0]
                 pv_match_re = re.search(r'\d+', pv_part)
-                if pv_match_re: 
+                if pv_match_re:
                     candidate = pv_match_re.group().zfill(4)
                     if is_valid_sales_point(candidate):
                         sales_point = candidate
-            
+
             # 2. Fallback to origin invoice
             origin_invoice = None
             if not sales_point and fx.source_invoice_id:
@@ -554,16 +554,16 @@ def void_document(
                         candidate = pv_match_re.group().zfill(4)
                         if is_valid_sales_point(candidate):
                             sales_point = candidate
-                            
+
             if not is_valid_sales_point(sales_point):
                 raise ValueError(f"No se pudo determinar un punto de venta válido para la reversa FX. FX note={fx.id}, number={fx.number}, source_invoice_id={fx.source_invoice_id}")
-                
+
             letter = fx.line or "A"
             doc_tag = f"NC{letter}" if reverse_type == models.DocumentType.CREDIT_NOTE else f"ND{letter}"
             new_num = numbering_service.reserve_next_number(db, sales_point, doc_tag)
-            
+
             notes = f"Reversa por anulación de recibo. Cancela {fx.number} [ID:{fx.id}]"
-            
+
             new_doc = models.Document(
                 entity_id=fx.entity_id,
                 doc_type=reverse_type,
@@ -585,7 +585,7 @@ def void_document(
             )
             db.add(new_doc)
             db.flush()
-            
+
             for line in fx.lines:
                 new_line = models.DocumentLine(
                     document_id=new_doc.id,
@@ -607,17 +607,17 @@ def void_document(
                     accounting_account_id=line.accounting_account_id
                 )
                 db.add(new_line)
-                
+
             if reverse_type == models.DocumentType.CREDIT_NOTE:
                 from_doc_id, to_doc_id = new_doc.id, fx.id
             else:
                 from_doc_id, to_doc_id = fx.id, new_doc.id
-                
+
             existing_app = db.query(models.Application).filter(
                 models.Application.from_document_id == from_doc_id,
                 models.Application.to_document_id == to_doc_id
             ).first()
-            
+
             if existing_app:
                 auto_application_created = False
                 auto_application_already_exists = True
@@ -633,18 +633,18 @@ def void_document(
                 )
                 db.add(app_rev)
                 db.flush()
-                
+
                 auto_application_created = True
                 auto_application_already_exists = False
                 auto_application_id = app_rev.id
-                
+
                 # Recalcular estados
                 debit_doc = new_doc if reverse_type == models.DocumentType.DEBIT_NOTE else fx
                 credit_doc = fx if reverse_type == models.DocumentType.DEBIT_NOTE else new_doc
-                
+
                 _recalc_document_status(debit_doc, db)
                 _recalc_document_status(credit_doc, db)
-                
+
 
 
             require_accounting(db, new_doc)
@@ -657,29 +657,29 @@ def void_document(
                 "auto_application_already_exists": auto_application_already_exists,
                 "auto_application_id": auto_application_id
             })
-            
+
             _log_history(db, fx.id, "ANULACION_FISCAL", f"Se generó NC/ND reversa {new_num} por anulación de recibo.", current_user)
             _log_history(db, new_doc.id, "GENERACION", f"Reversa automática de {fx.number} por anulación de recibo.", current_user)
 
         db.commit()
-        
+
         # Reformatear reverted applications con el nuevo status de la factura
         final_reverted = []
         for r in reverted_applications:
             # refetch the affected to get updated balance info
             d = db.query(models.Document).filter(models.Document.id == r['document_id']).first()
             if d:
-                # El saldo pendiente en QAgross no se guarda explícito si no que surge, 
+                # El saldo pendiente en QAgross no se guarda explícito si no que surge,
                 # pero mandamos el nuevo status
                 r["new_status"] = str(d.status.value if hasattr(d.status, 'value') else d.status)
                 # El "new_pending_amount" idealmente es total - sum(applications). No es estrictamente necesario, el user pidió algo representativo.
             final_reverted.append(r)
-            
+
         warnings = [
             "Se han eliminado físicamente las relaciones de aplicación por limitación técnica, dejando rastro en auditoría.",
             "Si el cobro poseía Diferencias de Cambio asociadas, requieren revisión y reversión manual."
         ]
-        
+
         return {
             "ok": True,
             "document_id": doc.id,
@@ -697,19 +697,19 @@ def void_document(
 
 @router.post("/", response_model=document_schemas.DocumentResponse)
 def create_document(
-    doc: document_schemas.DocumentCreate, 
+    doc: document_schemas.DocumentCreate,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
     from app.modules.sales.sales_utils import recalc_sales_order_status, recalc_purchase_order_status
-    
+
     # 0. Check Permission based on type
     is_purchase = doc.doc_type in [
-        models.DocumentType.PURCHASE_INVOICE, 
-        models.DocumentType.PURCHASE_DEBIT_NOTE, 
+        models.DocumentType.PURCHASE_INVOICE,
+        models.DocumentType.PURCHASE_DEBIT_NOTE,
         models.DocumentType.PURCHASE_CREDIT_NOTE
     ]
-    
+
     # Manual permission check inside
     module = "purchase_invoices" if is_purchase else "sales_invoices"
     # Admin and Owner always pass
@@ -718,7 +718,7 @@ def create_document(
         perms = get_effective_permissions(current_user, db)
         if not perms.get(module, {}).get("create", False):
             raise HTTPException(
-                status_code=403, 
+                status_code=403,
                 detail=f"No tiene permiso para crear en el módulo {module}"
             )
 
@@ -792,7 +792,7 @@ def create_document(
     if doc.doc_type == models.DocumentType.CREDIT_NOTE:
         if not doc.source_invoice_id:
             raise HTTPException(status_code=400, detail="La factura origen es obligatoria para Notas de Crédito.")
-            
+
     # 0.0.2 Validar Cuentas Contables se hace más adelante, durante la inferencia.
 
     # 0.1 Validar Límite de Crédito (solo para Clientes y facturas/notas de débito)
@@ -802,7 +802,7 @@ def create_document(
             current_balance = db.query(sa_func.sum(models.AccountMovement.debit - models.AccountMovement.credit)).filter(
                 models.AccountMovement.entity_id == entity.id
             ).scalar() or 0.0
-            
+
             # Si el nuevo documento excede el límite
             if (current_balance + doc.total_amount) > entity.credit_limit:
                 if entity.credit_status == "BLOCKED":
@@ -812,7 +812,7 @@ def create_document(
 
     # 1. Calcular monto en ARS al momento del alta
     total_amount_ars = doc.total_amount * doc.exchange_rate if doc.currency == models.CurrencyType.USD else doc.total_amount
-    
+
     # 2. Numeración automática
     from app.modules.sales import numbering_service
     doc_number = doc.number
@@ -822,14 +822,14 @@ def create_document(
     # Determinar Tag de numeración para el servicio de correlativos
     doc_tag = None
     letter = (doc.line or "A").upper()
-    
+
     if doc.doc_type == models.DocumentType.INVOICE: doc_tag = f"F{letter}"
     elif doc.doc_type == models.DocumentType.FCE_MIPYME: doc_tag = f"FCE{letter}"
     elif doc.doc_type == models.DocumentType.CREDIT_NOTE: doc_tag = f"NC{letter}"
     elif doc.doc_type == models.DocumentType.DEBIT_NOTE: doc_tag = f"ND{letter}"
     elif doc.doc_type == models.DocumentType.RECEIPT: doc_tag = "RECIBO"
     elif doc.doc_type == models.DocumentType.PAYMENT: doc_tag = "PAGO"
-    # No asignamos doc_tag para PURCHASE_INVOICE, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE 
+    # No asignamos doc_tag para PURCHASE_INVOICE, PURCHASE_CREDIT_NOTE, PURCHASE_DEBIT_NOTE
     # ya que su numeración pertenece al proveedor externo y no debe avanzar un contador propio.
 
     if doc_tag:
@@ -837,7 +837,7 @@ def create_document(
         pv_code = "0001"
         if doc_number and "-" in doc_number:
             pv_code = doc_number.split("-")[0]
-        
+
         if not doc_number or "AUTO" in doc_number or doc_number.endswith("-"):
             doc_number = numbering_service.reserve_next_number(db, pv_code, doc_tag)
         # Los números manuales no deben incrementar el contador automáticamente.
@@ -845,25 +845,25 @@ def create_document(
 
     if doc_number and doc_number.endswith("-00000000"):
         raise HTTPException(status_code=400, detail="El número de comprobante no puede ser 00000000. Genere un número válido.")
-        
+
     if doc_number:
         existing = db.query(models.Document).filter(models.Document.doc_type == doc.doc_type, models.Document.number == doc_number).first()
         if existing:
             raise HTTPException(status_code=400, detail=f"Ya existe un comprobante con el número {doc_number}.")
 
-    # 3. Excluir campos que no pertenecen al modelo Document 
+    # 3. Excluir campos que no pertenecen al modelo Document
     doc_data = doc.model_dump(exclude={"lines", "payments", "applications", "vehicle_expenses", "perceptions", "retentions", "reimbursement_entity_id", "number"})
-    
+
     # net_amount existe en el schema para cálculo de comisión pero no en la tabla Document
     net_amount = doc_data.pop("net_amount", 0) or 0
-    
+
     db_doc = models.Document(
         **doc_data,
         number=doc_number,
         total_amount_ars=total_amount_ars,
         created_by="Sistema" # Placeholder
     )
-    
+
     # Calcular comision
     if doc.salesperson_id and db_doc.status != models.DocumentStatus.DRAFT:
         seller = db.query(models.Entity).filter(models.Entity.id == doc.salesperson_id).first()
@@ -880,7 +880,7 @@ def create_document(
 
         # Log creation
         _log_history(db, db_doc.id, "CREACION", f"Documento {db_doc.doc_type} {db_doc.number} creado", current_user=current_user)
-        
+
         # El contador se reservó de forma transaccional al generar el número.
 
 
@@ -917,9 +917,9 @@ def create_document(
                         import logging
                         # Usar el logger global en lugar de redefinirlo localmente
                         logger.info(f"BUSCANDO CHEQUE PARA ENDOSO: Nro={pay.reference_number}, Importe={pay.amount}")
-                        
+
                         from sqlalchemy import func, cast, Integer
-                        
+
                         # Limpiar el número de referencia para la búsqueda (quitar ceros a la izquierda)
                         ref_num_str = str(pay.reference_number or "0").strip().lstrip('0')
                         if not ref_num_str: ref_num_str = "0"
@@ -933,7 +933,7 @@ def create_document(
                             # Aceptamos EN_CARTERA o PENDIENTE (limpieza automática)
                             finance_models.Cheque.estado.in_(["EN_CARTERA", "PENDIENTE"])
                         ).first()
-                        
+
                         if existing_ch:
                             logger.info(f"CHEQUE ENCONTRADO: ID={existing_ch.id}, Nro={existing_ch.nro_cheque}, Nuevo Estado=ENDOSADO")
                             existing_ch.estado = "ENDOSADO"
@@ -973,7 +973,7 @@ def create_document(
                 source_purchase_line_id = line_data.pop("source_purchase_line_id", None)
                 line_data.pop("cost_price", None) # Eliminar alias de frontend
                 line_data.pop("unit_cost", None) # Evitar duplicación al crear db_line
-                
+
                 if not line_data.get("accounting_account_id") and line_data.get("product_id"):
                     prod = db.query(Product).filter(Product.id == line_data.get("product_id")).first()
                     if prod:
@@ -992,7 +992,7 @@ def create_document(
                 computed_line_order = provided_line_order if provided_line_order is not None else i
                 # Priorizar costo manual del formulario si existe
                 unit_cost = float(line_data.get("cost_price") if line_data.get("cost_price") is not None else (line_data.get("unit_cost") or 0.0))
-                
+
                 qty = float(line_data.get("qty", 1.0) or 1.0)
                 unit_price = float(line_data.get("unit_price", 0.0) or 0.0)
                 discount_pct = float(line_data.get("discount_pct", 0.0) or 0.0)
@@ -1000,7 +1000,7 @@ def create_document(
 
                 qty_packages = line_data.get("qty_packages")
                 package_size = line_data.get("package_size")
-                
+
                 if line_data.get("product_id"):
                     prod_tmp = db.query(Product).filter(Product.id == line_data["product_id"]).first()
                     if prod_tmp and prod_tmp.quantity_per_container and float(prod_tmp.quantity_per_container) > 1:
@@ -1029,7 +1029,7 @@ def create_document(
                 line_data["net_amount"] = totals["net_amount"]
                 line_data["vat_amount"] = totals["vat_amount"]
                 line_data["total_amount"] = totals["total_amount"]
-                
+
                 if unit_cost == 0:
                     if source_dn_line_id:
                         dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == source_dn_line_id).first()
@@ -1048,7 +1048,7 @@ def create_document(
                         from app.db.models.commercial_models import PurchaseOrderLine
                         pol = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == source_purchase_line_id).first()
                         if pol: unit_cost = float(pol.unit_cost or 0)
-                
+
                 if unit_cost == 0 and line_data.get("product_id"):
                     prod = db.query(Product).filter(Product.id == line_data.get("product_id")).first()
                     if prod: unit_cost = float(prod.cost_price or 0)
@@ -1065,48 +1065,55 @@ def create_document(
                 )
                 db.add(db_line)
                 db.flush()
-                
+
                 # Sales invoices do not dispatch goods: stock moves with the confirmed delivery note.
-                if db_doc.doc_type not in (models.DocumentType.INVOICE, models.DocumentType.FCE_MIPYME, models.DocumentType.TIQUET_FACTURA) and db_doc.status != models.DocumentStatus.DRAFT and db_doc.warehouse_id and not source_dn_line_id and line_data.get("product_id") and not doc.is_exchange_difference:
+                if db_doc.doc_type not in (models.DocumentType.INVOICE, models.DocumentType.FCE_MIPYME, models.DocumentType.TIQUET_FACTURA, models.DocumentType.PURCHASE_INVOICE) and db_doc.status != models.DocumentStatus.DRAFT and db_doc.warehouse_id and not source_dn_line_id and line_data.get("product_id") and not doc.is_exchange_difference:
                     prod = db.query(Product).filter(Product.id == line_data.get("product_id")).first()
                     if prod and getattr(prod, 'is_service', False) == False:
                         from app.db.models.commercial_models import StockMovement, StockMovementType
                         from app.modules.inventory.stock_utils import get_or_create_stock_item
                         from decimal import Decimal
-                        
+
                         # Reglas de stock para documentos
                         # ND -> Nunca toca stock
                         if doc.doc_type == models.DocumentType.DEBIT_NOTE:
                             continue
-                            
+
                         # NC -> Solo toca stock si es devolución física
                         if doc.doc_type == models.DocumentType.CREDIT_NOTE:
                             if not (doc.reason_type == models.DocumentReasonType.RETURN and doc.return_stock):
                                 continue
-                                
+
                         item = get_or_create_stock_item(db, prod.id, db_doc.warehouse_id)
                         qty = Decimal(str(line_data.get("qty", 0)))
                         is_in = doc.doc_type in [models.DocumentType.PURCHASE_INVOICE, models.DocumentType.CREDIT_NOTE]
-                        
+
                         sm = StockMovement(
                             id=generate_uuid(),
                             stock_item_id=item.id,
-                            qty=qty,
+                            qty=qty if is_in else -qty,
                             movement_type=StockMovementType.IN if is_in else StockMovementType.OUT,
                             reference_type=db_doc.doc_type,
                             reference_id=db_doc.id,
-                            date=db_doc.date or datetime.now()
+                            created_at=db_doc.date or datetime.now()
                         )
                         db.add(sm)
-                        
+
                         # Actualizar qty_on_hand
                         if is_in:
                             item.qty_on_hand += qty
                         else:
                             item.qty_on_hand -= qty
-                            
+
                         db.flush()
                         db_line.stock_movement_id = sm.id
+
+                        from app.modules.inventory.reservation_reconciliation import (
+                            reconcile_product_reservations,
+                        )
+                        reconcile_product_reservations(
+                            db, prod.id, db_doc.warehouse_id
+                        )
 
                 if source_dn_line_id:
                     dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == source_dn_line_id).first()
@@ -1117,7 +1124,7 @@ def create_document(
                         pending_dn = dn_qty - dn_qty_invoiced
                         if Decimal(str(qty)) > (pending_dn + Decimal('0.001')):
                             raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({qty}) supera lo pendiente en el remito ({pending_dn}).")
-                            
+
                         dn_line.qty_invoiced = dn_qty_invoiced + Decimal(str(qty))
                         db.flush()
                         # Also update the origin Order Line (OV or OC)
@@ -1156,16 +1163,16 @@ def create_document(
                         pending_ov = Decimal(str(ovl.qty)) - Decimal(str(ovl.qty_invoiced or 0))
                         if Decimal(str(qty)) > (pending_ov + Decimal('0.001')):
                             raise HTTPException(status_code=400, detail=f"La cantidad a facturar ({qty}) supera lo pendiente en la Orden de Venta ({pending_ov}).")
-                        
+
                         ovl.qty_invoiced = Decimal(str(ovl.qty_invoiced or 0)) + Decimal(str(qty))
-                        
+
                         # --- PRICE SYNC LOGIC ---
                         new_price = Decimal(str(line_data.get('unit_price', 0)))
                         old_price = Decimal(str(ovl.unit_price))
-                        
+
                         if new_price != old_price:
                             ovl.unit_price = float(new_price)
-                            
+
                             # Recalc line
                             discount = Decimal(str(ovl.discount_pct or 0))
                             vat_rate = Decimal(str(0.21 if ovl.vat_rate is None else ovl.vat_rate))
@@ -1175,17 +1182,17 @@ def create_document(
                             net = sub - bonif
                             vat = net * vat_rate
                             total = net + vat
-                            
+
                             ovl.net_amount = float(net)
                             ovl.vat_amount = float(vat)
                             ovl.total_amount = float(total)
-                            
+
                             user_name = "Sistema"
                             if current_user:
                                 user_name = getattr(current_user, 'username', getattr(current_user, 'name', "Sistema"))
-                                
+
                             prod_name = ovl.product.name if ovl.product else 'Ítem'
-                            
+
                             db.add(SalesOrderHistory(
                                 order_id=ovl.order_id,
                                 user=user_name,
@@ -1193,12 +1200,12 @@ def create_document(
                                 details=f"Factura {db_doc.number}: Precio modificado en {prod_name}. Anterior: USD {old_price} -> Nuevo: USD {new_price}"
                             ))
                             db.flush()
-                            
+
                             ov = db.query(SalesOrder).filter(SalesOrder.id == ovl.order_id).first()
                             if ov:
                                 _recalc_total(ov, db)
                         # --- END PRICE SYNC ---
-                        
+
                         db.flush()
                         recalc_sales_order_status(db, ovl.order_id)
                 elif source_purchase_line_id:
@@ -1223,7 +1230,7 @@ def create_document(
                         else: all_invoiced = False
                     if all_invoiced: dn.status = DeliveryNoteStatus.INVOICED
                     elif some_invoiced: dn.status = DeliveryNoteStatus.PARTIAL
-                    
+
                     # Recalc status of parent order if exists
                     if dn.sales_order_id:
                         recalc_sales_order_status(db, dn.sales_order_id)
@@ -1245,7 +1252,7 @@ def create_document(
                     # Payment (Egreso) -> Factura Venta (Deuda Cliente) = Pago de Comisión
                     # Receipt (Ingreso) -> Factura Venta (Deuda Cliente) = Cobro a Cliente
                     # Payment (Egreso) -> Factura Compra (Deuda Prov) = Pago a Proveedor
-                    is_commission_payout = (db_doc.doc_type == models.DocumentType.PAYMENT and 
+                    is_commission_payout = (db_doc.doc_type == models.DocumentType.PAYMENT and
                                            to_doc.doc_type in [models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE])
 
                     if not is_commission_payout:
@@ -1258,7 +1265,7 @@ def create_document(
                         )
                         db.add(db_app)
                         db.flush() # Ensure ID is available for FX adjustment
-                        
+
                         # Trigger FX adjustment if needed:
                         # SOLO cuando la factura es USD y el RECIBO es ARS
                         # Si recibo USD + factura USD: NO generar DDC (mismo universo monetario)
@@ -1276,7 +1283,7 @@ def create_document(
                         if to_doc.commission_paid_amount >= (float(to_doc.commission_amount or 0)) - 0.01:
                             to_doc.commission_paid = True
                         to_doc.commission_payment_date = datetime.now()
-                        
+
                         db.add(models.CommissionPayment(
                             document_id=to_doc.id,
                             source_document_id=db_doc.id, # Link back to this OP
@@ -1296,7 +1303,7 @@ def create_document(
                         if float(dn.commission_paid_amount or 0) >= float(dn.commission_amount or 0) - 0.01:
                             dn.commission_paid = True
                         dn.commission_payment_date = datetime.now()
-                        
+
                         db.add(models.CommissionPayment(
                             delivery_note_id=dn.id,
                             source_document_id=db_doc.id, # Link back to this OP
@@ -1315,7 +1322,7 @@ def create_document(
                             if float(ov.commission_paid_amount or 0) >= float(ov.commission_amount or 0) - 0.01:
                                 ov.commission_paid = True
                             ov.commission_payment_date = datetime.now()
-                            
+
                             db.add(models.CommissionPayment(
                                 source_document_id=db_doc.id, # Link back to this OP
                                 salesperson_id=ov.salesperson_id or entity.id,
@@ -1325,7 +1332,7 @@ def create_document(
                                 notes=f"Liquidación desde {db_doc.number} (OV)",
                                 date=datetime.now()
                             ))
-        
+
         # Calcular Vencimiento si hay Condición
         if db_doc.sale_condition_id:
             from app.db.models.commercial_models import SaleCondition
@@ -1373,7 +1380,7 @@ def create_document(
             )
             db.add(provider_payment)
             db.flush()
-            
+
             # Linkar OP con la Factura Compra del proveedor
             app_prov = models.Application(
                 from_document_id=provider_payment.id,
@@ -1384,7 +1391,7 @@ def create_document(
             )
             db.add(app_prov)
             db_doc.status = models.DocumentStatus.CLOSED
-            
+
             # 2. Crear Factura Compra (Deuda) para el empleado
             # El empleado ahora tiene una cuenta corriente donde se le debe este dinero
             employee_invoice = models.Document(
@@ -1402,7 +1409,7 @@ def create_document(
             )
             db.add(employee_invoice)
             db.flush()
-            
+
             # Línea de la factura del empleado (Concepto genérico de rendición)
             db_line_emp = models.DocumentLine(
                 document_id=employee_invoice.id,
@@ -1417,11 +1424,11 @@ def create_document(
                 line_order=0
             )
             db.add(db_line_emp)
-        
+
         # 6. Recalcular estados (del propio comprobante y destinos si hubo aplicaciones)
         db.flush()
         _recalc_document_status(db_doc, db)
-        
+
         # También recalculamos los documentos que recibieron aplicaciones (ej: las facturas cobradas)
         for target_id in docs_to_recalc:
              target_doc = db.query(models.Document).filter(models.Document.id == target_id).first()
@@ -1459,8 +1466,8 @@ def create_document(
 @router.get("/", response_model=List[document_schemas.DocumentResponse])
 def get_documents(
     doc_type: Optional[models.DocumentType] = None,
-    entity_id: Optional[str] = None, 
-    cost_center: Optional[int] = None, 
+    entity_id: Optional[str] = None,
+    cost_center: Optional[int] = None,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -1479,14 +1486,14 @@ def get_documents(
         joinedload(models.Document.applied_by),
         joinedload(models.Document.lines)
     )
-    
+
     if doc_type:
         query = query.filter(models.Document.doc_type == doc_type)
     if entity_id:
         query = query.filter(models.Document.entity_id == entity_id)
     if cost_center:
         query = query.filter(models.Document.cost_center == cost_center)
-        
+
     items = query.order_by(models.Document.date.desc()).limit(1000).all() # Limit for performance
     for it in items:
         _sanitize_document_for_response(it, db=db)
@@ -1494,7 +1501,7 @@ def get_documents(
 
 @router.post("/bulk-invoice")
 def bulk_invoice_delivery_notes(
-    req: BulkInvoiceRequest, 
+    req: BulkInvoiceRequest,
     db: Session = Depends(get_db),
     current_user: models.User = Depends(get_current_user)
 ):
@@ -1519,7 +1526,7 @@ def bulk_invoice_delivery_notes(
         raise HTTPException(status_code=400, detail="Todos los remitos deben pertenecer a la misma entidad para ser consolidados")
 
     entity_id = list(entity_ids)[0]
-    
+
     for delivery in dns:
         validate_invoice_origins(db, req.doc_type, entity_id, delivery.lines)
 
@@ -1527,7 +1534,7 @@ def bulk_invoice_delivery_notes(
     if req.doc_type != models.DocumentType.INVOICE:
         raise HTTPException(status_code=400, detail="La facturación masiva solo admite facturas de venta")
     full_number = numbering_service.reserve_next_number(db, req.pv, f"F{req.letter.upper()}")
-    
+
     # 3. Crear el Documento (Factura)
     new_doc = models.Document(
         id=str(uuid.uuid4()),
@@ -1592,10 +1599,10 @@ def bulk_invoice_delivery_notes(
                 source_sales_line_id=line.source_sales_line_id
             )
             db.add(doc_line)
-            
+
             # Actualizar progreso en el remito
             line.qty_invoiced = float(Decimal(str(line.qty_invoiced or 0)) + qty_to_invoice)
-            
+
             # Actualizar progreso en la orden de venta (si existe)
             if line.source_sales_line_id:
                 ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
@@ -1616,7 +1623,7 @@ def bulk_invoice_delivery_notes(
         new_doc.total_amount_ars = new_doc.total_amount
     else:
         new_doc.total_amount_ars = round(new_doc.total_amount * req.exchange_rate, 2)
-        
+
     _log_history(db, new_doc.id, "CREACION", f"Factura masiva generada a partir de {len(dns)} remitos.", current_user=current_user)
 
     # 6. Recalcular Órdenes de Venta
@@ -1639,19 +1646,19 @@ def bulk_email_documents(req: BulkEmailRequest, db: Session = Depends(get_db), c
         if not doc:
             results.append({"id": doc_id, "status": "error", "message": "No encontrado"})
             continue
-        
+
         email = doc.entity.email if doc.entity else None
         if not email:
             results.append({"id": doc_id, "number": doc.number, "status": "error", "message": "Entidad no tiene email"})
             continue
-        
+
         try:
             pdf_internal = export_document_to_pdf(doc, db=db)
             attachments = [{"filename": f"{doc.number}.pdf", "content": pdf_internal}]
-            
+
             subject = req.subject or f"Comprobante {doc.number} - Quintal Agross"
             body = req.body or f"Estimado {doc.entity.name},\n\nAdjuntamos el comprobante {doc.number} para su gestión.\n\nSaludos cordiales,\nEquipo de Administración de Quintal Agross"
-            
+
             res = send_email(subject, body, attachments=attachments, to_email=email)
             if res.get("sent"):
                 _log_history(db, doc_id, "ENVIO_EMAIL", f"PDF enviado con éxito a {email}", current_user=current_user)
@@ -1660,147 +1667,152 @@ def bulk_email_documents(req: BulkEmailRequest, db: Session = Depends(get_db), c
                 results.append({"id": doc_id, "number": doc.number, "status": "error", "message": res.get("reason", "Error SMTP")})
         except Exception as e:
             results.append({"id": doc_id, "number": doc.number, "status": "error", "message": str(e)})
-    
+
     db.commit()
     return results
 
 @router.delete("/{id}")
 def delete_document(id: str, db: Session = Depends(get_db), current_user: models.User = Depends(get_current_user)):
-    doc = db.query(models.Document).filter(models.Document.id == id).first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Documento no encontrado")
-        
-    # Check Permission based on type
-    is_purchase = doc.doc_type in [
-        models.DocumentType.PURCHASE_INVOICE, 
-        models.DocumentType.PURCHASE_DEBIT_NOTE, 
-        models.DocumentType.PURCHASE_CREDIT_NOTE
-    ]
-    is_finance = doc.doc_type in [
-        models.DocumentType.RECEIPT, 
-        models.DocumentType.PAYMENT
-    ]
-    
-    module = "purchase_invoices" if is_purchase else "finance" if is_finance else "sales_invoices"
-    
-    # Admin and Owner always pass
-    if not ("admin" in current_user.roles or "owner" in current_user.roles):
-        from app.modules.auth.auth_router import get_effective_permissions
-        perms = get_effective_permissions(current_user, db)
-        if not perms.get(module, {}).get("delete", False):
+    try:
+        doc = db.query(models.Document).filter(models.Document.id == id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
+
+        if doc.status == models.DocumentStatus.CANCELLED:
             raise HTTPException(
-                status_code=403, 
-                detail=f"No tiene permiso para eliminar en el módulo {module}"
+                status_code=409,
+                detail="El documento ya está anulado y no admite esta operación",
             )
 
-    require_unapplied_draft(db, doc)
-    if doc.cae:
-        raise HTTPException(status_code=403, detail="No se puede eliminar un documento autorizado en ARCA (posee CAE)")
-    
-    # 1. Recalcular destinos de aplicaciones y revertir impactos en órdenes/remitos
-    targets_to_recalc = set()
-    dns_to_recalc = set()
-    orders_to_recalc = set()
-    
-    from app.modules.sales.sales_utils import recalc_sales_order_status, recalc_purchase_order_status
+        # Check Permission based on type
+        is_purchase = doc.doc_type in [
+            models.DocumentType.PURCHASE_INVOICE,
+            models.DocumentType.PURCHASE_DEBIT_NOTE,
+            models.DocumentType.PURCHASE_CREDIT_NOTE
+        ]
+        is_finance = doc.doc_type in [
+            models.DocumentType.RECEIPT,
+            models.DocumentType.PAYMENT
+        ]
 
-    # 1.1 Revertir qty_invoiced en remitos y órdenes (OV/OC)
-    for line in doc.lines:
-        if line.source_dn_line_id:
-            dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == line.source_dn_line_id).first()
-            if dn_line:
-                from decimal import Decimal
-                diff = Decimal(str(line.qty))
-                dn_line.qty_invoiced = max(Decimal(0), Decimal(str(dn_line.qty_invoiced or 0)) - diff)
-                dns_to_recalc.add(dn_line.delivery_note_id)
-        else:
-            # Revertir stock (solo si no viene de remito y tiene movimiento)
-            if getattr(line, "stock_movement_id", None):
-                from app.db.models.commercial_models import StockMovement, StockItem, StockMovementType
-                from decimal import Decimal
-                sm = db.query(StockMovement).filter(StockMovement.id == line.stock_movement_id).first()
-                if sm:
-                    item = db.query(StockItem).filter(StockItem.id == sm.stock_item_id).first()
-                    if item:
-                        # Revertir qty_on_hand
-                        qty = Decimal(str(sm.qty))
-                        if sm.movement_type == StockMovementType.IN:
-                            item.qty_on_hand -= qty
-                        elif sm.movement_type == StockMovementType.OUT:
-                            item.qty_on_hand += qty
-                    db.delete(sm)
-        
-        if line.source_sales_line_id:
-            ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
-            if ov_line:
-                from decimal import Decimal
-                diff = Decimal(str(line.qty))
-                ov_line.qty_invoiced = max(Decimal(0), Decimal(str(ov_line.qty_invoiced or 0)) - diff)
-                orders_to_recalc.add(("OV", ov_line.order_id))
-        elif line.source_purchase_line_id:
-            oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == line.source_purchase_line_id).first()
-            if oc_line:
-                from decimal import Decimal
-                diff = Decimal(str(line.qty))
-                oc_line.qty_invoiced = max(Decimal(0), Decimal(str(oc_line.qty_invoiced or 0)) - diff)
-                orders_to_recalc.add(("OC", oc_line.order_id))
+        module = "purchase_invoices" if is_purchase else "finance" if is_finance else "sales_invoices"
 
-    # 1.2 Info para recalcular aplicaciones financieras
-    for app in doc.applied_to:
-        targets_to_recalc.add(app.to_document_id)
-    for app in doc.applied_by:
-        targets_to_recalc.add(app.from_document_id)
+        # Admin and Owner always pass
+        if not ("admin" in current_user.roles or "owner" in current_user.roles):
+            from app.modules.auth.auth_router import get_effective_permissions
+            perms = get_effective_permissions(current_user, db)
+            if not perms.get(module, {}).get("delete", False):
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"No tiene permiso para eliminar en el módulo {module}"
+                )
 
-    # 1.3 Revertir comisiones
-    comm_payments = db.query(CommissionPayment).filter(CommissionPayment.source_document_id == id).all()
-    for cp in comm_payments:
-        if cp.document_id:
-            target_doc = db.query(models.Document).filter(models.Document.id == cp.document_id).first()
-            if target_doc:
-                target_doc.commission_paid_amount = max(0.0, float(target_doc.commission_paid_amount or 0) - float(cp.applied_amount))
-                target_doc.commission_paid = False
-                targets_to_recalc.add(target_doc.id)
-        if cp.delivery_note_id:
-            target_dn = db.query(DeliveryNote).filter(DeliveryNote.id == cp.delivery_note_id).first()
-            if target_dn:
-                target_dn.commission_paid_amount = max(0.0, float(target_dn.commission_paid_amount or 0) - float(cp.applied_amount))
-                target_dn.commission_paid = False
-        db.delete(cp)
+        require_unapplied_draft(db, doc)
+        if doc.cae:
+            raise HTTPException(status_code=403, detail="No se puede eliminar un documento autorizado en ARCA (posee CAE)")
 
-    # 2. Borrar el documento
-    db.delete(doc)
-    db.flush()
-    
-    # 3. Recalcular todo lo afectado
-    # 3.1 Recalcular Remitos
-    for dn_id in dns_to_recalc:
-        dn_obj = db.query(DeliveryNote).filter(DeliveryNote.id == dn_id).first()
-        if dn_obj:
-            all_invoiced = True
-            some_invoiced = False
-            for dl in dn_obj.lines:
-                if (dl.qty_invoiced or 0) >= dl.qty: some_invoiced = True
-                else: all_invoiced = False
-            if all_invoiced: dn_obj.status = DeliveryNoteStatus.INVOICED
-            elif some_invoiced: dn_obj.status = DeliveryNoteStatus.PARTIAL
-            else: dn_obj.status = DeliveryNoteStatus.DISPATCHED
+        # 1. Recalcular destinos de aplicaciones y revertir impactos en órdenes/remitos
+        targets_to_recalc = set()
+        dns_to_recalc = set()
+        orders_to_recalc = set()
 
-    # 3.2 Recalcular Órdenes
-    for o_type, o_id in orders_to_recalc:
-        if o_type == "OV":
-            recalc_sales_order_status(db, o_id)
-        else:
-            recalc_purchase_order_status(db, o_id)
+        from app.modules.sales.sales_utils import recalc_sales_order_status, recalc_purchase_order_status
 
-    # 3.3 Recalcular otros documentos financieros
-    for t_id in targets_to_recalc:
-        if t_id == doc.id: continue
-        target = db.query(models.Document).filter(models.Document.id == t_id).first()
-        if target:
-            _recalc_document_status(target, db)
+        # 1.1 Revertir qty_invoiced en remitos y órdenes (OV/OC)
+        for line in doc.lines:
+            if line.source_dn_line_id:
+                dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == line.source_dn_line_id).first()
+                if dn_line:
+                    from decimal import Decimal
+                    diff = Decimal(str(line.qty))
+                    dn_line.qty_invoiced = max(Decimal(0), Decimal(str(dn_line.qty_invoiced or 0)) - diff)
+                    dns_to_recalc.add(dn_line.delivery_note_id)
+            else:
+                # Revertir stock (solo si no viene de remito y tiene movimiento)
+                if getattr(line, "stock_movement_id", None):
+                    from app.modules.inventory.document_stock_reversal import (
+                        reverse_document_stock_movement,
+                    )
+                    reverse_document_stock_movement(
+                        db,
+                        movement_id=line.stock_movement_id,
+                        document_id=doc.id,
+                    )
 
-    db.commit()
-    return {"ok": True}
+            if line.source_sales_line_id:
+                ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
+                if ov_line:
+                    from decimal import Decimal
+                    diff = Decimal(str(line.qty))
+                    ov_line.qty_invoiced = max(Decimal(0), Decimal(str(ov_line.qty_invoiced or 0)) - diff)
+                    orders_to_recalc.add(("OV", ov_line.order_id))
+            elif line.source_purchase_line_id:
+                oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == line.source_purchase_line_id).first()
+                if oc_line:
+                    from decimal import Decimal
+                    diff = Decimal(str(line.qty))
+                    oc_line.qty_invoiced = max(Decimal(0), Decimal(str(oc_line.qty_invoiced or 0)) - diff)
+                    orders_to_recalc.add(("OC", oc_line.order_id))
+
+        # 1.2 Info para recalcular aplicaciones financieras
+        for app in doc.applied_to:
+            targets_to_recalc.add(app.to_document_id)
+        for app in doc.applied_by:
+            targets_to_recalc.add(app.from_document_id)
+
+        # 1.3 Revertir comisiones
+        comm_payments = db.query(CommissionPayment).filter(CommissionPayment.source_document_id == id).all()
+        for cp in comm_payments:
+            if cp.document_id:
+                target_doc = db.query(models.Document).filter(models.Document.id == cp.document_id).first()
+                if target_doc:
+                    target_doc.commission_paid_amount = max(0.0, float(target_doc.commission_paid_amount or 0) - float(cp.applied_amount))
+                    target_doc.commission_paid = False
+                    targets_to_recalc.add(target_doc.id)
+            if cp.delivery_note_id:
+                target_dn = db.query(DeliveryNote).filter(DeliveryNote.id == cp.delivery_note_id).first()
+                if target_dn:
+                    target_dn.commission_paid_amount = max(0.0, float(target_dn.commission_paid_amount or 0) - float(cp.applied_amount))
+                    target_dn.commission_paid = False
+            db.delete(cp)
+
+        # 2. Borrar el documento
+        db.delete(doc)
+        db.flush()
+
+        # 3. Recalcular todo lo afectado
+        # 3.1 Recalcular Remitos
+        for dn_id in dns_to_recalc:
+            dn_obj = db.query(DeliveryNote).filter(DeliveryNote.id == dn_id).first()
+            if dn_obj:
+                all_invoiced = True
+                some_invoiced = False
+                for dl in dn_obj.lines:
+                    if (dl.qty_invoiced or 0) >= dl.qty: some_invoiced = True
+                    else: all_invoiced = False
+                if all_invoiced: dn_obj.status = DeliveryNoteStatus.INVOICED
+                elif some_invoiced: dn_obj.status = DeliveryNoteStatus.PARTIAL
+                else: dn_obj.status = DeliveryNoteStatus.DISPATCHED
+
+        # 3.2 Recalcular Órdenes
+        for o_type, o_id in orders_to_recalc:
+            if o_type == "OV":
+                recalc_sales_order_status(db, o_id)
+            else:
+                recalc_purchase_order_status(db, o_id)
+
+        # 3.3 Recalcular otros documentos financieros
+        for t_id in targets_to_recalc:
+            if t_id == doc.id: continue
+            target = db.query(models.Document).filter(models.Document.id == t_id).first()
+            if target:
+                _recalc_document_status(target, db)
+
+        db.commit()
+        return {"ok": True}
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("/next-number")
@@ -1822,7 +1834,7 @@ def get_next_document_number(pv: str, doc_type: str, db: Session = Depends(get_d
     # Use exact doc_type passed by frontend, since frontend can pass 'FA', 'FB', etc.
     if len(doc_type) <= 4:
         doc_tag = doc_type
-    
+
     next_num = numbering_service.get_next_number(db, pv, doc_tag)
     return {"next_number": next_num.split('-')[-1], "full_number": next_num}
 
@@ -1855,12 +1867,12 @@ def get_document_pdf(id: str, db: Session = Depends(get_db)):
             joinedload(grain_models.GrainSettlement.movements)
         )
     ).filter(models.Document.id == id).first()
-    
+
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
-        
+
     pdf_output = export_document_to_pdf(doc, db=db)
-    
+
     filename = f"{doc.doc_type}_{doc.number}.pdf"
     return Response(
         content=pdf_output.getvalue(),
@@ -1884,34 +1896,34 @@ def send_document_email(id: str, payload: EmailPayload, db: Session = Depends(ge
             joinedload(grain_models.GrainSettlement.movements)
         )
     ).filter(models.Document.id == id).first()
-    
+
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
-        
+
     pdf_output = export_document_to_pdf(doc, db=db)
     filename = f"{doc.doc_type}_{doc.number}.pdf"
-    
+
     doc_label = "Documento"
     if doc.doc_type.startswith("INV"): doc_label = "Factura"
     elif doc.doc_type == "REC": doc_label = "Recibo"
     elif doc.doc_type == "PAY": doc_label = "Orden de Pago"
     elif doc.doc_type == "LPG_PRIMARY": doc_label = "LPG Primaria"
     elif doc.doc_type == "LPG_SECONDARY": doc_label = "LPG Secundaria"
-    
+
     subject = payload.subject or f"{doc_label} {doc.number} - Quintal Agross"
     body = payload.body or f"""
     <p>Estimado/a,</p>
     <p>Adjuntamos su <b>{doc_label} {doc.number}</b>.</p>
     <p>Saludos cordiales,<br>Quintal Agross</p>
     """
-    
+
     attachment = {
         "filename": filename,
         "content": pdf_output
     }
-    
+
     res = send_email(subject, body, attachments=[attachment], to_email=payload.to_email)
-    
+
     # Log history of email send
     try:
         current_user = get_current_user(db, Response())
@@ -1923,7 +1935,7 @@ def send_document_email(id: str, payload: EmailPayload, db: Session = Depends(ge
 
     if not res.get("sent"):
         raise HTTPException(status_code=500, detail=f"Error enviando correo: {res.get('reason') or res.get('error')}")
-    
+
     return {"message": "Correo enviado con éxito"}
 
 @router.post("/applications", response_model=document_schemas.ApplicationResponse)
@@ -1933,19 +1945,19 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
     to_doc = db.query(models.Document).filter(models.Document.id == app.to_document_id).first()
     require_unmanaged_employee_document(db,from_doc)
     require_unmanaged_employee_document(db,to_doc)
-    
+
     if not from_doc or not to_doc:
         raise HTTPException(status_code=404, detail="One or both documents not found")
-    
+
     # 2. Determinar TC de la aplicación
     # Si el usuario envía TC explícito, usarlo; si no, usar TC del doc crédito
     app_exchange_rate = app.exchange_rate if app.exchange_rate is not None else from_doc.exchange_rate
-    
+
     # 3. Calcular monto aplicado en ARS
     amount_applied_ars = app.amount_applied * app_exchange_rate if to_doc.currency == models.CurrencyType.USD else app.amount_applied
 
     # DETERMINAR SI ES APLICACION DE DEUDA O PAGO DE COMISION
-    is_commission_payout = (from_doc.doc_type == models.DocumentType.PAYMENT and 
+    is_commission_payout = (from_doc.doc_type == models.DocumentType.PAYMENT and
                            to_doc.doc_type in [models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE])
 
     db_app = None
@@ -1960,7 +1972,7 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
         )
         db.add(db_app)
         db.flush()
-        
+
         generate_fx_adjustment(db_app.id, db)
 
         # 5. Recalcular estado del documento destino (deuda)
@@ -1972,7 +1984,7 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
         if to_doc.commission_paid_amount >= (float(to_doc.commission_amount or 0)) - 0.01:
             to_doc.commission_paid = True
         to_doc.commission_payment_date = datetime.now()
-        
+
         db.add(models.CommissionPayment(
             document_id=to_doc.id,
             source_document_id=from_doc.id, # Link back to the payment
@@ -1983,7 +1995,7 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
             notes=f"Liquidación comisión manual desde {from_doc.number}",
             date=datetime.now()
         ))
-    
+
     # Recalcular estado del documento origen (el que paga)
     db.flush()
     _recalc_document_status(from_doc, db)
@@ -1993,11 +2005,11 @@ def create_application(app: document_schemas.ApplicationCreate, db: Session = De
     _log_history(db, to_doc.id, "COBRO_APLICADO", f"Recibida aplicación de {app.amount_applied} {from_doc.currency} desde {from_doc.doc_type} {from_doc.number}", current_user=current_user)
 
     db.commit()
-    
+
     if db_app:
         db.refresh(db_app)
         return db_app
-    
+
     # Si fue solo comisión, devolvemos un objeto Application ficticio para el frontend
     return models.Application(
         id="COMM-"+from_doc.id[:8],
@@ -2017,11 +2029,11 @@ def get_document_balance(id: str, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
-    
+
     total_applied = db.query(func.sum(models.Application.amount_applied)).filter(
         models.Application.to_document_id == id
     ).scalar() or 0.0
-    
+
     return {
         "total_amount": doc.total_amount,
         "total_applied": total_applied,
@@ -2032,10 +2044,10 @@ def get_document_balance(id: str, db: Session = Depends(get_db)):
 @router.get("/{id}/applications", response_model=List[document_schemas.ApplicationDetailResponse])
 def get_document_applications(id: str, db: Session = Depends(get_db)):
     apps = db.query(models.Application).filter(
-        (models.Application.from_document_id == id) | 
+        (models.Application.from_document_id == id) |
         (models.Application.to_document_id == id)
     ).all()
-    
+
     results = []
     for app in apps:
         item = document_schemas.ApplicationDetailResponse.model_validate(app)
@@ -2056,7 +2068,7 @@ def get_entity_applications(entity_id: str, db: Session = Depends(get_db)):
     ).filter(
         models.Document.entity_id == entity_id
     ).order_by(models.Application.created_at.desc()).limit(100).all()
-    
+
     results = []
     for app in apps:
         item = document_schemas.ApplicationDetailResponse.model_validate(app)
@@ -2067,7 +2079,7 @@ def get_entity_applications(entity_id: str, db: Session = Depends(get_db)):
         item.to_doc_type = app.to_document.doc_type
         item.to_doc_currency = app.to_document.currency
         results.append(item)
-    
+
     # Pendiente: Podríamos sumar CommissionPayments aquí transformándolos a este esquema
     # por ahora enviamos solo las financieras automáticas
     return results
@@ -2083,27 +2095,27 @@ def delete_application(id: str, db: Session = Depends(get_db), current_user: mod
              # Por ahora no tenemos el ID exacto aquí pero podríamos buscarlo
              raise HTTPException(status_code=400, detail="Use el módulo de comisiones para borrar liquidaciones")
         raise HTTPException(status_code=404, detail="Aplicación no encontrada")
-    
+
     from_doc = app.from_document
     to_doc = app.to_document
     require_unmanaged_employee_document(db,from_doc)
     require_unmanaged_employee_document(db,to_doc)
-    
+
     # 1. Si tenía ajuste de cambio, manejarlo
     if app.fx_link:
         gen_doc = app.fx_link.generated_document
         if gen_doc and not gen_doc.cae:
             # Si no tiene CAE, borramos el documento de ajuste generado
             db.delete(gen_doc)
-    
+
     # 2. Borrar aplicación (fx_link se borra por cascade)
     db.delete(app)
     db.flush()
-    
+
     # 3. Recalcular estados
     _recalc_document_status(from_doc, db)
     _recalc_document_status(to_doc, db)
-    
+
     # Log deletion
     if from_doc:
         _log_history(db, from_doc.id, "ELIMINACION_APLICACION", f"Se eliminó aplicación a {to_doc.number if to_doc else '?'}", current_user=current_user)
@@ -2123,7 +2135,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
         doc = db.query(models.Document).filter(models.Document.id == id).first()
         if not doc:
             raise HTTPException(status_code=404, detail="Documento no encontrado")
-        
+
         require_unapplied_draft(db, doc)
         update_data = data.model_dump(exclude_unset=True)
         from app.db.models.service_models import ServiceWorkBilling
@@ -2158,7 +2170,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                     old_val = getattr(doc, field, None)
                     if _is_changed(new_val, old_val):
                         raise HTTPException(status_code=err_code, detail=f"{error_msg} (Campo bloqueado: {field})")
-            
+
             lines_data = update_data.get("lines")
             if lines_data is not None:
                 if len(lines_data) != len(doc.lines):
@@ -2194,7 +2206,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                                 if acc_id is not None:
                                     line.accounting_account_id = acc_id
                                 break
-            
+
             require_accounting(db, doc)
             db.commit()
             db.refresh(doc)
@@ -2232,7 +2244,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                 raise HTTPException(status_code=400, detail="El número de comprobante no puede ser 00000000. Genere un número válido.")
 
             existing = db.query(models.Document).filter(
-                models.Document.doc_type == doc.doc_type, 
+                models.Document.doc_type == doc.doc_type,
                 models.Document.number == final_num,
                 models.Document.id != id
             ).first()
@@ -2299,13 +2311,13 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
             if is_linked:
                 if len(lines_data) != len(doc.lines):
                     raise HTTPException(status_code=409, detail="No se pueden añadir/quitar ítems de un documento vinculado a una orden. Use el gestor de vínculos.")
-                
+
                 for i, ld in enumerate(lines_data):
                     old_l = doc.lines[i]
                     new_q = float(ld.get("qty") if isinstance(ld, dict) else getattr(ld, "qty", 0))
                     if abs(new_q - float(old_l.qty)) > 0.0001:
                         raise HTTPException(status_code=409, detail=f"Línea {i+1}: Cantidad protegida por vínculo. Use el gestor de vínculos.")
-                    
+
                     new_p = ld.get("product_id") if isinstance(ld, dict) else getattr(ld, "product_id", None)
                     if str(new_p) != str(old_l.product_id):
                         raise HTTPException(status_code=409, detail=f"Línea {i+1}: Producto protegido por vínculo.")
@@ -2327,7 +2339,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
 
                 qty_packages = line_dict.get("qty_packages")
                 package_size = line_dict.get("package_size")
-                
+
                 if line_dict.get("product_id"):
                     prod_tmp = db.query(Product).filter(Product.id == line_dict["product_id"]).first()
                     if prod_tmp and prod_tmp.quantity_per_container and float(prod_tmp.quantity_per_container) > 1:
@@ -2353,7 +2365,7 @@ def update_document(id: str, data: document_schemas.DocumentUpdate, db: Session 
                 # Costo unitario: priorizar entrada manual del formulario
                 unit_val = line_dict.get("cost_price") if line_dict.get("cost_price") is not None else line_dict.get("unit_cost")
                 unit_cost = float(unit_val or 0.0)
-                
+
                 if unit_cost == 0 and line_dict.get("product_id"):
                     prod = db.query(Product).filter(Product.id == line_dict["product_id"]).first()
                     if prod:
@@ -2453,119 +2465,124 @@ def annul_document(id: str, db: Session = Depends(get_db), current_user: models.
     Anula un documento de forma trazable.
     Revierte aplicaciones, comisiones, remitos y órdenes.
     """
-    doc = db.query(models.Document).filter(models.Document.id == id).first()
-    if not doc:
-        raise HTTPException(status_code=404, detail="Documento no encontrado")
-    
-    # No anular automáticamente comprobantes fiscales autorizados.
-    # La anulación fiscal requiere una NC válida y autorización real de ARCA.
-    if (
-        getattr(doc, "cae", None)
-        and doc.doc_type in (
-            models.DocumentType.INVOICE,
-            models.DocumentType.DEBIT_NOTE,
-            models.DocumentType.FCE_MIPYME,
-        )
-    ):
-        raise HTTPException(
-            status_code=503,
-            detail=(
-                "Anulación fiscal automática no disponible. "
-                "El comprobante original no fue modificado. "
-                "Se requiere un circuito autorizado por ARCA."
-            ),
-        )
+    try:
+        doc = db.query(models.Document).filter(models.Document.id == id).first()
+        if not doc:
+            raise HTTPException(status_code=404, detail="Documento no encontrado")
 
-    require_unapplied_draft(db, doc)
-    was_draft = doc.is_draft
+        if doc.status == models.DocumentStatus.CANCELLED:
+            raise HTTPException(
+                status_code=409,
+                detail="El documento ya está anulado y no admite esta operación",
+            )
 
-    generated_nc_msg = ""
+        # No anular automáticamente comprobantes fiscales autorizados.
+        # La anulación fiscal requiere una NC válida y autorización real de ARCA.
+        if (
+            getattr(doc, "cae", None)
+            and doc.doc_type in (
+                models.DocumentType.INVOICE,
+                models.DocumentType.DEBIT_NOTE,
+                models.DocumentType.FCE_MIPYME,
+            )
+        ):
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "Anulación fiscal automática no disponible. "
+                    "El comprobante original no fue modificado. "
+                    "Se requiere un circuito autorizado por ARCA."
+                ),
+            )
 
-    # --- LÓGICA DE REVERSIÓN ESTÁNDAR ---
-    # 1. Revertir stocks / remitos / órdenes si corresponde
-    orders_to_recalc = set()
-    dns_to_recalc = set()
-    from app.modules.sales.sales_utils import recalc_sales_order_status, recalc_purchase_order_status
+        require_unapplied_draft(db, doc)
+        was_draft = doc.is_draft
 
-    for line in doc.lines:
-        if line.source_dn_line_id:
-            dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == line.source_dn_line_id).first()
-            if dn_line:
-                from decimal import Decimal
-                diff_qty = Decimal(str(line.qty))
-                dn_line.qty_invoiced = max(Decimal(0), Decimal(str(dn_line.qty_invoiced or 0)) - diff_qty)
-                dns_to_recalc.add(dn_line.delivery_note_id)
-        else:
-            # Revertir stock (solo si no viene de remito y tiene movimiento)
-            if getattr(line, "stock_movement_id", None):
-                from app.db.models.commercial_models import StockMovement, StockItem, StockMovementType
-                from decimal import Decimal
-                sm = db.query(StockMovement).filter(StockMovement.id == line.stock_movement_id).first()
-                if sm:
-                    item = db.query(StockItem).filter(StockItem.id == sm.stock_item_id).first()
-                    if item:
-                        # Revertir qty_on_hand
-                        qty = Decimal(str(sm.qty))
-                        if sm.movement_type == StockMovementType.IN:
-                            item.qty_on_hand -= qty
-                        elif sm.movement_type == StockMovementType.OUT:
-                            item.qty_on_hand += qty
-                    db.delete(sm)
-        
-        if line.source_sales_line_id:
-            ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
-            if ov_line:
-                from decimal import Decimal
-                diff_qty = Decimal(str(line.qty))
-                ov_line.qty_invoiced = max(Decimal(0), Decimal(str(ov_line.qty_invoiced or 0)) - diff_qty)
-                orders_to_recalc.add(("OV", ov_line.order_id))
-        elif line.source_purchase_line_id:
-            oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == line.source_purchase_line_id).first()
-            if oc_line:
-                from decimal import Decimal
-                diff_qty = Decimal(str(line.qty))
-                oc_line.qty_invoiced = max(Decimal(0), Decimal(str(oc_line.qty_invoiced or 0)) - diff_qty)
-                orders_to_recalc.add(("OC", oc_line.order_id))
+        generated_nc_msg = ""
 
-    # 2. Revertir aplicaciones y comisiones
-    apps_from = db.query(models.Application).filter(models.Application.from_document_id == id).all()
-    apps_to = db.query(models.Application).filter(models.Application.to_document_id == id).all()
-    targets_to_recalc = set()
-    for app in apps_from: targets_to_recalc.add(app.to_document_id); db.delete(app)
-    for app in apps_to: targets_to_recalc.add(app.from_document_id); db.delete(app)
-    
-    # Comisiones
-    db.query(models.CommissionPayment).filter(models.CommissionPayment.source_document_id == id).delete()
-    db.query(InvoiceDeliveryNoteLink).filter(InvoiceDeliveryNoteLink.document_id == id).delete()
+        # --- LÓGICA DE REVERSIÓN ESTÁNDAR ---
+        # 1. Revertir stocks / remitos / órdenes si corresponde
+        orders_to_recalc = set()
+        dns_to_recalc = set()
+        from app.modules.sales.sales_utils import recalc_sales_order_status, recalc_purchase_order_status
 
-    # 3. Estado Final e Historia
-    if was_draft:
-        for entry in list(doc.journal_entries):
-            db.delete(entry)
-    doc.status = models.DocumentStatus.CANCELLED
-    _log_history(db, id, "ANULACION", "Documento anulado. Se revirtieron impactos comerciales" + generated_nc_msg, current_user=current_user)
-    
-    db.flush()
-    
-    # 4. Recalcular involucrados
-    for dn_id in dns_to_recalc:
-        dn_obj = db.query(DeliveryNote).filter(DeliveryNote.id == dn_id).first()
-        if dn_obj:
-            all_invoiced = True
-            for dl in dn_obj.lines:
-                if (dl.qty_invoiced or 0) < dl.qty: all_invoiced = False
-            dn_obj.status = DeliveryNoteStatus.INVOICED if all_invoiced else DeliveryNoteStatus.PARTIAL
+        for line in doc.lines:
+            if line.source_dn_line_id:
+                dn_line = db.query(DeliveryNoteLine).filter(DeliveryNoteLine.id == line.source_dn_line_id).first()
+                if dn_line:
+                    from decimal import Decimal
+                    diff_qty = Decimal(str(line.qty))
+                    dn_line.qty_invoiced = max(Decimal(0), Decimal(str(dn_line.qty_invoiced or 0)) - diff_qty)
+                    dns_to_recalc.add(dn_line.delivery_note_id)
+            else:
+                # Revertir stock (solo si no viene de remito y tiene movimiento)
+                if getattr(line, "stock_movement_id", None):
+                    from app.modules.inventory.document_stock_reversal import (
+                        reverse_document_stock_movement,
+                    )
+                    reverse_document_stock_movement(
+                        db,
+                        movement_id=line.stock_movement_id,
+                        document_id=doc.id,
+                    )
 
-    for o_type, o_id in orders_to_recalc:
-        if o_type == "OV": recalc_sales_order_status(db, o_id)
-        else: recalc_purchase_order_status(db, o_id)
-            
-    for t_id in targets_to_recalc:
-        target = db.query(models.Document).filter(models.Document.id == t_id).first()
-        if target: _recalc_document_status(target, db)
+            if line.source_sales_line_id:
+                ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
+                if ov_line:
+                    from decimal import Decimal
+                    diff_qty = Decimal(str(line.qty))
+                    ov_line.qty_invoiced = max(Decimal(0), Decimal(str(ov_line.qty_invoiced or 0)) - diff_qty)
+                    orders_to_recalc.add(("OV", ov_line.order_id))
+            elif line.source_purchase_line_id:
+                oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == line.source_purchase_line_id).first()
+                if oc_line:
+                    from decimal import Decimal
+                    diff_qty = Decimal(str(line.qty))
+                    oc_line.qty_invoiced = max(Decimal(0), Decimal(str(oc_line.qty_invoiced or 0)) - diff_qty)
+                    orders_to_recalc.add(("OC", oc_line.order_id))
 
-    db.commit()
-    return {"status": "ok", "message": "Documento anulado"}
+        # 2. Revertir aplicaciones y comisiones
+        apps_from = db.query(models.Application).filter(models.Application.from_document_id == id).all()
+        apps_to = db.query(models.Application).filter(models.Application.to_document_id == id).all()
+        targets_to_recalc = set()
+        for app in apps_from: targets_to_recalc.add(app.to_document_id); db.delete(app)
+        for app in apps_to: targets_to_recalc.add(app.from_document_id); db.delete(app)
+
+        # Comisiones
+        db.query(models.CommissionPayment).filter(models.CommissionPayment.source_document_id == id).delete()
+        db.query(InvoiceDeliveryNoteLink).filter(InvoiceDeliveryNoteLink.document_id == id).delete()
+
+        # 3. Estado Final e Historia
+        if was_draft:
+            for entry in list(doc.journal_entries):
+                db.delete(entry)
+        doc.status = models.DocumentStatus.CANCELLED
+        _log_history(db, id, "ANULACION", "Documento anulado. Se revirtieron impactos comerciales" + generated_nc_msg, current_user=current_user)
+
+        db.flush()
+
+        # 4. Recalcular involucrados
+        for dn_id in dns_to_recalc:
+            dn_obj = db.query(DeliveryNote).filter(DeliveryNote.id == dn_id).first()
+            if dn_obj:
+                all_invoiced = True
+                for dl in dn_obj.lines:
+                    if (dl.qty_invoiced or 0) < dl.qty: all_invoiced = False
+                dn_obj.status = DeliveryNoteStatus.INVOICED if all_invoiced else DeliveryNoteStatus.PARTIAL
+
+        for o_type, o_id in orders_to_recalc:
+            if o_type == "OV": recalc_sales_order_status(db, o_id)
+            else: recalc_purchase_order_status(db, o_id)
+
+        for t_id in targets_to_recalc:
+            target = db.query(models.Document).filter(models.Document.id == t_id).first()
+            if target: _recalc_document_status(target, db)
+
+        db.commit()
+        return {"status": "ok", "message": "Documento anulado"}
+    except Exception:
+        db.rollback()
+        raise
 
 @router.get("/{id}/timeline")
 def get_document_timeline(id: str, db: Session = Depends(get_db)):
@@ -2576,9 +2593,9 @@ def get_document_timeline(id: str, db: Session = Depends(get_db)):
     doc = db.query(models.Document).filter(models.Document.id == id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
-        
+
     timeline = []
-    
+
     # 1. Eventos de Auditoría (DocumentHistory)
     history = db.query(models.DocumentHistory).filter(models.DocumentHistory.document_id == id).order_by(models.DocumentHistory.date.asc()).all()
     for h in history:
@@ -2589,7 +2606,7 @@ def get_document_timeline(id: str, db: Session = Depends(get_db)):
             "action": h.action,
             "details": h.details
         })
-        
+
     # 2. Vínculos a Origen (Sales Orders / Purchase Orders)
     # Extraído de las líneas
     so_ids = db.query(SalesOrder).join(SalesOrderLine).filter(SalesOrderLine.id.in_([l.source_sales_line_id for l in doc.lines if l.source_sales_line_id])).distinct().all()
@@ -2602,7 +2619,7 @@ def get_document_timeline(id: str, db: Session = Depends(get_db)):
             "status": so.status,
             "details": f"Documento originado desde la orden {so.number}"
         })
-        
+
     # 3. Remitos Vinculados
     dn_links = db.query(DeliveryNote).join(InvoiceDeliveryNoteLink).filter(InvoiceDeliveryNoteLink.document_id == id).all()
     for dn in dn_links:
@@ -2614,7 +2631,7 @@ def get_document_timeline(id: str, db: Session = Depends(get_db)):
             "status": dn.status.value if hasattr(dn.status, 'value') else str(dn.status),
             "details": "Mercadería vinculada a este comprobante"
         })
-        
+
     # 4. Pagos Recibidos (Applications into this document)
     apps_received = db.query(models.Application).filter(models.Application.to_document_id == id).all()
     for app in apps_received:
@@ -2647,7 +2664,7 @@ def get_document_timeline(id: str, db: Session = Depends(get_db)):
 
     # Ordenar cronológicamente (más antiguo primero para la lectura de arriba hacia abajo)
     timeline.sort(key=lambda x: x["date"])
-    
+
     return timeline
 
 
@@ -2665,7 +2682,7 @@ def bulk_import_documents(batch: List[document_schemas.DocumentCreate], db: Sess
 
             # 2. Calcular montos
             total_amount_ars = doc.total_amount * doc.exchange_rate if doc.currency == models.CurrencyType.USD else doc.total_amount
-            
+
             # 3. Crear cabecera
             doc_data = doc.model_dump(exclude={"lines", "payments", "applications", "vehicle_expenses", "is_initial_load", "perceptions", "retentions", "reimbursement_entity_id", "net_amount"})
             db_doc = models.Document(
@@ -2676,7 +2693,7 @@ def bulk_import_documents(batch: List[document_schemas.DocumentCreate], db: Sess
             )
             # Marcar estado según se deba
             db_doc.status = doc.status
-            
+
             db.add(db_doc)
             db.flush()
 
@@ -2710,7 +2727,7 @@ def bulk_import_documents(batch: List[document_schemas.DocumentCreate], db: Sess
             db.rollback()
             results.append({"number": doc.number, "ok": False, "error": str(e)})
             continue
-            
+
     db.commit()
     return results
 
@@ -2724,16 +2741,16 @@ def get_entities_open_items(entity_id: str, cost_center: Optional[int] = None, d
     if cost_center:
         query = query.filter(models.Document.cost_center == cost_center)
     docs = query.all()
-    
+
     results = []
     for doc in docs:
         is_credit = doc.doc_type in [
-            models.DocumentType.CREDIT_NOTE, 
-            models.DocumentType.PAYMENT, 
+            models.DocumentType.CREDIT_NOTE,
+            models.DocumentType.PAYMENT,
             models.DocumentType.RECEIPT,
             models.DocumentType.LPG_PRIMARY
         ]
-        
+
         if is_credit:
              applied = db.query(func.sum(models.Application.amount_applied)).filter(
                 models.Application.from_document_id == doc.id
@@ -2742,7 +2759,7 @@ def get_entities_open_items(entity_id: str, cost_center: Optional[int] = None, d
              applied = db.query(func.sum(models.Application.amount_applied)).filter(
                 models.Application.to_document_id == doc.id
             ).scalar() or 0.0
-            
+
         remaining = float(doc.total_amount) - applied
         if remaining > 0.001:
             results.append(document_schemas.OpenItemResponse(
@@ -2770,7 +2787,7 @@ def get_vat_ledger(
 ):
     from datetime import datetime
     import calendar
-    
+
     start_date = datetime(year, month, 1)
     _, last_day = calendar.monthrange(year, month)
     end_date = datetime(year, month, last_day, 23, 59, 59)
@@ -2778,8 +2795,8 @@ def get_vat_ledger(
     # Identificar tipos de documentos segun categoria
     if category == "sales":
         types = [
-            models.DocumentType.INVOICE, 
-            models.DocumentType.DEBIT_NOTE, 
+            models.DocumentType.INVOICE,
+            models.DocumentType.DEBIT_NOTE,
             models.DocumentType.CREDIT_NOTE
         ]
     else:
@@ -2794,7 +2811,7 @@ def get_vat_ledger(
     )
     if cost_center:
         query = query.filter(models.Document.cost_center == cost_center)
-    
+
     docs = query.all()
 
     result = []
@@ -2802,12 +2819,12 @@ def get_vat_ledger(
         vat_breakdown = {}
         total_net = 0.0
         total_vat = 0.0
-        
+
         for l in d.lines:
             rate = str(round(l.vat_rate, 3))
             if rate not in vat_breakdown:
                 vat_breakdown[rate] = {"net": 0.0, "vat": 0.0}
-            
+
             vat_breakdown[rate]["net"] += float(l.net_amount or 0)
             vat_breakdown[rate]["vat"] += float(l.vat_amount or 0)
             total_net += float(l.net_amount or 0)
@@ -2828,9 +2845,9 @@ def get_vat_ledger(
             "total_amount_ars": float(d.total_amount_ars or 0),
             "vat_breakdown": vat_breakdown
         })
-    
+
     return result
-    
+
 @router.post("/{id}/register-afip", dependencies=[Depends(check_permission("sales_invoices", "edit"))])
 def register_document_afip(id: str, db: Session = Depends(get_db), current_user = Depends(get_current_user)):
     """
@@ -2840,10 +2857,10 @@ def register_document_afip(id: str, db: Session = Depends(get_db), current_user 
     doc = db.query(models.Document).filter(models.Document.id == id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Documento no encontrado")
-    
+
     if doc.cae:
         raise HTTPException(status_code=400, detail="El documento ya posee CAE")
-    
+
     if doc.doc_type not in [models.DocumentType.INVOICE, models.DocumentType.DEBIT_NOTE, models.DocumentType.CREDIT_NOTE]:
         raise HTTPException(status_code=400, detail="Este tipo de documento no requiere validación fiscal ARCA")
 
@@ -2870,16 +2887,16 @@ def get_entity_commissions_history(entity_id: str, db: Session = Depends(get_db)
         joinedload(models.CommissionPayment.source_document),
         joinedload(models.CommissionPayment.salesperson)
     )
-    
+
     # Intentar encontrar por UUID
     comms = query.filter(models.CommissionPayment.salesperson_id == entity_id).order_by(models.CommissionPayment.date.desc()).limit(100).all()
-    
+
     # Si no hay nada y el entity_id dado no parece un UUID, intentar por nombre
     if not comms and not ("-" in entity_id):
         ent = db.query(models.Entity).filter(models.Entity.name == entity_id).first()
         if ent:
             comms = query.filter(models.CommissionPayment.salesperson_id == ent.id).order_by(models.CommissionPayment.date.desc()).limit(100).all()
-    
+
     results = []
     for c in comms:
         try:
@@ -2917,7 +2934,7 @@ def get_entity_commissions_history(entity_id: str, db: Session = Depends(get_db)
         except Exception as e:
             logger.error(f"Error validating comm history item {c.id}: {e}")
             continue
-            
+
     return results
 
 @router.delete("/commissions/{id}")
@@ -2925,25 +2942,25 @@ def delete_commission_payment(id: str, db: Session = Depends(get_db)):
     comm = db.query(models.CommissionPayment).filter(models.CommissionPayment.id == id).first()
     if not comm:
         raise HTTPException(status_code=404, detail="Liquidación no encontrada")
-    
+
     source_doc_id = comm.source_document_id # El Pago/Recibo
     target_doc_id = comm.document_id # La Factura/ND
-    
+
     db.delete(comm)
     db.flush()
-    
+
     # 1. Recalcular estado del Pago/Recibo
     if source_doc_id:
         source_doc = db.query(models.Document).filter(models.Document.id == source_doc_id).first()
         if source_doc:
             _recalc_document_status(source_doc, db)
-    
+
     # 2. Recalcular saldo de comisión en la factura destino
     if target_doc_id:
         target_doc = db.query(models.Document).filter(models.Document.id == target_doc_id).first()
         if target_doc:
             _recalc_document_commission(target_doc, db)
-    
+
     db.commit()
     return {"ok": True}
 @router.post("/adjust-link")
@@ -2952,7 +2969,7 @@ def adjust_link(req: LinkAdjustmentRequest, db: Session = Depends(get_db)):
     doc_line = db.query(models.DocumentLine).filter(models.DocumentLine.id == req.line_id).first()
     if not doc_line:
         raise HTTPException(status_code=404, detail="Línea de factura no encontrada")
-    
+
     require_unapplied_draft(db, doc_line.document)
     if doc_line.service_billings:
         raise HTTPException(409, "El vínculo pertenece a un trabajo de servicios; corrija desde su factura de origen")
@@ -2974,20 +2991,20 @@ def adjust_link(req: LinkAdjustmentRequest, db: Session = Depends(get_db)):
     from decimal import Decimal
     old_qty = Decimal(str(doc_line.qty))
     new_qty = Decimal(str(req.new_qty))
-    
+
     if new_qty == old_qty:
         return {"status": "no_change"}
-    
+
     # 3. Lógica de "Descruzar" preservando la factura
     if new_qty <= 0:
         # Descruzar TODO: La factura mantiene su cantidad original, pero ya no resta a la OV
         doc_line.source_sales_line_id = None
         ov_line.qty_invoiced = Decimal(str(ov_line.qty_invoiced or 0)) - old_qty
-    
+
     elif new_qty < old_qty:
         # Descruzar PARCIAL: Dividimos la línea en dos
         remainder_qty = old_qty - new_qty
-        
+
         # Línea A (Nueva, sin vínculo)
         new_unlinked_line = models.DocumentLine(
             document_id=doc_line.document_id,
@@ -3004,27 +3021,27 @@ def adjust_link(req: LinkAdjustmentRequest, db: Session = Depends(get_db)):
             source_sales_line_id=None
         )
         db.add(new_unlinked_line)
-        
+
         # Línea B (Original, vinculada): Reflejamos la parte que queda cruzada
         doc_line.qty = new_qty
         doc_line.net_amount = (doc_line.net_amount / old_qty) * new_qty
         doc_line.vat_amount = (doc_line.vat_amount / old_qty) * new_qty
         doc_line.total_amount = (doc_line.total_amount / old_qty) * new_qty
-        
+
         # Actualizar OV
         ov_line.qty_invoiced = Decimal(str(ov_line.qty_invoiced or 0)) - remainder_qty
-    
+
     else:
         # Incrementar no permitido aquí
         raise HTTPException(status_code=400, detail="No se puede aumentar la cantidad desde el gestor de vínculos")
-    
+
     db.commit()
-    
+
     # Recalcular estados de OV
     from app.modules.sales.sales_order_router import _recalc_status
     _recalc_status(db, ov_line.order_id)
     db.commit()
-    
+
     return {"status": "ok"}
 
 

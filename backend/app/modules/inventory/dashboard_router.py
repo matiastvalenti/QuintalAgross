@@ -1,3 +1,6 @@
+from app.modules.auth.auth_router import get_current_user
+from .stock_authorization import authorize_stock_action
+from .stock_report_router import _rows
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
@@ -8,8 +11,9 @@ from app.db.models.commercial_models import StockItem, Product, Warehouse, Categ
 router = APIRouter(prefix="/dashboard", tags=["Inventory Dashboard"])
 
 @router.get("/summary")
-def get_inventory_summary(db: Session = Depends(get_db)):
+def get_inventory_summary(db: Session = Depends(get_db), user=Depends(get_current_user)):
     """Provides a high-level summary of stock valuation and distribution."""
+    authorize_stock_action(db, user, "view")
     
     # 1. Base Query for Valuation
     stock_data = db.query(
@@ -47,22 +51,28 @@ def get_inventory_summary(db: Session = Depends(get_db)):
         items_map[pid]["value"] += val
         items_map[pid]["qty"] += float(qty or 0)
 
-    # 2. Critical Items (Low Stock)
-    critical_query = db.query(Product).join(StockItem).group_by(Product.id).having(
-        func.sum(StockItem.qty_on_hand) <= Product.min_stock
-    ).filter(Product.min_stock > 0)
-    
-    critical_items = []
-    # Usamos slicing normal de lista tras ejecutar la query
-    crit_prods = critical_query.limit(5).all()
-    for p in crit_prods:
-        total_qty = db.query(func.sum(StockItem.qty_on_hand)).filter(StockItem.product_id == p.id).scalar() or 0
-        critical_items.append({
-            "name": p.name,
-            "sku": p.sku,
-            "qty": float(total_qty),
-            "min": float(p.min_stock)
-        })
+    # 2. Critical Items: available stock, respecting warehouse controls
+    all_alerts = [row for row in _rows(db) if row["is_critical"]]
+    all_alerts.sort(
+        key=lambda row: (
+            float(row["qty_available"]) - float(row["min_stock"]),
+            row["warehouse_name"],
+            row["product_name"],
+        )
+    )
+    critical_items = [
+        {
+            "name": row["product_name"],
+            "sku": row["sku"],
+            "qty": float(row["qty_available"]),
+            "min": float(row["min_stock"]),
+            "warehouse_id": row["warehouse_id"],
+            "warehouse_name": row["warehouse_name"],
+            "qty_on_hand": float(row["qty_on_hand"]),
+            "qty_reserved": float(row["qty_reserved"]),
+        }
+        for row in all_alerts[:5]
+    ]
 
     # Sort and Format
     top_items = sorted(items_map.values(), key=lambda x: x["value"], reverse=True)[:5]
@@ -73,20 +83,30 @@ def get_inventory_summary(db: Session = Depends(get_db)):
         "by_category": [{"label": k, "value": round(v, 2)} for k, v in category_map.items()],
         "top_items": top_items,
         "critical_items": critical_items,
-        "critical_count": len(critical_items)
+        "critical_count": len(all_alerts)
     }
 
 @router.get("/warehouse-detail")
-def get_warehouse_stock_detail(warehouse_id: str, db: Session = Depends(get_db)):
-    """Detailed stock list for a specific warehouse including valuation."""
-    items = db.query(StockItem).filter(StockItem.warehouse_id == warehouse_id).all()
+def get_warehouse_stock_detail(
+    warehouse_id: str,
+    db: Session = Depends(get_db),
+    user=Depends(get_current_user),
+):
+    """Stock físico, reservado y disponible de un depósito."""
+    authorize_stock_action(db, user, "view")
     results = []
-    for i in items:
-        val = float(i.qty_on_hand) * float(i.product.cost_price or 0)
+    for row in _rows(db, warehouse_id=warehouse_id):
+        product = db.get(Product, row["product_id"])
+        physical = float(row["qty_on_hand"])
         results.append({
-            "product_name": i.product.name,
-            "qty": float(i.qty_on_hand),
-            "valuation_usd": val,
-            "is_critical": float(i.qty_on_hand) <= (i.product.min_stock or 0)
+            "product_name": row["product_name"],
+            "qty": physical,
+            "valuation_usd": physical * float(product.cost_price or 0),
+            "is_critical": row["is_critical"],
+            "product_id": row["product_id"],
+            "warehouse_id": row["warehouse_id"],
+            "qty_reserved": float(row["qty_reserved"]),
+            "qty_available": float(row["qty_available"]),
+            "min_stock": float(row["min_stock"]),
         })
     return results

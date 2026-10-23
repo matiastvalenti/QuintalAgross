@@ -28,3 +28,4 @@ from app.db.models.employee_fund_models import EmployeeReceiptUpload
 from app.db.models.employee_fund_models import EmployeeFundCut
 from app.db.models.employee_fund_models import ExpenseReceiptAuthorization
 from app.db.models.dashboard_models import DashboardPreference
+from app.db.models.stock_count_models import StockCount, StockCountLine

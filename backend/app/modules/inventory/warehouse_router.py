@@ -1,9 +1,17 @@
+from app.db.models.models import Document
+import uuid
 """CRUD básico de depósitos + consulta de stock."""
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
+from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 from typing import List, Optional
 from app.db.session import get_db
-from app.db.models.commercial_models import Warehouse, StockItem, StockMovement
+from app.db.models.commercial_models import (
+    Warehouse, StockItem, StockMovement,
+    SalesOrder, PurchaseOrder, DeliveryNote,
+    StockMovementHeader
+)
 from app.modules.inventory import warehouse_schemas
 
 router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
@@ -15,25 +23,38 @@ router = APIRouter(prefix="/warehouses", tags=["Warehouses"])
 
 @router.post("/", response_model=warehouse_schemas.WarehouseResponse, status_code=201)
 def create_warehouse(data: warehouse_schemas.WarehouseCreate, db: Session = Depends(get_db)):
-    # Unique name
-    existing = db.query(Warehouse).filter(Warehouse.name == data.name).first()
-    if existing:
-        raise HTTPException(status_code=409, detail=f"Depósito '{data.name}' ya existe")
-    
-    # Auto-generate code if not provided
-    if not data.code:
-        count = db.query(Warehouse).count()
-        data.code = f"WH-{str(count + 1).zfill(3)}"
-    else:
-        existing_code = db.query(Warehouse).filter(Warehouse.code == data.code).first()
-        if existing_code:
-            raise HTTPException(status_code=409, detail=f"Código '{data.code}' ya existe")
+    values = data.model_dump()
 
-    db_wh = Warehouse(**data.model_dump())
-    db.add(db_wh)
-    db.commit()
-    db.refresh(db_wh)
-    return db_wh
+    duplicate_name = db.query(Warehouse.id).filter(
+        func.lower(Warehouse.name) == values["name"].lower()
+    ).first()
+    if duplicate_name:
+        raise HTTPException(409, "Ya existe un depósito con ese nombre")
+
+    if not values["code"]:
+        # Identificador aleatorio: no depende de contar depósitos.
+        # La restricción UNIQUE de la base es la última protección.
+        values["code"] = "WH-" + uuid.uuid4().hex[:12].upper()
+
+    duplicate_code = db.query(Warehouse.id).filter(
+        func.lower(Warehouse.code) == values["code"].lower()
+    ).first()
+    if duplicate_code:
+        raise HTTPException(409, "Ya existe un depósito con ese código")
+
+    warehouse = Warehouse(**values)
+    try:
+        db.add(warehouse)
+        db.commit()
+        db.refresh(warehouse)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Nombre o código de depósito duplicado")
+    except Exception:
+        db.rollback()
+        raise
+
+    return warehouse
 
 
 @router.get("/", response_model=List[warehouse_schemas.WarehouseResponse])
@@ -54,40 +75,125 @@ def get_warehouse(warehouse_id: str, db: Session = Depends(get_db)):
 
 @router.put("/{warehouse_id}", response_model=warehouse_schemas.WarehouseResponse)
 def update_warehouse(warehouse_id: str, data: warehouse_schemas.WarehouseUpdate, db: Session = Depends(get_db)):
-    wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
-    if not wh:
-        raise HTTPException(status_code=404, detail="Depósito no encontrado")
+    warehouse = db.query(Warehouse).filter(
+        Warehouse.id == warehouse_id
+    ).first()
+    if not warehouse:
+        raise HTTPException(404, "Depósito no encontrado")
 
-    update_data = data.model_dump(exclude_unset=True)
+    values = data.model_dump(exclude_unset=True)
 
-    if "name" in update_data:
-        existing = db.query(Warehouse).filter(
-            Warehouse.name == update_data["name"], Warehouse.id != warehouse_id
+    if "name" in values:
+        duplicate = db.query(Warehouse.id).filter(
+            func.lower(Warehouse.name) == values["name"].lower(),
+            Warehouse.id != warehouse_id
         ).first()
-        if existing:
-            raise HTTPException(status_code=409, detail=f"Depósito '{update_data['name']}' ya existe")
+        if duplicate:
+            raise HTTPException(409, "Ya existe un depósito con ese nombre")
 
-    for key, value in update_data.items():
-        setattr(wh, key, value)
+    if "code" in values:
+        duplicate = db.query(Warehouse.id).filter(
+            func.lower(Warehouse.code) == values["code"].lower(),
+            Warehouse.id != warehouse_id
+        ).first()
+        if duplicate:
+            raise HTTPException(409, "Ya existe un depósito con ese código")
 
-    db.commit()
-    db.refresh(wh)
-    return wh
+    for field, value in values.items():
+        setattr(warehouse, field, value)
+
+    try:
+        db.commit()
+        db.refresh(warehouse)
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "Nombre o código de depósito duplicado")
+    except Exception:
+        db.rollback()
+        raise
+
+    return warehouse
 
 
 @router.delete("/{warehouse_id}", status_code=204)
 def delete_warehouse(warehouse_id: str, db: Session = Depends(get_db)):
-    wh = db.query(Warehouse).filter(Warehouse.id == warehouse_id).first()
-    if not wh:
-        raise HTTPException(status_code=404, detail="Depósito no encontrado")
-    # Verificar que no tenga stock
-    has_stock = db.query(StockItem).filter(
-        StockItem.warehouse_id == warehouse_id, StockItem.qty_on_hand != 0
+    """
+    Solo permite eliminar depósitos completamente sin uso.
+    Los depósitos con actividad deben desactivarse.
+    """
+    wh = db.query(Warehouse).filter(
+        Warehouse.id == warehouse_id
     ).first()
-    if has_stock:
-        raise HTTPException(status_code=409, detail="No se puede eliminar un depósito con stock")
-    db.delete(wh)
-    db.commit()
+
+    if not wh:
+        raise HTTPException(
+            status_code=404,
+            detail="Depósito no encontrado"
+        )
+
+    checks = [
+        (
+            "existencias o reservas",
+            db.query(StockItem.id).filter(
+                StockItem.warehouse_id == warehouse_id
+            )
+        ),
+        (
+            "órdenes de venta",
+            db.query(SalesOrder.id).filter(
+                SalesOrder.warehouse_id == warehouse_id
+            )
+        ),
+        (
+            "órdenes de compra",
+            db.query(PurchaseOrder.id).filter(
+                PurchaseOrder.warehouse_id == warehouse_id
+            )
+        ),
+        (
+            "remitos",
+            db.query(DeliveryNote.id).filter(
+                DeliveryNote.warehouse_id == warehouse_id
+            )
+        ),
+        (
+            "documentos comerciales o contables",
+            db.query(Document.id).filter(
+                Document.warehouse_id == warehouse_id
+            )
+        ),
+        (
+            "movimientos de stock",
+            db.query(StockMovementHeader.id).filter(
+                (StockMovementHeader.from_warehouse_id == warehouse_id) |
+                (StockMovementHeader.to_warehouse_id == warehouse_id)
+            )
+        )
+    ]
+
+    for description, query in checks:
+        if query.first() is not None:
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"No se puede eliminar el depósito: "
+                    f"tiene {description}. "
+                    f"Desactivalo para conservar su historial."
+                )
+            )
+
+    try:
+        db.delete(wh)
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "No se pudo eliminar el depósito porque "
+                "tiene referencias o restricciones pendientes."
+            )
+        )
 
 
 # ═══════════════════════════════════════════

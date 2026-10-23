@@ -40,3 +40,55 @@ def unreserve_stock(db: Session, product_id: str, warehouse_id: str, qty: Decima
         item.qty_reserved = Decimal(str(item.qty_reserved or 0)) - Decimal(str(qty))
         item.qty_reserved = max(Decimal("0.0"), item.qty_reserved)
         db.flush()
+
+
+def reserve_available_stock(
+    db: Session,
+    product_id: str,
+    warehouse_id: str,
+    qty: Decimal,
+):
+    """
+    Reserva hasta la disponibilidad física existente.
+
+    Devuelve:
+      reserved: cantidad efectivamente reservada
+      shortage: cantidad que quedó sin reservar
+
+    No realiza commit.
+    """
+    from app.modules.inventory.reservation_calculator import (
+        calculate_reservation,
+    )
+
+    requested = Decimal(str(qty))
+
+    if requested < 0:
+        raise ValueError("La cantidad solicitada no puede ser negativa")
+
+    if not product_id or not warehouse_id:
+        return {
+            "reserved": Decimal("0"),
+            "shortage": requested,
+        }
+
+    item = get_or_create_stock_item(db, product_id, warehouse_id)
+
+    result = calculate_reservation(
+        item.qty_on_hand or 0,
+        item.qty_reserved or 0,
+        requested,
+    )
+
+    actual = result["to_reserve"]
+
+    if actual > 0:
+        item.qty_reserved = (
+            Decimal(str(item.qty_reserved or 0)) + actual
+        )
+        db.flush()
+
+    return {
+        "reserved": actual,
+        "shortage": result["shortage"],
+    }

@@ -25,13 +25,32 @@ class WarehouseCreate(BaseModel):
     no_stock_control: StockControlMode = StockControlMode.WARNING
     account_code: Optional[str] = None
 
+
     @field_validator("name")
     @classmethod
-    def validate_name(cls, v):
-        v = v.strip()
-        if len(v) < 2:
+    def validate_name(cls, value):
+        if value is None:
+            raise ValueError("El nombre es obligatorio")
+        value = value.strip()
+        if len(value) < 2:
             raise ValueError("El nombre debe tener al menos 2 caracteres")
-        return v
+        if len(value) > 150:
+            raise ValueError("El nombre es demasiado largo")
+        return value
+
+    @field_validator("code")
+    @classmethod
+    def validate_code(cls, value):
+        if value is None:
+            return None
+        value = value.strip().upper()
+        if not value:
+            return None
+        if len(value) > 30:
+            raise ValueError("El código es demasiado largo")
+        if not all(c.isalnum() or c in "-_" for c in value):
+            raise ValueError("El código contiene caracteres no permitidos")
+        return value
 
 
 class WarehouseUpdate(BaseModel):
@@ -43,6 +62,28 @@ class WarehouseUpdate(BaseModel):
     low_stock_control: Optional[StockControlMode] = None
     no_stock_control: Optional[StockControlMode] = None
     account_code: Optional[str] = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_update_name(cls, value):
+        if value is None:
+            raise ValueError("El nombre no puede ser nulo")
+        value = value.strip()
+        if not 2 <= len(value) <= 150:
+            raise ValueError("El nombre debe tener entre 2 y 150 caracteres")
+        return value
+
+    @field_validator("code")
+    @classmethod
+    def validate_update_code(cls, value):
+        if value is None:
+            raise ValueError("El código no puede ser nulo")
+        value = value.strip().upper()
+        if not value or len(value) > 30:
+            raise ValueError("Código inválido")
+        if not all(c.isalnum() or c in "-_" for c in value):
+            raise ValueError("El código contiene caracteres no permitidos")
+        return value
 
 
 class WarehouseResponse(BaseModel):

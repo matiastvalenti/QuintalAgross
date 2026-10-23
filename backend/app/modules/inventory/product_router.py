@@ -191,57 +191,183 @@ def get_product_movements(product_id: str, db: Session = Depends(get_db)):
 
 @router.post("/sync-movements", tags=["Admin"])
 def sync_missing_movements(db: Session = Depends(get_db)):
-    # Find all confirmed/dispatched/invoiced delivery notes and their lines
-    from app.db.models.commercial_models import DeliveryNote, DeliveryNoteLine, StockItem, StockMovement, StockMovementType, DeliveryNoteStatus
+    """
+    Reconstruye únicamente registros históricos faltantes.
+
+    No modifica existencias físicas ni reservas.
+    Omite remitos ambiguos para evitar duplicaciones.
+    """
+    from collections import defaultdict
     from decimal import Decimal
-    
-    dns = db.query(DeliveryNote).filter(
-        DeliveryNote.status.in_([DeliveryNoteStatus.DISPATCHED, DeliveryNoteStatus.PARTIAL, DeliveryNoteStatus.INVOICED])
-    ).all()
-    
-    count = 0
-    for dn in dns:
-        for line in dn.lines:
-            if not line.product_id: continue
-            
-            # Check if movement exists for this dn line
-            exists = db.query(StockMovement).filter(
-                StockMovement.reference_id == dn.id,
-                StockMovement.reference_type.in_(["DELIVERY_NOTE", "RETURN"])
-            ).first()
-            
-            if not exists:
-                # Need to generate missing movement
-                item = db.query(StockItem).filter(
-                    StockItem.product_id == line.product_id,
-                    StockItem.warehouse_id == dn.warehouse_id
-                ).first()
-                if not item:
-                    item = StockItem(product_id=line.product_id, warehouse_id=dn.warehouse_id, qty_on_hand=0)
-                    db.add(item)
-                    db.flush()
-                
-                is_sale = dn.note_type == "SALE"
-                is_return = dn.delivery_type == "RETURN"
-                should_add = (not is_sale and not is_return) or (is_sale and is_return)
-                
-                qty = line.qty
-                m_type = StockMovementType.IN if should_add else StockMovementType.OUT
-                mq = qty if should_add else -qty
-                
-                mov = StockMovement(
-                    stock_item_id=item.id,
-                    movement_type=m_type,
-                    qty=mq,
-                    reference_type="RETURN" if is_return else "DELIVERY_NOTE",
-                    reference_id=dn.id,
-                    notes=f"Auto-sync from Delivery Note {dn.number}"
+
+    from app.db.models.commercial_models import (
+        DeliveryNote,
+        DeliveryNoteStatus,
+        StockMovement,
+        StockMovementType,
+        StockItem,
+        OrderType,
+        DeliveryNoteType,
+    )
+
+    eligible = (
+        DeliveryNoteStatus.DISPATCHED,
+        DeliveryNoteStatus.PARTIAL,
+        DeliveryNoteStatus.INVOICED,
+    )
+
+    dns = (
+        db.query(DeliveryNote)
+        .filter(DeliveryNote.status.in_(eligible))
+        .all()
+    )
+
+    created = 0
+    skipped = []
+    reviewed = 0
+
+    try:
+        for dn in dns:
+            if not dn.warehouse_id:
+                skipped.append({
+                    "delivery_note_id": dn.id,
+                    "reason": "Remito sin depósito",
+                })
+                continue
+
+            grouped = defaultdict(list)
+
+            is_sale = dn.note_type == OrderType.SALE
+
+            from app.modules.sales.delivery_note_router import (
+                _resolve_delivery_note_product_id,
+            )
+
+            for line in dn.lines:
+                product_id = _resolve_delivery_note_product_id(
+                    db, line, is_sale
                 )
-                db.add(mov)
-                count += 1
-                
-    db.commit()
-    return {"status": "ok", "synced_movements": count}
+
+                if product_id:
+                    grouped[product_id].append(line)
+                else:
+                    skipped.append({
+                        "delivery_note_id": dn.id,
+                        "delivery_note_line_id": line.id,
+                        "reason": (
+                            "No se pudo identificar el producto "
+                            "desde el remito ni desde la OV/OC"
+                        ),
+                    })
+
+            is_return = dn.delivery_type == DeliveryNoteType.RETURN
+
+            should_add = (
+                (not is_sale and not is_return)
+                or (is_sale and is_return)
+            )
+
+            for product_id, lines in grouped.items():
+                reviewed += 1
+
+                # Un registro por producto solo puede reconstruirse
+                # automáticamente si el producto aparece una vez.
+                if len(lines) != 1:
+                    skipped.append({
+                        "delivery_note_id": dn.id,
+                        "product_id": product_id,
+                        "reason": (
+                            "Varias líneas del mismo producto: "
+                            "requiere revisión manual"
+                        ),
+                    })
+                    continue
+
+                line = lines[0]
+                qty = Decimal(str(line.qty or 0))
+
+                if qty <= 0:
+                    skipped.append({
+                        "delivery_note_id": dn.id,
+                        "product_id": product_id,
+                        "reason": "Cantidad no positiva",
+                    })
+                    continue
+
+                item = (
+                    db.query(StockItem)
+                    .filter(
+                        StockItem.product_id == product_id,
+                        StockItem.warehouse_id == dn.warehouse_id,
+                    )
+                    .first()
+                )
+
+                if item is None:
+                    skipped.append({
+                        "delivery_note_id": dn.id,
+                        "product_id": product_id,
+                        "reason": (
+                            "No existe registro de stock "
+                            "en el depósito"
+                        ),
+                    })
+                    continue
+
+                existing = (
+                    db.query(StockMovement)
+                    .filter(
+                        StockMovement.stock_item_id == item.id,
+                        StockMovement.reference_id == dn.id,
+                        StockMovement.reference_type.in_(
+                            ["DELIVERY_NOTE", "RETURN"]
+                        ),
+                    )
+                    .first()
+                )
+
+                if existing:
+                    continue
+
+                signed_qty = qty if should_add else -qty
+
+                db.add(StockMovement(
+                    stock_item_id=item.id,
+                    movement_type=(
+                        StockMovementType.IN
+                        if should_add
+                        else StockMovementType.OUT
+                    ),
+                    qty=signed_qty,
+                    reference_type=(
+                        "RETURN"
+                        if is_return
+                        else "DELIVERY_NOTE"
+                    ),
+                    reference_id=dn.id,
+                    notes=(
+                        "Reconstrucción histórica "
+                        f"del remito {dn.number}"
+                    ),
+                ))
+
+                created += 1
+
+        db.commit()
+
+    except Exception:
+        db.rollback()
+        raise
+
+    return {
+        "status": "ok",
+        "reviewed_products": reviewed,
+        "synced_movements": created,
+        "skipped_count": len(skipped),
+        "skipped": skipped,
+        "stock_quantities_modified": False,
+    }
+
 
 
 @router.put("/{product_id}", response_model=product_schemas.ProductResponse, dependencies=[Depends(check_permission("products", "edit"))])

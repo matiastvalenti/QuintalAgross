@@ -256,6 +256,27 @@ def _check_and_cleanup_dn_header_link(db: Session, dn_id: str):
 from sqlalchemy.orm import joinedload
 
 # Inside _apply_stock_impact, replace the per‑line product lookup with a joinedload
+
+def _resolve_delivery_note_product_id(db: Session, line, is_sale: bool):
+    """Identifica el producto de un remito usando su línea o su origen."""
+    if line.product_id:
+        return line.product_id
+
+    if is_sale and line.source_sales_line_id:
+        source = db.query(SalesOrderLine).filter(
+            SalesOrderLine.id == line.source_sales_line_id
+        ).first()
+        return source.product_id if source else None
+
+    if not is_sale and line.source_purchase_line_id:
+        source = db.query(PurchaseOrderLine).filter(
+            PurchaseOrderLine.id == line.source_purchase_line_id
+        ).first()
+        return source.product_id if source else None
+
+    return None
+
+
 def _apply_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[str] = None):
     """
     Genera movimientos de stock (IN/OUT) y actualiza qty_delivered en la OV (o qty_received en OC).
@@ -268,15 +289,9 @@ def _apply_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[str
 
     # Reemplazamos la query redundante por dn.lines que ya están en la sesión
     for line in dn.lines:
-        product_id = line.product_id
-        if not product_id:
-            # Fallback a origen si no hay producto en la línea del remito
-            if is_sale and line.source_sales_line_id:
-                ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
-                product_id = ov_line.product_id if ov_line else None
-            elif not is_sale and line.source_purchase_line_id:
-                oc_line = db.query(PurchaseOrderLine).filter(PurchaseOrderLine.id == line.source_purchase_line_id).first()
-                product_id = oc_line.product_id if oc_line else None
+        product_id = _resolve_delivery_note_product_id(
+            db, line, is_sale
+        )
         
         if not product_id:
             continue
@@ -296,12 +311,6 @@ def _apply_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[str
 
         # 2. Actualizar contadores de Ordenes (qty_delivered / qty_received)
         if is_sale and line.source_sales_line_id:
-            # 2.1 Descontar Reserva si es una Venta (ya que ahora es stock físico OUT)
-            if not is_return:
-                 unreserve_stock(db, product_id, dn.warehouse_id, qty)
-            else:
-                 reserve_stock(db, product_id, dn.warehouse_id, qty)
-
             ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
             if ov_line:
                 change = qty if not is_return else -qty
@@ -328,7 +337,26 @@ def _apply_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[str
         )
         db.add(movement)
     
-    db.flush() 
+    db.flush()
+
+    from app.modules.inventory.reservation_reconciliation import (
+        reconcile_product_reservations,
+    )
+
+    affected_products = {
+        product_id
+        for line in dn.lines
+        if (
+            product_id := _resolve_delivery_note_product_id(
+                db, line, is_sale
+            )
+        )
+    }
+
+    for product_id in sorted(affected_products):
+        reconcile_product_reservations(
+            db, product_id, dn.warehouse_id
+        )
 
 
 def _reverse_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[str] = None):
@@ -340,8 +368,11 @@ def _reverse_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[s
     should_add_now = (is_sale and not is_return) or (not is_sale and is_return)
 
     for line in dn.lines:
-        product_id = line.product_id
-        if not product_id: continue
+        product_id = _resolve_delivery_note_product_id(
+            db, line, is_sale
+        )
+        if not product_id:
+            continue
 
         stock_item = _get_or_create_stock_item(db, product_id, dn.warehouse_id)
         qty = Decimal(str(line.qty))
@@ -355,12 +386,6 @@ def _reverse_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[s
 
         # Revertir contadores
         if is_sale and line.source_sales_line_id:
-            # Re-reservar si el remito vuelve (ya no salió físico, pero la orden sigue confirmada)
-            if not is_return:
-                 reserve_stock(db, product_id, dn.warehouse_id, qty)
-            else:
-                 unreserve_stock(db, product_id, dn.warehouse_id, qty)
-
             ov_line = db.query(SalesOrderLine).filter(SalesOrderLine.id == line.source_sales_line_id).first()
             if ov_line:
                 # Invertimos el efecto del remito
@@ -382,6 +407,27 @@ def _reverse_stock_impact(db: Session, dn: DeliveryNote, revision_id: Optional[s
             notes=f"Reversión de remito {dn.number}",
         )
         db.add(movement)
+
+    db.flush()
+
+    from app.modules.inventory.reservation_reconciliation import (
+        reconcile_product_reservations,
+    )
+
+    affected_products = {
+        product_id
+        for line in dn.lines
+        if (
+            product_id := _resolve_delivery_note_product_id(
+                db, line, is_sale
+            )
+        )
+    }
+
+    for product_id in sorted(affected_products):
+        reconcile_product_reservations(
+            db, product_id, dn.warehouse_id
+        )
 
 
 # ═══════════════════════════════════════════
