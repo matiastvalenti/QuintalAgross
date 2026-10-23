@@ -58,3 +58,34 @@
     overflow: hidden;
     text-overflow: ellipsis;
 }
+/* Bandeja contextual: sólo documentos minimizados, sin franja blanca a lo ancho. */
+.dockContainer {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    right: auto;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: min(94vw, 900px);
+    min-height: 44px;
+    height: auto;
+    padding: 6px 8px;
+    border: 1px solid #41516d;
+    border-radius: 12px;
+    background: rgba(20, 29, 49, 0.96);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+    overflow-x: auto;
+    overflow-y: hidden;
+    backdrop-filter: blur(8px);
+}
+.chip {
+    flex: 0 0 auto;
+    min-height: 30px;
+    border-radius: 8px;
+    border: 1px solid #465874;
+    background: #263451;
+    color: #e3ebfa;
+}
+.chip:hover {background: #36496d;color:#fff;}
+.chip.minimized {opacity:1;border-style:solid;}
+.title {color: inherit;}
