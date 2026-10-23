@@ -747,3 +747,65 @@
 .quintalTheme .cardTable button:not(.primaryCta) {
   transition: color .15s ease, background .15s ease, border-color .15s ease;
 }
+
+/* Estado sin registros: la tabla no debe ocupar media pantalla con un bloque vacío. */
+.quintalTheme .cardTableEmpty {
+  flex: 0 0 auto;
+  margin: 0;
+  border: 1px solid #354361;
+  border-radius: 12px;
+  box-shadow: none;
+  overflow: hidden;
+}
+.quintalTheme .tableWrapEmpty {
+  width: 100%;
+  overflow: hidden;
+}
+.quintalTheme .cardTableEmpty tbody td {
+  padding: 0 !important;
+  border: 0;
+}
+.quintalTheme .cardTableEmpty tbody td > div {
+  min-height: 0 !important;
+  height: auto !important;
+  padding: 22px 18px 24px !important;
+  gap: 10px !important;
+  border-radius: 0 !important;
+  background: #202c46 !important;
+  border: 0 !important;
+}
+.quintalTheme .cardTableEmpty tbody td > div > div:first-child {
+  width: 54px;
+  height: 54px;
+  padding: 11px !important;
+  box-sizing: border-box;
+  background: #16233c !important;
+  border: 1px solid #344664;
+  border-radius: 50%;
+  color: #c7b8ff !important;
+  display: grid;
+  place-items: center;
+}
+.quintalTheme .cardTableEmpty tbody td > div > div:first-child svg {
+  width: 30px;
+  height: 30px;
+  color: #c7b8ff;
+}
+.quintalTheme .cardTableEmpty tbody td h3 {
+  font-size: 15px !important;
+  font-weight: 800;
+  margin: 0 0 4px !important;
+  color: #f8fafc !important;
+}
+.quintalTheme .cardTableEmpty tbody td p {
+  font-size: 12px !important;
+  color: #b8c8e0 !important;
+  line-height: 1.45 !important;
+  margin: 0 !important;
+}
+.quintalTheme .cardTableEmpty tbody td button {
+  margin-top: 5px !important;
+  min-height: 32px;
+  font-size: 12px;
+  border-radius: 8px;
+}
