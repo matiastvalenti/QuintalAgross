@@ -1500,3 +1500,22 @@
   text-overflow:ellipsis;
 }
 .formCard .tableHeader .th {white-space:nowrap;font-size:10px;}
+
+/* Alineación de acciones de compra con la Orden de Venta. */
+.formCard .actionGroup .actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.formCard .actionGroup .actionBtn:focus-visible {
+  outline: 2px solid #b9abff;
+  outline-offset: 2px;
+}
+@container (max-width: 940px) {
+  .formCard .actionGroup .actionBtn {padding:9px;}
+}
