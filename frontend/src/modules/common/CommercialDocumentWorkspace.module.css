@@ -284,3 +284,116 @@
 @container (max-width:680px) {
   .documentRight {display:flex;flex-direction:column;}
 }
+
+/* Ajustes de integración con los paneles reales: no dejar islas blancas. */
+.shell :global([class*="relationsBar"]),
+.shell :global([class*="summaryPanel"]),
+.shell :global([class*="clientPanel"]),
+.shell :global([class*="middleRightPanel"]),
+.shell :global([class*="bottomRightPanel"]),
+.shell :global([class*="observationsPanel"]),
+.shell :global([class*="bottomTabs"]),
+.shell :global([class*="panelTabs"]),
+.shell :global([class*="panelTitle"]),
+.shell :global([class*="clientPanelBody"]) {
+  background: var(--doc-panel) !important;
+  color: var(--doc-text) !important;
+  border-color: var(--doc-line) !important;
+}
+.shell :global([class*="relationsBar"]) {
+  display:flex;
+  align-items:stretch;
+  gap:8px;
+  min-height:75px;
+  height:auto;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:8px !important;
+  margin-top:0;
+}
+.shell :global([class*="relationCard"]) {
+  background:#17233b !important;
+  border:1px solid #435473 !important;
+  color:#e6eeff !important;
+  min-width:125px;
+}
+.shell :global([class*="nodeMetric"]),
+.shell :global([class*="nodeStatus"]),
+.shell :global([class*="summaryValue"]) {color:#f8fafc !important;}
+.shell :global([class*="nodeBadge"]) {background:#33415f;color:#cfcbff;}
+.shell :global([class*="summaryPanel"]) {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(135px,1fr));
+  gap:9px;
+  min-height:47px;
+  padding:9px 12px !important;
+}
+.shell :global([class*="summaryItem"]) {
+  border:0 !important;
+  background:transparent !important;
+  min-width:0;
+}
+.shell :global([class*="panelTabs"]) {border-radius:8px;gap:4px;}
+.shell :global([class*="panelTab"]) {
+  color:#cbd7e8;
+  background:#293754 !important;
+  border:1px solid #465875 !important;
+}
+.shell :global([class*="panelTabActive"]) {
+  background:#6955cf !important;
+  border-color:#8976e5 !important;
+  color:#fff !important;
+}
+.shell :global([class*="clientPanel"]) {
+  height:auto;
+  min-height:143px;
+  max-height:none;
+  border:1px solid var(--doc-line);
+}
+.shell :global([class*="middleRightPanel"]) {
+  height:auto;
+  min-height:190px;
+  max-height:none;
+  border:1px solid var(--doc-line);
+}
+.shell :global([class*="bottomRightPanel"]) {
+  height:auto;
+  min-height:120px;
+  max-height:none;
+  border:1px solid var(--doc-line);
+  border-radius:12px;
+}
+.shell :global([class*="observationsPanel"]),
+.shell :global([class*="tabContent"]) {
+  color:#f8fafc;
+  min-height:0;
+  overflow:visible;
+}
+.shell :global([class*="itemsPanel"]) {
+  height:clamp(230px,44vh,420px) !important;
+  min-height:230px !important;
+  max-height:420px !important;
+}
+.shell :global([class*="itemsTableScroll"]) {
+  overflow-y:auto;
+  min-height:0;
+}
+.shell :global([class*="commercialControl"]),
+.shell :global([class*="readonlyControl"]) {
+  background:#151f35 !important;
+  color:#f8fafc !important;
+  border-color:#465875 !important;
+}
+.shell :global([class*="sideBlock"]),
+.shell :global([class*="sideBlockTitle"]) {
+  background:var(--doc-panel);
+  color:var(--doc-text);
+  border-color:var(--doc-line);
+}
+.shell :global([class*="footerCompactItem"]) {min-width:0;}
+.shell :global([class*="footerCompactValue"]),
+.shell :global([class*="footerCompactTotal"]) {font-variant-numeric:tabular-nums;}
+@container (max-width:1050px) {
+  .shell :global([class*="relationsBar"]) {flex-wrap:wrap;}
+  .shell :global([class*="relationCard"]) {min-width:120px;}
+}
