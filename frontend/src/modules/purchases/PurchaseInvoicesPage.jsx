@@ -7,6 +7,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
+import { exportToExcel } from '../../utils/ReportExporter';
 import DocumentListPage from '../../components/layout/DocumentListPage';
 import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import StatusBadge from '../../components/ui/StatusBadge';
@@ -249,6 +250,25 @@ export default function PurchaseInvoicesPage() {
     }
   ];
 
+  const exportFilteredInvoices = () => {
+    if (!sorted.length) {
+      showToast("No hay facturas para exportar", "warning");
+      return;
+    }
+    const rows = sorted.map(inv => ({
+      "Comprobante": inv.number || "",
+      "Fecha": inv.date ? new Date(inv.date).toLocaleDateString("es-AR") : "",
+      "Proveedor": inv.entity_name || entityName(inv.entity_id),
+      "Moneda": inv.currency || "ARS",
+      "Importe": Number(inv.total_amount) || 0,
+      "Estado": inv.status || "",
+      "Vencimiento": inv.due_date ? new Date(inv.due_date).toLocaleDateString("es-AR") : "",
+    }));
+    if (!exportToExcel(rows, "facturas_compra", "Facturas")) {
+      showToast("No se pudo exportar el listado", "error");
+    }
+  };
+
   const toolbar = {
     search: (
       <div className={s.searchWrap}>
@@ -275,8 +295,7 @@ export default function PurchaseInvoicesPage() {
     ),
     actions: (
       <>
-        <button className={s.ghostBtn} title="Próximamente">Exportar</button>
-        <button className={s.ghostBtn} title="Próximamente">Columnas</button>
+        <button className={s.ghostBtn} onClick={exportFilteredInvoices} title="Exportar facturas filtradas a Excel">Exportar</button>
         <button className={s.ghostBtn} style={{ color: '#ef4444' }} onClick={clearFilters} title="Limpiar Filtros">Limpiar</button>
         <button className={s.primaryCta} onClick={handleOpenNew}>
             <PlusCircle size={16} />
