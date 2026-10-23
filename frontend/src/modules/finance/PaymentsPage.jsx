@@ -10,7 +10,6 @@ import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
-import { openNuevoPago, openEditPago } from '../../utils/openStandaloneWindow';
 import api from '../../services/api';
 import t from '../../components/ui/Table.module.css';
 import TableSkeleton from '../../components/ui/TableSkeleton';
@@ -111,19 +110,18 @@ export default function PaymentsPage() {
   const totalPages = Math.ceil(filtered.length / pageSize);
 
   const handleHandleNew = () => {
-    openNuevoPago({ 
-      title: 'Nueva Orden de Pago', 
-      width: 1100, 
-      height: 700,
+    openWindow('receipt-form', { mode: 'new', isPayment: true }, {
+      title: 'Nueva Orden de Pago',
+      width: 1270, height: 680, minWidth: 720, minHeight: 470,
+      singletonKey: 'payment-new',
     });
   };
 
   const handleOpen = (id) => {
-    openEditPago(id, { 
-      mode: 'view',
-      title: `Pago ${payments.find(r => r.id === id)?.number || ''}`, 
-      width: 1100, 
-      height: 700 
+    openWindow('receipt-form', { mode: 'view', id, isPayment: true }, {
+      title: `Orden de Pago ${payments.find(r => r.id === id)?.number || ''}`,
+      width: 1270, height: 680, minWidth: 720, minHeight: 470,
+      singletonKey: `payment-${id}`,
     });
   };
 
