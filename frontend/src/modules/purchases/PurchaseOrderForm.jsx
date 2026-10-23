@@ -62,10 +62,7 @@ import {
 } from "../../components/ui/TraceabilityStatusBadge";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 
-import {
-  openNuevoRemitoEntrada,
-  openNuevaFacturaCompra,
-} from "../../utils/openStandaloneWindow";
+import { useInternalCommercialDocuments } from "../common/useInternalCommercialDocuments";
 import OrderEmailDialog from "../common/OrderEmailDialog";
 
 
@@ -96,6 +93,7 @@ export default function PurchaseOrderForm(props) {
   }, []);
 
   const { closeWindow, openWindow, updateWindow, minimizeWindow } = useWindow();
+  const { openNuevoRemitoEntrada, openNuevaFacturaCompra } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -806,12 +804,7 @@ export default function PurchaseOrderForm(props) {
     // Abrir ventana standalone del remito con ov_id + draft_key
     openNuevoRemitoEntrada(id, { draft_key: draftKey });
 
-    // Intentar cerrar esta ventana (puede fallar por restricciones del navegador)
-    try {
-      window.close();
-    } catch (e) {
-      /* ignorar */
-    }
+    // La Orden de Compra permanece abierta bajo el remito de entrada.
   };
 
   const handleOpenInvoiceModal = () => {
