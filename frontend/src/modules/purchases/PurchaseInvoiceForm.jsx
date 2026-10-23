@@ -17,7 +17,7 @@ import s from "../sales/SalesOrderForm.module.css";
 import v from "../common/CommercialDocumentWorkspace.module.css";
 import w from "../common/InvoiceWorkbench.module.css";
 import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
-import BnaDivisasRateField from "../common/BnaDivisasRateField";
+import BnaDivisasRateField, { argentinaToday } from "../common/BnaDivisasRateField";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
 export default function PurchaseInvoiceForm(props) {
@@ -45,8 +45,8 @@ export default function PurchaseInvoiceForm(props) {
   const invoiceTabId = useId();
 
   // Header State
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
-  const [dueDate, setDueDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(() => argentinaToday());
+  const [dueDate, setDueDate] = useState(() => argentinaToday());
   const [entity, setEntity] = useState(null); // This is now SUPPLIER
   const [pv, setPv] = useState("0001");
   const [number, setNumber] = useState("");
