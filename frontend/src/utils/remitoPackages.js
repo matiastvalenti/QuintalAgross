@@ -33,3 +33,14 @@ export function selectedRemitoUnits(line) {
 export function formatRemitoQuantity(value) {
   return Number(value || 0).toLocaleString("es-AR", { maximumFractionDigits: 3 });
 }
+
+/**
+ * Los módulos reciben alícuotas tanto en fracción (0.21) como en porcentaje (21).
+ * Conservar 0% explícito: no sustituirlo por 21%.
+ */
+export function normalizeRemitoVatRate(rate, fallback = 0.21) {
+  if (rate === null || rate === undefined || rate === "") return fallback;
+  const value = Number(rate);
+  if (!Number.isFinite(value) || value < 0) return fallback;
+  return value > 1 ? Number((value / 100).toFixed(6)) : value;
+}
