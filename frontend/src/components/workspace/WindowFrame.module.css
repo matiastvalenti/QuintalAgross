@@ -117,3 +117,20 @@
 .content {background:#101729;overscroll-behavior:contain;}
 .maximized {border-radius:0;}
 .resizeHandle {background:linear-gradient(135deg,transparent 50%,#6955cf 50%);}
+
+/* Los documentos comerciales administran su scroll dentro del cuerpo y mantienen
+   el pie visible. Evitar un segundo scroll alrededor de todo el formulario. */
+.content {
+  min-height: 0;
+  min-width: 0;
+}
+.content:has(> [data-commercial-document="true"]) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.content:has(> [data-commercial-document="true"]) > [data-commercial-document="true"] {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: 100%;
+}
