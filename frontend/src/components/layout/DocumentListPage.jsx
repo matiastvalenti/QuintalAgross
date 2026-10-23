@@ -79,8 +79,8 @@ export default function DocumentListPage({
 
       {/* Table */}
       {table && (
-        <div className={s.cardTable}>
-          <div className={s.tableWrap}>
+        <div className={`${s.cardTable} ${table.empty ? s.cardTableEmpty : ""}`}>
+          <div className={`${s.tableWrap} ${table.empty ? s.tableWrapEmpty : ""}`}>
             <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
               <thead>
                 <tr>
