@@ -9,8 +9,12 @@
  */
 
 export function openStandaloneWindow(path, name = '_blank', options = {}) {
-  const width = options.width || 1280;
-  const height = options.height || 820;
+  // Una ventana de documento debe entrar en la pantalla real del usuario.
+  // Conservar la medida estándar sin abrirla recortada en notebooks.
+  const availableWidth = window.screen?.availWidth || 1280;
+  const availableHeight = window.screen?.availHeight || 900;
+  const width = Math.min(options.width || 1280, Math.max(360, availableWidth - 24));
+  const height = Math.min(options.height || 820, Math.max(420, availableHeight - 64));
 
   const left = options.left !== undefined ? options.left : window.screenX + Math.max(0, (window.outerWidth - width) / 2);
   const top = options.top !== undefined ? options.top : window.screenY + Math.max(0, (window.outerHeight - height) / 2);
