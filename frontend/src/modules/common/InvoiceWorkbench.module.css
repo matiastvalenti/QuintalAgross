@@ -542,3 +542,79 @@
   .root :global([class*="clientField"]),
   .root :global([class*="sideField"]) {grid-template-columns: minmax(80px, .5fr) minmax(0, 1fr) !important;}
 }
+
+/* QUINTAL_FACTURAS_FIT_WINDOW
+   El marco del ERP determina la altura disponible. El cuerpo puede desplazarse,
+   pero el resumen del comprobante debe permanecer en pantalla. Una factura
+   sin productos no reserva artificialmente 37vh de grilla vacía. */
+.root.root {
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 9px !important;
+  padding: 12px 16px 10px !important;
+}
+.root .header {
+  flex: 0 0 auto !important;
+  min-height: 43px !important;
+  padding-bottom: 8px !important;
+}
+.root .layout {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100%;
+  align-content: start !important;
+  align-items: start !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  grid-auto-rows: max-content;
+  padding: 0 3px 8px 0;
+  scrollbar-color: #526383 transparent;
+}
+.root .layout .party,
+.root .layout .commercial {
+  min-height: 0 !important;
+  align-self: start !important;
+}
+.root .layout .items {
+  height: clamp(160px, 26vh, 275px) !important;
+  min-height: 160px !important;
+  max-height: 275px !important;
+}
+/* Cuando está vacía, priorizar la información y el total sobre el espacio vacío. */
+.root[data-has-items="false"] .layout .items {
+  height: 112px !important;
+  min-height: 112px !important;
+  max-height: 112px !important;
+}
+.root[data-has-items="false"] .items :global([class*="itemsList"]) {
+  min-height: 110px !important;
+  height: auto !important;
+}
+.root .bottom {
+  flex: 0 0 auto !important;
+}
+.root .footer {
+  position: relative !important;
+  flex: 0 0 auto !important;
+  min-height: 52px !important;
+  padding: 8px 14px !important;
+  margin: 0 !important;
+  z-index: 2;
+  box-shadow: 0 -7px 18px rgba(8,14,28,.28) !important;
+}
+.root .footer :global([class*="footerCompactTotal"]) {
+  font-size: 18px !important;
+}
+@container (max-height: 720px) {
+  .root .layout {gap: 7px 10px !important;}
+  .root .layout .items {height: 175px !important;min-height: 175px !important;}
+  .root[data-has-items="false"] .layout .items {
+    height: 95px !important;
+    min-height: 95px !important;
+  }
+}
