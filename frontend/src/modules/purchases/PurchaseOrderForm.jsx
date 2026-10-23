@@ -919,7 +919,7 @@ export default function PurchaseOrderForm(props) {
 
   const handleAddItem = (p) => {
     if (!p) return;
-    const factor = p.quantity_per_container || 1;
+    const factor = Number(p.quantity_per_container) || 1;
     const newItem = {
       id: Math.random(),
       product_id: p.id,
@@ -927,7 +927,7 @@ export default function PurchaseOrderForm(props) {
       description: p.name,
       brand: p.brand?.name || p.brand_name || "",
       qty: factor,
-      qty_packages: factor > 1 ? 1 : null,
+      qty_packages: 1,
       cost_price: p.cost_price || 0,
       unit_price: p.cost_price || p.base_price || 0,
       discount_pct: 0,
