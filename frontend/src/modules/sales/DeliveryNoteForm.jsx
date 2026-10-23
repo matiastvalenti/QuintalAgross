@@ -8,7 +8,7 @@ import Drawer from "../../components/ui/Drawer";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { useWindow } from '../../context/WindowContext';
-import { openEditOrdenVenta, openNuevaFactura } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
@@ -94,6 +94,7 @@ export default function DeliveryNoteForm(props) {
     isStandalone = false,
   } = props;
   const { closeWindow, openWindow } = useWindow();
+  const { openEditOrdenVenta, openNuevaFactura, openEditFactura } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -1326,7 +1327,7 @@ export default function DeliveryNoteForm(props) {
                 return (
                   <div 
                     className={s.relationCard} 
-                    onClick={() => invoices.length === 1 && openNuevaFactura({ id: invoices[0].id })}
+                    onClick={() => invoices.length === 1 && openEditFactura(invoices[0].id)}
                     style={{ cursor: invoices.length === 1 ? 'pointer' : 'default', border: pendingQty <= 0 ? '1.5px solid #10b981' : '1.5px solid #f97316' }}
                   >
                     <div className={s.nodeTitle} style={{ color: pendingQty <= 0 ? '#10b981' : '#f97316' }}>FACTURA</div>
@@ -1412,7 +1413,7 @@ export default function DeliveryNoteForm(props) {
                         <td style={{ padding: '8px 4px', textAlign: 'right' }}>{inv.currency === 'USD' ? 'u$s' : '$'} {(inv.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                         <td style={{ padding: '8px 4px', textAlign: 'right' }}>
                           <button 
-                            onClick={() => openNuevaFactura({ id: inv.id })}
+                            onClick={() => openEditFactura(inv.id)}
                             style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}
                           >
                             Ver
