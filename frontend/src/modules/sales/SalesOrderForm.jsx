@@ -60,7 +60,7 @@ import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkDeliveryNoteModal from "./ManualLinkDeliveryNoteModal";
 import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
-import { openNuevoRemito, openNuevaFactura } from "../../utils/openStandaloneWindow";
+import { useInternalCommercialDocuments } from "../common/useInternalCommercialDocuments";
 import OrderEmailDialog from "../common/OrderEmailDialog";
 
 export default function SalesOrderForm(props) {
@@ -79,6 +79,7 @@ export default function SalesOrderForm(props) {
   }, []);
 
   const { closeWindow, openWindow, updateWindow, minimizeWindow } = useWindow();
+  const { openNuevoRemito, openNuevaFactura } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -640,8 +641,7 @@ export default function SalesOrderForm(props) {
     // Abrir ventana standalone del remito con ov_id + draft_key
     openNuevoRemito(id, { draft_key: draftKey });
 
-    // Intentar cerrar esta ventana (puede fallar por restricciones del navegador)
-    try { window.close(); } catch (e) { /* ignorar */ }
+    // Mantener la orden abierta en su pestaña interna mientras se carga el remito.
   };
 
   const handleOpenInvoiceModal = () => {
