@@ -1099,19 +1099,19 @@ export default function DeliveryNoteForm(props) {
                                         const totalAmount = subtotalNeto + vatAmount;
                                         
                                         return (
-                                            <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
+                                            <div key={item.id} className={v.readonlyRemitoLine} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                                     <div>
-                                                        <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.name || item.product?.name || item.description || ''}</div>
+                                                        <div style={{ fontSize: 13, fontWeight: 900, color: '#f0f5ff' }}>Producto: {item.name || item.product?.name || item.description || ''}</div>
                                                     </div>
-                                                    <div style={{ display: 'flex', gap: 8, fontSize: 10, fontWeight: 800, background: '#f8fafc', padding: '4px 8px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
-                                                        <span style={{ color: '#64748b' }}>Ped: {qtyOrdered.toFixed(2)}</span>
-                                                        <span style={{ color: '#059669' }}>Rem: {qtyDelivered.toFixed(2)}</span>
-                                                        <span style={{ color: qtyPending > 0 ? '#d97706' : '#059669' }}>Pte: {qtyPending.toFixed(2)}</span>
+                                                    <div style={{ display: 'flex', gap: 8, fontSize: 10, fontWeight: 800, background: '#17243d', padding: '4px 8px', borderRadius: 4, border: '1px solid #e2e8f0' }}>
+                                                        <span style={{ color: '#adbed9' }}>Ped: {qtyOrdered.toFixed(2)}</span>
+                                                        <span style={{ color: '#64e1a5' }}>Rem: {qtyDelivered.toFixed(2)}</span>
+                                                        <span style={{ color: qtyPending > 0 ? '#d97706' : '#64e1a5' }}>Pte: {qtyPending.toFixed(2)}</span>
                                                     </div>
                                                 </div>
                                                 
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569', alignItems: 'center' }}>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#c5d3e9', alignItems: 'center' }}>
                                                                                     <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {totalQty.toFixed(2)} {item._unit_label || 'u'}</div>
                                                     {packageFactor(item) !== 1 && (
                                                         <div><span style={{ fontWeight: 800 }}>Equivalencia:</span> {getDisplayPackages(item)}</div>
@@ -1120,7 +1120,7 @@ export default function DeliveryNoteForm(props) {
                                                     <div><span style={{ fontWeight: 800 }}>Precio:</span> {fmt(item.unit_price)} / {item._unit_label || 'u'}</div>
                                                     <div><span style={{ fontWeight: 800 }}>Subtotal:</span> {fmt(subtotalNeto)}</div>
                                                     <div><span style={{ fontWeight: 800 }}>IVA:</span> {fmt(vatAmount)}</div>
-                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Total:</span> {fmt(totalAmount)}</div>
+                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#f0f5ff' }}>Total:</span> {fmt(totalAmount)}</div>
                                                 </div>
                                             </div>
                                         );
