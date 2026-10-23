@@ -21,6 +21,7 @@ import {
 } from "../../utils/formatters";
 import {
   Save,
+  Pencil,
   Trash2,
   Plus,
   Truck,
@@ -52,7 +53,9 @@ import {
   AlertCircle,
   ArrowRight
 } from "lucide-react";
-import s from "../sales/SalesOrderForm.module.css"; // Using SalesOrderForm.module.css for consistent styling
+import s from "../sales/SalesOrderForm.module.css";
+import v from "../common/CommercialDocumentWorkspace.module.css";
+import CommercialDocumentNav from "../common/CommercialDocumentNav"; // Using SalesOrderForm.module.css for consistent styling
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkInvoiceModal from "../sales/ManualLinkInvoiceModal"; // Needs to be adapted or removed for purchases
@@ -82,7 +85,7 @@ export default function PurchaseDeliveryNoteForm(props) {
   const [sourceOrderId, setSourceOrderId] = useState(oc_id || ''); // Changed from ov_id
     const [invoices, setInvoices] = useState([]);
   const [relatedDeliveryNotes, setRelatedDeliveryNotes] = useState([]);
-  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit" || initialMode === "view");
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [selectableItems, setSelectableItems] = useState([]);
   const [selectorLoading, setSelectorLoading] = useState(false);
@@ -750,6 +753,7 @@ export default function PurchaseDeliveryNoteForm(props) {
             }
             setMode("edit");
             setId(savedId);
+            setIsReadOnly(true);
         } else {
             const err = await res.json();
             showToast(err.detail || "Error al guardar", "error");
@@ -783,7 +787,7 @@ export default function PurchaseDeliveryNoteForm(props) {
 
   return (
     <>
-      <div className={`${s.formCard}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
+      <div data-commercial-document="true" className={`${s.formCard} ${v.shell} ${v.remito} ${isStandalone ? v.standalone : ""}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
           {isLocked && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(37, 99, 235, 0.05)', color: '#1d4ed8', padding: '8px 24px', fontSize: 10, fontWeight: 900, textAlign: 'center', borderBottom: '1px solid rgba(37, 99, 235, 0.1)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, backdropFilter: 'blur(4px)' }}>
                 <Receipt size={14} /> DOCUMENTO BLOQUEADO POR FACTURACIÓN. NO SE PERMITEN MODIFICACIONES.
@@ -792,7 +796,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           )}
 
           {/* Header Section */}
-          <div className={s.headerLine} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
+          <div className={`${s.headerLine} ${v.header}`} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
               <div className={s.compactHeaderTitle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <h1 style={{ fontSize: '15px', margin: 0, fontWeight: 900, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -808,10 +812,15 @@ export default function PurchaseDeliveryNoteForm(props) {
                   </div>
               </div>
               <div className={s.headerActions}>
-                  <button className={s.saveBtn} onClick={handleSave} disabled={isLocked} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                      <Save size={16} />
-                      Guardar
-                  </button>
+                  {isReadOnly ? (
+                      <button className={s.saveBtn} onClick={() => setIsReadOnly(false)} disabled={isLocked} title="Editar remito">
+                          <Pencil size={16} /> Editar
+                      </button>
+                  ) : (
+                      <button className={s.saveBtn} onClick={handleSave} disabled={isLocked || loading} title="Guardar remito">
+                          <Save size={16} /> {loading ? "Guardando..." : "Guardar"}
+                      </button>
+                  )}
                   <div className={s.actionGroup}>
                       <button className={s.actionBtn} disabled={!id || isLocked} onClick={async () => {
                           if (!window.confirm("¿Estás seguro de anular este remito? Esta acción no se puede deshacer.")) return;
@@ -840,15 +849,16 @@ export default function PurchaseDeliveryNoteForm(props) {
               </div>
           </div>
 
+          <CommercialDocumentNav />
           {/* Body: 2 Column Layout */}
-          <div className={s.bodyTwoColumns} style={{ opacity: isLocked ? 0.8 : 1 }}>
+          <div className={`${s.bodyTwoColumns} ${v.body}`} style={{ opacity: isLocked ? 0.8 : 1 }}>
               {/* Columna Izquierda: Ítems y Productos */}
-              <div className={s.leftCol}>
-                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden' }}>
+              <div data-document-section="items" className={`${s.leftCol} ${v.left}`}>
+                  <div className={`${s.bentoContainer} ${v.bento}`} style={{ padding: 0, overflow: 'hidden' }}>
                       {items.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
+                                <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
                                     <div className={s.th}>Producto</div>
                                     <div className={s.th} style={{ textAlign: 'left' }}>Cant.</div>
                                     <div className={s.th} style={{ textAlign: 'right' }}>Recibir</div> {/* Changed from Remitir */}
@@ -898,7 +908,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                                     
                                   const isExceeding = mode === 'new' && item.qty > (item.qty_pending || 0);
                                   return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border_box' }}>
+                                    <div key={item.id} data-exceeding={isExceeding} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border_box' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
                                             <div style={{ fontSize: 11, fontWeight: 900, color: '#1e293b', lineHeight: 1.1, whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {item.name || item.product?.name || item.description}
@@ -949,10 +959,10 @@ export default function PurchaseDeliveryNoteForm(props) {
 
               {/* Columna Derecha: Panel Lateral Administrativo */}
               {/* Columna Derecha: Panel Lateral Administrativo */}
-              <div className={s.rightCol}>
+              <div data-document-section="details" className={`${s.rightCol} ${v.right}`}>
                   {/* Bloque Proveedor */}
-                  <div className={s.sideBlock}>
-                      <div className={s.sideBlockTitle}><User size={12}/> PROVEEDOR</div> {/* Changed from CLIENTE */}
+                  <div className={`${s.sideBlock} ${v.panel}`}>
+                      <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><User size={12}/> PROVEEDOR</div> {/* Changed from CLIENTE */}
                       <div className={s.sideField}>
                           <label>NOMBRE</label>
                           {isReadOnly || sourceId ? (
@@ -995,8 +1005,8 @@ export default function PurchaseDeliveryNoteForm(props) {
                   </div>
 
                   {/* Bloque Operativo / Logística */}
-                  <div className={s.sideBlock} style={{ height: '100%' }}>
-                      <div className={s.sideBlockTitle}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
+                  <div className={`${s.sideBlock} ${v.panel}`} style={{ height: '100%' }}>
+                      <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
                       <div className={s.sideField}>
                           <label>TRANSPORTE</label>
                           {isReadOnly ? <div className={s.sideInput}>{transporter || '-'}</div> : (
@@ -1138,7 +1148,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           </div>
 
           {/* Footer Compact: Totales */}
-          <div className={s.footerCompact}>
+          <div data-document-section="total" className={`${s.footerCompact} ${v.footer}`}>
             <div className={s.footerCompactItem}>
               <span className={s.footerCompactLabel}>TOTAL UNIDADES</span>
               <span className={s.footerCompactValue}>{items.reduce((acc, l) => acc + (Number(l.qty) || 0), 0).toFixed(2)} u.</span>
