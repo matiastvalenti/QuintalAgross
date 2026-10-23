@@ -262,7 +262,7 @@ export default function PurchaseOrderForm(props) {
     );
     if (totalQty === 0) return { delivered: 0, invoiced: 0, paid: 0 };
     const delivered = items.reduce(
-      (acc, i) => acc + (parseFloat(i.qty_delivered) || 0),
+      (acc, i) => acc + (parseFloat(i.qty_received) || 0),
       0,
     );
     const invoiced = items.reduce(
@@ -304,7 +304,7 @@ export default function PurchaseOrderForm(props) {
   const deliveredLts = useMemo(
     () =>
       items.reduce(
-        (acc, item) => acc + (parseFloat(item.qty_delivered) || 0),
+        (acc, item) => acc + (parseFloat(item.qty_received) || 0),
         0,
       ),
     [items],
@@ -325,7 +325,7 @@ export default function PurchaseOrderForm(props) {
   const hasProgress = useMemo(() => {
     return items.some(
       (i) =>
-        (parseFloat(i.qty_delivered) || 0) > 0 ||
+        (parseFloat(i.qty_received) || 0) > 0 ||
         (parseFloat(i.qty_invoiced) || 0) > 0,
     );
   }, [items]);
@@ -341,7 +341,7 @@ export default function PurchaseOrderForm(props) {
       const lineLink = linkManagerDoc.lines.find(
         (l) => l.source_purchase_line_id === item.id,
       );
-      let simD = parseFloat(item.qty_delivered || 0);
+      let simD = parseFloat(item.qty_received || 0);
       let simI = parseFloat(item.qty_invoiced || 0);
       if (lineLink) {
         if (isDN)
@@ -477,7 +477,7 @@ export default function PurchaseOrderForm(props) {
 
     const hasP = (data.lines || []).some(
       (l) =>
-        (parseFloat(l.qty_delivered) || 0) > 0 ||
+        (parseFloat(l.qty_received) || 0) > 0 ||
         (parseFloat(l.qty_invoiced) || 0) > 0,
     );
     if (hasP) {
@@ -635,7 +635,7 @@ export default function PurchaseOrderForm(props) {
             newQty: l.qty,
             // Attach OC context
             ovQty: ovLine ? parseFloat(ovLine.qty || 0) : 0,
-            ovDelivered: ovLine ? parseFloat(ovLine.qty_delivered || 0) : 0,
+            ovDelivered: ovLine ? parseFloat(ovLine.qty_received || 0) : 0,
             unitLabel: ovLine ? ovLine._unit_label : "",
             unitFactor: ovLine ? parseFloat(ovLine._unit_content || 1) : 1,
           };
@@ -690,7 +690,7 @@ export default function PurchaseOrderForm(props) {
 
       showToast("Vínculos actualizados correctamente", "success");
       setLinkManagerDoc(null);
-      fetchPurchaseOrder(); // Refresh to see updated qty_delivered
+      fetchPurchaseOrder(); // Refresh to see updated qty_received
     } catch (e) {
       showToast("Error al actualizar vínculos", "error");
     }
@@ -730,7 +730,7 @@ export default function PurchaseOrderForm(props) {
     const initial = {};
     items.forEach((item) => {
       const realId = item.id;
-      const qtyDelivered = parseFloat(item.qty_delivered || 0);
+      const qtyDelivered = parseFloat(item.qty_received || 0);
       const qtyOrdered = parseFloat(item.qty || 0);
       const factor = parseFloat(
         item.product?.quantity_per_container ||
@@ -757,7 +757,7 @@ export default function PurchaseOrderForm(props) {
       }
       if (packages === 0) continue;
       const factor = Number(line.product?.quantity_per_container || line.quantity_per_container || line._unit_content || 1);
-      const pending = Math.max(0, Number(line.qty || 0) - Number(line.qty_delivered || 0));
+      const pending = Math.max(0, Number(line.qty || 0) - Number(line.qty_received || 0));
       if (!Number.isFinite(factor) || factor <= 0 || packages * factor > pending + 0.000001) {
         return showToast(`La cantidad a remitir supera el pendiente de ${line.description || line.name || "un producto"}`, "warning");
       }
@@ -777,7 +777,7 @@ export default function PurchaseOrderForm(props) {
         );
         const qtyUnits = Number((qtyPackages * factor).toFixed(2));
         const orderedBaseQty = parseFloat(line.qty || 0);
-        const deliveredBaseQty = parseFloat(line.qty_delivered || 0);
+        const deliveredBaseQty = parseFloat(line.qty_received || 0);
         const pendingBaseQty = Math.max(0, orderedBaseQty - deliveredBaseQty);
 
         const qtyToReceive = qtyUnits;
@@ -792,7 +792,7 @@ export default function PurchaseOrderForm(props) {
           qty_to_receive: qtyToReceive,
           qty_to_remit: qtyToReceive,
           qty_pending: qtyPending,
-          qty_received: Number(line.qty_received ?? line.qty_delivered ?? 0),
+          qty_received: Number(line.qty_received ?? line.qty_received ?? 0),
           product_id: line.product_id,
           product_name: line.product_name || line.product?.name || line.description,
           description: line.description || line.product_name || line.product?.name,
@@ -1045,7 +1045,7 @@ export default function PurchaseOrderForm(props) {
 
   // Pending items aggregate
   const pendingCount = items.filter(
-    (i) => parseFloat(i.qty || 0) - parseFloat(i.qty_delivered || 0) > 0,
+    (i) => parseFloat(i.qty || 0) - parseFloat(i.qty_received || 0) > 0,
   ).length;
   const pendingInvoicedCount = items.filter(
     (i) => parseFloat(i.qty || 0) - parseFloat(i.qty_invoiced || 0) > 0,
@@ -1313,7 +1313,7 @@ export default function PurchaseOrderForm(props) {
                     {items.map((item) => {
                       if (isReadOnly) {
                         const qtyDelivered =
-                          parseFloat(item.qty_delivered) || 0;
+                          parseFloat(item.qty_received) || 0;
                         const qtyOrdered = parseFloat(item.qty) || 0;
                         const qtyPackages = item.qty_packages;
                         const hasPackages =
@@ -1459,7 +1459,7 @@ export default function PurchaseOrderForm(props) {
                         );
                       }
 
-                      const qtyDelivered = parseFloat(item.qty_delivered) || 0;
+                      const qtyDelivered = parseFloat(item.qty_received) || 0;
                       const qtyOrdered = parseFloat(item.qty) || 0;
                       const isPending = qtyOrdered - qtyDelivered > 0;
                       return (
@@ -2361,7 +2361,7 @@ export default function PurchaseOrderForm(props) {
                 item._unit_label || item.unit_of_measure || "LT";
 
               const orderedBaseQty = parseFloat(item.qty || 0);
-              const deliveredBaseQty = parseFloat(item.qty_delivered || 0);
+              const deliveredBaseQty = parseFloat(item.qty_received || 0);
               const pendingBaseQty = Math.max(
                 0,
                 orderedBaseQty - deliveredBaseQty,
@@ -2617,7 +2617,7 @@ export default function PurchaseOrderForm(props) {
               {
                 items.filter(
                   (i) =>
-                    parseFloat(i.qty || 0) - parseFloat(i.qty_delivered || 0) >
+                    parseFloat(i.qty || 0) - parseFloat(i.qty_received || 0) >
                     0,
                 ).length
               }{" "}
