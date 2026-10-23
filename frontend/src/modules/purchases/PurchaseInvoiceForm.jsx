@@ -511,7 +511,7 @@ export default function PurchaseInvoiceForm(props) {
     }));
   };
 
-  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val || 0);
+  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency === 'USD' ? 'USD' : 'ARS' }).format(val || 0);
   const fmtValue = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency }).format(val || 0);
 
   if (loading) return <LoadingScreen message="Cargando Factura de Compra..." />; // Changed Factura
@@ -575,6 +575,7 @@ export default function PurchaseInvoiceForm(props) {
             
             {/* Columna Izquierda: Ítems y Productos */}
             <div data-document-section="items" className={`${s.leftCol} ${v.left}`}>
+                <div className={v.sectionHeading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
                 {!isReadOnly && (
                     <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
@@ -912,7 +913,7 @@ export default function PurchaseInvoiceForm(props) {
                 </div>
             </div>
             {/* Flujo Inferior */}
-          <div className={s.relationsBar}>
+          <div className={`${s.relationsBar} ${v.flowStrip}`}>
               <div className={s.relationCard} style={{ opacity: initialSourceType ? 1 : 0.5 }}>
                   <div className={s.nodeTitle} style={{ color: initialSourceType ? '#10b981' : '#0b132b' }}>ORIGEN</div>
                   <div className={s.nodeStatus} style={{ color: initialSourceType ? '#10b981' : '#eab308' }}>
@@ -973,7 +974,7 @@ export default function PurchaseInvoiceForm(props) {
         </div>
 
         {/* Operational Summary */}
-        <div className={s.summaryPanel}>
+        <div className={`${s.summaryPanel} ${v.statusStrip}`}>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>PROVEEDOR</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
