@@ -726,7 +726,23 @@ export default function PurchaseDeliveryNoteForm(props) {
             const data = await res.json();
             const savedId = data.id || id;
             showToast("Remito de Entrada guardado exitosamente", "success"); // Changed Remito
-            window.dispatchEvent(new CustomEvent("purchase-delivery-note-changed")); // Changed event name
+            window.dispatchEvent(new CustomEvent("purchase-delivery-note-changed"));
+            // Avisar a la OC de origen aun cuando el remito se abra en otra ventana.
+            const documentEvent = {
+                type: "QUINTAL_DOCUMENT_SAVED",
+                documentType: "purchase-delivery-note",
+                purchaseOrderId: sourceOrderId || null,
+                documentId: savedId
+            };
+            try {
+                window.opener?.dispatchEvent(new CustomEvent("purchase-delivery-note-changed"));
+                window.opener?.postMessage(documentEvent, window.location.origin);
+                const channel = new BroadcastChannel("quintal-documents");
+                channel.postMessage(documentEvent);
+                channel.close();
+            } catch (eventError) {
+                console.warn("No se pudo notificar a la orden de compra", eventError);
+            }
             setMode("edit");
             setId(savedId);
         } else {
