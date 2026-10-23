@@ -177,12 +177,13 @@ export default function PurchaseOrderForm(props) {
           id: Math.random(),
           product_id: l.product_id || null,
           name: l.name || l.description || "",
-          qty: parseFloat(l.qty || 1) / parseFloat(l._unit_content || 1), // Calculate containers from total units
+          qty: Number(l.qty ?? 1), // Cantidad expresada en LT/KG, no en envases
+          qty_packages: Number(l.qty_packages ?? (Number(l.qty ?? 1) / (Number(l._unit_content ?? l.package_size ?? l.quantity_per_container ?? 1) || 1))),
           unit_price: parseFloat(l.unit_price || 0),
           cost_price: 0,
-          discount_pct: 0,
-          vat_rate: 0.21,
-          _unit_content: parseFloat(l._unit_content || 1),
+          discount_pct: Number(l.discount_pct ?? 0),
+          vat_rate: l.vat_rate ?? 0.21,
+          _unit_content: Number(l._unit_content ?? l.package_size ?? l.quantity_per_container ?? 1) || 1,
           _unit_label: "u",
         }));
         if (mappedLines.length > 0) setItems(mappedLines);
