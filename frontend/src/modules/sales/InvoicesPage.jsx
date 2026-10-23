@@ -794,7 +794,8 @@ export default function InvoicesPage() {
 
   return (
     <>
-      <DocumentListPage 
+      <DocumentListPage
+        theme="quintal" 
         title="Libro de Facturas"
         breadcrumbs={[{ label: 'Suite Comercial' }, { label: 'Facturación' }]}
         kpis={kpis}
