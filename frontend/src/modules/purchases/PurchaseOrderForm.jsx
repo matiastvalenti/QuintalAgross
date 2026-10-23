@@ -964,8 +964,10 @@ export default function PurchaseOrderForm(props) {
         }
         if (field === "qty") {
           newItem.qty = Number(value);
-          const factor = i._unit_content || 1;
-          if (factor > 1) {
+          const factor = Number(i._unit_content) || 1;
+          // Presentaciones menores a una unidad (ej. frasco de 0,35 kg)
+          // también deben sincronizar la cantidad de envases.
+          if (factor > 0) {
             newItem.qty_packages = Number(value) / factor;
           }
         }
