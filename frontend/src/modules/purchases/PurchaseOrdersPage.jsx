@@ -366,8 +366,6 @@ export default function PurchaseOrdersPage() {
               icon={Layers} 
               title={orders.length ? "No hay órdenes que coincidan" : "Todavía no hay órdenes de compra"}
               description={orders.length ? "Probá quitando filtros o cambiando la búsqueda." : "Empezá creando una orden para registrar la compra."}
-              actionLabel="Nueva Orden"
-              onAction={handleOpenNew}
           />
         </td>
       </tr>
