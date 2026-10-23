@@ -1449,3 +1449,54 @@
   .formCard .rightCol > .sideBlock:nth-child(2) {grid-column:1;}
   .formCard .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(2,minmax(0,1fr));}
 }
+
+/* Fix: the purchase item table has exactly EIGHT visible cells.
+   Legacy grid defined ten tracks, causing narrow/clipped package fields. */
+.formCard .tableHeader,
+.formCard .tableRow {
+  grid-template-columns:
+    minmax(240px,2.5fr)
+    minmax(100px,.85fr)
+    minmax(125px,1.1fr)
+    minmax(120px,1fr)
+    minmax(100px,.85fr)
+    minmax(65px,.55fr)
+    minmax(105px,.95fr)
+    38px !important;
+  gap:10px;
+  min-width:1010px;
+  box-sizing:border-box;
+}
+.formCard .bentoContainer {
+  overflow-x:auto !important;
+  scrollbar-color:#566688 #182239;
+}
+.formCard .itemsList {
+  overflow-x:visible;
+  padding-right:0;
+  max-height:420px;
+}
+.formCard .tableRow {min-height:48px;height:auto;padding-top:5px;padding-bottom:5px;}
+.formCard .tableRow > * {min-width:0;}
+.formCard .tableRow .tableInput {
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+  background:#151f35 !important;
+  border:1px solid #40516f !important;
+  color:#f8fafc !important;
+  -webkit-text-fill-color:#f8fafc !important;
+  padding:7px 9px;
+  font-size:12px;
+  font-weight:650;
+}
+.formCard .tableRow .tableInput:read-only {
+  background:#27344d !important;
+  color:#b9c8dd !important;
+  -webkit-text-fill-color:#b9c8dd !important;
+}
+.formCard .tableRow > div:first-child .tableInput {
+  background:#151f35 !important;
+  text-overflow:ellipsis;
+}
+.formCard .tableHeader .th {white-space:nowrap;font-size:10px;}
