@@ -575,6 +575,9 @@ export default function PurchaseDeliveryNoteForm(props) {
         product_id: item.product_id,
         description: item.product_name || item.description,
         qty: selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0),
+        qty_packages: Number(item.quantity_per_container) > 0
+          ? Number(selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0)) / Number(item.quantity_per_container)
+          : Number(item.qty_pending || 0),
         unit_price: finalUnitPrice, // This is COST
         discount_pct: item.discount_pct || 0,
         vat_rate: item.vat_rate || 0.21,
@@ -615,6 +618,8 @@ export default function PurchaseDeliveryNoteForm(props) {
         const newItem = { ...i, [field]: value === "" ? "" : Number(value) };
         if (field === 'qty') {
             newItem.qty = value === "" ? "" : Number(value);
+            const factor = Number(i._unit_content) || 1;
+            newItem.qty_packages = value === "" ? "" : Number(value) / factor;
         }
         if (field === 'qty_packages') {
             newItem.qty_packages = value === "" ? "" : Number(value);
