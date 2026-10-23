@@ -193,7 +193,7 @@ export default function PurchaseInvoiceForm(props) {
       // Logic for purchase-order or delivery-note (remito de entrada)
       let draft = null;
       if (draftId) {
-          const draftStr = localStorage.getItem(`invoice_draft_${draftId}`);
+          const draftStr = localStorage.getItem(`purchase_invoice_draft_${draftId}`);
           if (draftStr) {
               draft = JSON.parse(draftStr);
           } else {
