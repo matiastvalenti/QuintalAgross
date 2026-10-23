@@ -1,2 +1,96 @@
 /* InvoiceForm.module.css - Reusing Precision v4.7 Aesthetic */
 @import "./SalesOrderForm.module.css";
+/* Formularios de Factura de Venta y Compra: misma escala que las órdenes dark. */
+.formCard {
+  --text:#f8fafc;
+  --text-primary:#f8fafc;
+  --text-secondary:#bbc9dc;
+  --border-color:#394861;
+  --bg-page:#101729;
+  --panel-bg:#202c46;
+  --primary:#8e7ae8;
+  background:#101729;
+  color:#f8fafc;
+  min-width:0;
+  max-width:none;
+  box-sizing:border-box;
+  padding:16px 20px;
+  overflow-x:hidden;
+  overflow-y:auto;
+  scrollbar-color:#495a79 #101729;
+}
+.formCardStandalone {
+  background:#101729;
+  min-height:100%;
+  overflow-x:hidden;
+}
+.formCard .headerLine {
+  min-height:56px;
+  gap:12px;
+  flex-wrap:wrap;
+  border-bottom:1px solid #394861;
+  padding-bottom:12px;
+}
+.formCard .titleGroup h1 {color:#f8fafc;}
+.formCard .headerMeta {color:#bbc9dc;flex-wrap:wrap;}
+.formCard .tableHeader,
+.formCard .tableRow {
+  grid-template-columns:
+    minmax(210px,2.4fr) 85px 96px 63px 100px 66px 64px 105px 52px !important;
+  gap:9px;
+  min-width:990px;
+  box-sizing:border-box;
+}
+.formCard .tableHeader {
+  background:#273551;
+  border:1px solid #394861;
+  border-radius:9px 9px 0 0;
+  min-height:34px;
+  height:auto;
+}
+.formCard .tableRow {
+  height:auto;
+  min-height:52px;
+  background:#202c46;
+  border-bottom:1px solid #394861;
+  padding-top:6px !important;
+  padding-bottom:6px !important;
+}
+.formCard .tableRow > * {min-width:0;}
+.formCard .tableHeader .th {font-size:10px;white-space:nowrap;color:#c5d1e2;}
+.formCard input.tableInput,
+.formCard select,
+.formCard textarea,
+.formCard .contextInput,
+.formCard .contextSelect {
+  box-sizing:border-box;
+  min-width:0;
+  background:#151f35 !important;
+  border:1px solid #465875 !important;
+  color:#f8fafc !important;
+  -webkit-text-fill-color:#f8fafc;
+  color-scheme:dark;
+}
+.formCard input.tableInput {min-height:35px;font-size:12px;padding:6px 8px;}
+.formCard input.tableInput[readonly],
+.formCard input.tableInput:disabled {
+  background:#293650 !important;
+  color:#c3d0e1 !important;
+  -webkit-text-fill-color:#c3d0e1;
+}
+.formCard input.tableInput:focus-visible,
+.formCard select:focus-visible {
+  outline:2px solid #8e7ae8;
+  outline-offset:1px;
+}
+.formCard input::placeholder {color:#99aac0 !important;}
+.formCard .searchRibbon,
+.formCard .footerCompact,
+.formCard .sideBlock {background:#202c46;color:#f8fafc;border-color:#394861;}
+.formCard .contextTab {background:#202c46;color:#c5d1e2;border-color:#394861;}
+.formCard .contextTabActive {background:#6955cf;color:#fff;}
+.formCard .readonlyControl {background:#293650;color:#f8fafc;}
+@media (max-width:1050px) {
+  .formCard {padding:12px 14px;}
+  .formCard .headerLine {align-items:flex-start;}
+}
