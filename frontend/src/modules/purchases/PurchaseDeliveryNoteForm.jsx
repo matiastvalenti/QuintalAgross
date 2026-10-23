@@ -219,7 +219,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                     product_name: line.product_name || line.description,
                     description: line.description || line.product_name,
                     qty: qtyToReceive,
-                    qty_packages: qtyToReceive,
+                    qty_packages: Number(line.qty_packages ?? (qtyToReceive / (Number(line._unit_content) || 1))),
                     qty_to_receive: qtyToReceive,
                     qty_pending: qtyPending,
                     qty_received: Number(line.qty_received ?? 0),
