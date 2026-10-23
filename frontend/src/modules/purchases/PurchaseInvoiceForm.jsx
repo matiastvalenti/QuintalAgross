@@ -485,7 +485,7 @@ export default function PurchaseInvoiceForm(props) {
                                 <span>&middot;</span>
                             </>
                         )}
-                        <span className={s.metaDate}>{new Date(date).toLocaleDateString('es-AR')}</span>
+
                         {(initialSourceType === 'purchase-order' || initialSourceType === 'delivery-note') && sourceNumber && ( // Changed sales-order
                             <>
                                 <span style={{ color: '#24389c', fontWeight: 800 }}>{initialSourceType === 'purchase-order' ? 'OC' : 'RE'} {sourceNumber} &middot; {entity?.name || 'Proveedor'}</span> {/* Changed OV, Cliente */}
