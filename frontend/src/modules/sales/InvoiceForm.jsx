@@ -1189,7 +1189,7 @@ export default function InvoiceForm(props) {
                                     }]);
                                 }}
                                 placeholder="Escriba para buscar productos para añadir..."
-                                variant="glass"
+                                variant="invoice"
                                 icon={<Search size={16} style={{ color: 'var(--primary)' }}/>}
                                 minChars={0}
                                 clearOnSelect={true}
@@ -1469,7 +1469,7 @@ export default function InvoiceForm(props) {
                             <div className={s.clientField}>
                                 <label>NOMBRE</label>
                                 <div className={s.clientNameControl}>
-                                    <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
+                                    <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="invoice" />
                                 </div>
                             </div>
                         )}
