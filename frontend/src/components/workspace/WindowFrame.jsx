@@ -114,8 +114,6 @@ export default function WindowFrame({ window: win, component: Component }) {
   return (
     <div
       className={`${s.frame} ${win.isMaximized ? s.maximized : ""} animate-scale`}
-      // display:none conserva el estado del formulario, pero evita que los controles
-      // del frame sigan pintándose durante la minimización.
       style={{ ...style, ...(win.isMinimized ? { display: "none" } : {}) }}
       aria-hidden={win.isMinimized}
       onMouseDown={() => { if (!win.isMinimized) focusWindow(win.id); }}
