@@ -1,22 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useParams, useSearchParams, useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import LoadingScreen from '../../components/ui/LoadingScreen';
 import { useToast } from '../../context/ToastContext';
 import ReceiptCollectionForm from './ReceiptCollectionForm';
+import ReceiptForm from './ReceiptForm';
 
 export default function ReceiptStandalonePage() {
   const { id } = useParams();
+  const { pathname } = useLocation();
+  const isPayment = pathname.startsWith('/standalone/pagos');
   const [searchParams] = useSearchParams();
   const mode = searchParams.get('mode') || (id ? 'view' : 'new');
   
-  const [loading, setLoading] = useState(!!id);
+  const [loading, setLoading] = useState(!!id && !isPayment);
   const [receipt, setReceipt] = useState(null);
   const { showToast } = useToast();
 
   useEffect(() => {
     let mounted = true;
-    if (id) {
+    if (id && !isPayment) {
       api.get(`/accounting/documents/${id}`)
         .then(res => {
           if (mounted) {
@@ -37,9 +40,8 @@ export default function ReceiptStandalonePage() {
     return () => { mounted = false; };
   }, [id, showToast]);
 
+  if (isPayment) return <ReceiptForm mode={mode} id={id} isPayment />;
   if (loading) return <LoadingScreen message="Cargando recibo..." />;
 
-  // En el futuro si es un pago (proveedor), se puede derivar a otro formulario aquí.
-  // Por ahora asume recibo manual (cliente).
   return <ReceiptCollectionForm mode={mode} source="manual" initialData={receipt} />;
 }
