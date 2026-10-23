@@ -22,6 +22,7 @@ import PurchaseDeliveryNoteForm from "../../modules/purchases/PurchaseDeliveryNo
 import PurchaseInvoiceForm from "../../modules/purchases/PurchaseInvoiceForm";
 import LedgerPage from "../../modules/reports/LedgerPage";
 import ReceiptForm from "../../modules/finance/ReceiptForm";
+import ReceiptCollectionWindow from "../../modules/finance/ReceiptCollectionWindow";
 import ReceiptsPage from "../../modules/finance/ReceiptsPage";
 import StatementPage from "../../modules/reports/StatementPage";
 import BalancesPage from "../../modules/reports/BalancesPage";
@@ -81,6 +82,7 @@ export const registry = {
   ),
   "purchase-invoice-form": PurchaseInvoiceForm,
   "receipt-form": ReceiptForm,
+  "receipt-collection-form": ReceiptCollectionWindow,
   "receipt-list": ReceiptsPage,
   "statement-page": StatementPage,
   "balances-report": BalancesPage,
