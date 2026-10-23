@@ -4,7 +4,7 @@ import { useWindow } from "../../context/WindowContext";
  * Apertura única de documentos comerciales dentro del gestor de ventanas del ERP.
  * Las rutas /standalone quedan únicamente para compatibilidad con enlaces viejos.
  */
-const FORM_WINDOW = { width: 1270, height: 780, minWidth: 720, minHeight: 470, allowMultiple: true };
+const FORM_WINDOW = { width: 1270, height: 680, minWidth: 720, minHeight: 470, allowMultiple: true };
 
 function readDraft(prefix, id) {
   if (!id) return null;
