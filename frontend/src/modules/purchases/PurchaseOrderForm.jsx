@@ -1091,10 +1091,10 @@ export default function PurchaseOrderForm(props) {
                 onClick={handleOpenRemitoModal}
                 title={
                   !id
-                    ? "Guarde la orden para remitir"
+                    ? "Guarde la orden para recibir"
                     : pendingCount === 0
-                      ? "No hay ítems pendientes de remitir"
-                      : `Remitir Pedido — ${pendingCount} ítem(s) pendiente(s)`
+                      ? "No hay ítems pendientes de recibir"
+                      : `Recibir Pedido — ${pendingCount} ítem(s) pendiente(s)`
                 }
                 style={
                   pendingCount > 0 && id
@@ -1106,7 +1106,7 @@ export default function PurchaseOrderForm(props) {
                     : {}
                 }
               >
-                <Truck size={18} />
+                <Truck size={18} /><span className={w.actionLabel}>Recibir</span>
               </button>
               <button
                 className={s.actionBtn}
@@ -1129,7 +1129,7 @@ export default function PurchaseOrderForm(props) {
                     : {}
                 }
               >
-                <Receipt size={18} />
+                <Receipt size={18} /><span className={w.actionLabel}>Factura</span>
               </button>
               <button
                 className={s.actionBtn}
@@ -1144,7 +1144,7 @@ export default function PurchaseOrderForm(props) {
                   !id ? "Guarde para imprimir" : "Imprimir Orden de Compra"
                 }
               >
-                <Printer size={18} />
+                <Printer size={18} /><span className={w.actionLabel}>PDF</span>
               </button>
               <button
                 className={s.actionBtn}
@@ -1157,7 +1157,7 @@ export default function PurchaseOrderForm(props) {
                 }
                 title="Enviar por Email"
               >
-                <Mail size={18} />
+                <Mail size={18} /><span className={w.actionLabel}>Correo</span>
               </button>
             </div>
           </div>
@@ -1468,7 +1468,8 @@ export default function PurchaseOrderForm(props) {
                                 color: "#64748b",
                               }}
                             >
-                              {item.brand || item.product?.brand?.name}
+                              {item.brand || item.product?.brand?.name || "Producto"}
+                              {Number(item._unit_content) > 0 && ` · Envase: ${item._unit_content} ${item._unit_label || "u"}`}
                             </div>
                           </div>
                           <input
@@ -2457,7 +2458,7 @@ export default function PurchaseOrderForm(props) {
                         color: "#475569",
                       }}
                     >
-                      {factor > 1
+                      {factor > 0
                         ? `${orderedPackages.toString().replace(/\.00$/, "")} env.`
                         : `${orderedBaseQty} und.`}
                     </div>
@@ -2475,7 +2476,7 @@ export default function PurchaseOrderForm(props) {
                         color: "#94a3b8",
                       }}
                     >
-                      {factor > 1
+                      {factor > 0
                         ? `${deliveredPackages.toString().replace(/\.00$/, "")} env.`
                         : `${deliveredBaseQty} und.`}
                     </div>
@@ -2493,7 +2494,7 @@ export default function PurchaseOrderForm(props) {
                         color: pendingBaseQty > 0 ? "#1e293b" : "#059669",
                       }}
                     >
-                      {factor > 1
+                      {factor > 0
                         ? `${pendingPackages.toString().replace(/\.00$/, "")} env.`
                         : `${pendingBaseQty} und.`}
                     </div>
@@ -2687,9 +2688,9 @@ export default function PurchaseOrderForm(props) {
               const qtyOrderedUnits = parseFloat(item.qty || 0);
               const factor = parseFloat(item._unit_content || 1);
               const orderedPkgs =
-                factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+                factor > 0 ? qtyOrderedUnits / factor : qtyOrderedUnits;
               const invoicedPkgs =
-                factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+                factor > 0 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
               const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
               const currentQty =
                 invoiceQtys[item.id] !== undefined
@@ -2783,7 +2784,7 @@ export default function PurchaseOrderForm(props) {
                     >
                       {orderedPkgs} env.
                     </div>
-                    {factor > 1 && (
+                    {factor > 0 && (
                       <div
                         style={{
                           fontSize: 10,
@@ -2805,7 +2806,7 @@ export default function PurchaseOrderForm(props) {
                     >
                       {invoicedPkgs} env.
                     </div>
-                    {factor > 1 && (
+                    {factor > 0 && (
                       <div
                         style={{
                           fontSize: 10,
@@ -2827,7 +2828,7 @@ export default function PurchaseOrderForm(props) {
                     >
                       {pendingPkgs.toFixed(2)} env.
                     </div>
-                    {factor > 1 && (
+                    {factor > 0 && (
                       <div
                         style={{
                           fontSize: 10,
@@ -2878,7 +2879,7 @@ export default function PurchaseOrderForm(props) {
                             outline: "none",
                           }}
                         />
-                        {factor > 1 && (
+                        {factor > 0 && (
                           <div
                             style={{
                               fontSize: 9,
