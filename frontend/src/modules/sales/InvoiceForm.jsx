@@ -1059,7 +1059,7 @@ export default function InvoiceForm(props) {
   const isAdminLocked = isReadOnly;
 
   return (
-    <div data-commercial-document="true" data-active-view={invoiceTab} className={`${s.formCard} ${w.root} ${isStandalone ? w.standalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} className={`${s.formCard} ${w.root} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
         <div className={`${s.headerLine} ${w.header}`}>
