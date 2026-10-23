@@ -155,7 +155,7 @@ export default function BnaDivisasRateField({
           rateMatchesDate ?
             <span>Banco Nación · Divisas vendedor USD {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} · {formatDate(quote.date)}{currency === "ARS" ? " · referencia USD/ARS" : ""}</span> :
           isLatestCloseForToday ?
-            <span className={s.warning}>Último cierre BNA divisas vendedor: {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} ({formatDate(quote.date)}). Cotización anterior a hoy: verificá antes de facturar.</span> :
+            <span className={s.warning}>Último cierre BNA divisas vendedor: {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} ({formatDate(quote.date)}). Cotización anterior a hoy: verificá antes de registrar el documento.</span> :
             <span className={s.warning}>BNA publicó {formatDate(quote.date)}. No coincide con {formatDate(date)}; verificá el TC antes de facturar.</span>
         }
       </div>
