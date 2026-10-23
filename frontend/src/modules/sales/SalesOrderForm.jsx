@@ -61,6 +61,7 @@ import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkDeliveryNoteModal from "./ManualLinkDeliveryNoteModal";
 import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
 import { openNuevoRemito, openNuevaFactura } from "../../utils/openStandaloneWindow";
+import OrderEmailDialog from "../common/OrderEmailDialog";
 
 export default function SalesOrderForm(props) {
   const {
@@ -109,6 +110,7 @@ export default function SalesOrderForm(props) {
 
   // --- Remito Selection Modal ---
   const [showRemitoModal, setShowRemitoModal] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
   // remitoQtys: { [lineId]: qty_to_remit }
   const [remitoQtys, setRemitoQtys] = useState({});
 
@@ -856,7 +858,7 @@ export default function SalesOrderForm(props) {
                       <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => window.open(`${API_URL}/sales/sales-orders/${id}/pdf`, '_blank')} title={!id ? "Guarde para imprimir" : "Imprimir Orden de Venta"}>
                           <Printer size={18} /><span className={w.actionLabel}>PDF</span>
                       </button>
-                      <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => showToast("Funcionalidad de envío por correo en desarrollo", "info")} title="Enviar por Email">
+                      <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => setShowEmailDialog(true)} title="Enviar por Email">
                           <Mail size={18} /><span className={w.actionLabel}>Correo</span>
                       </button>
                   </div>
@@ -1339,6 +1341,14 @@ export default function SalesOrderForm(props) {
           </div>
       </Drawer>
 
+      <OrderEmailDialog
+          open={showEmailDialog}
+          onClose={() => setShowEmailDialog(false)}
+          endpoint={id ? `${API_URL}/sales/sales-orders/${id}/email` : ""}
+          defaultRecipient={entity?.email || ""}
+          defaultSubject={`Orden de Venta ${joinFullNumber(pv, number)} - Quintal Agross`}
+          onSent={() => showToast("Orden enviada por correo", "success")}
+        />
       {/* Remito Selection Modal */}
       <Modal open={showRemitoModal} title="Seleccionar ítems a remitir" onClose={() => setShowRemitoModal(false)} wide>
           <div style={{ padding: '0 20px 20px' }}>
