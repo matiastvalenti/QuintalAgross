@@ -362,21 +362,19 @@ export default function PurchaseInvoicesPage() {
         <th className={s.th} style={{ textAlign: 'right' }}>ACCIONES</th>
       </>
     ),
+    emptyContent: (
+      <EmptyState 
+              icon={Search} 
+              title={hasActiveFilters ? "Sin resultados" : "Sin facturas de compra"}
+              description={hasActiveFilters ? "Ajustá los filtros para encontrar lo que buscás." : "Comenzá cargando una factura de proveedor."}
+              style={{ width: "100%", maxWidth: 440, padding: "22px 16px", boxSizing: "border-box", background: "transparent", border: "none", gap: 10 }}
+          />
+    ),
     body: loading ? (
         <TableRowSkeleton rows={8} cols={8} />
     ) : error ? (
         <tr><td colSpan="8"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
-    ) : sorted.length === 0 ? (
-      <tr>
-        <td colSpan="8">
-          <EmptyState 
-              icon={Search} 
-              title={hasActiveFilters ? "Sin resultados" : "Sin facturas de compra"}
-              description={hasActiveFilters ? "Ajustá los filtros para encontrar lo que buscás." : "Comenzá cargando una factura de proveedor."}
-          />
-        </td>
-      </tr>
-    ) : (
+    ) : sorted.length === 0 ? null : (
       paginatedData.map((inv) => (
         <tr key={inv.id} className={`${s.row} ${selectedInvoices.includes(inv.id) ? s.rowSelected : ""}`} onClick={() => handleOpenDetail(inv.id, inv.number)}>
           <td className={s.td} onClick={(e) => e.stopPropagation()} style={{ width: 40, padding: '0 12px' }}>
