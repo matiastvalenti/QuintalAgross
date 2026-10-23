@@ -1011,7 +1011,7 @@ export default function InvoiceForm(props) {
     }));
   };
 
-  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val || 0);
+  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency === 'USD' ? 'USD' : 'ARS' }).format(val || 0);
   const fmtValue = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency }).format(val || 0);
 
   if (loading) return <LoadingScreen message="Cargando Factura..." />;
@@ -1086,7 +1086,6 @@ export default function InvoiceForm(props) {
                         <span>&middot;</span>
                         <span>TC {exchangeRate}</span>
                         <TraceabilityStatusBadge status={status} />
-                        {fiscalInfo.is_draft && <strong>BORRADOR</strong>}
                         {hasApplications && (
                             <span className={s.appliedWarningWrap}>
                                 <span className={s.appliedWarningIcon}>
@@ -1154,6 +1153,7 @@ export default function InvoiceForm(props) {
             
             {/* Columna Izquierda: Ítems y Productos */}
             <div data-document-section="items" className={`${s.leftDocumentArea} ${v.documentLeft}`}>
+                <div className={v.sectionHeading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
                 {!isMonetaryLocked ? (
                     <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
@@ -1256,7 +1256,7 @@ export default function InvoiceForm(props) {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap' }}>
                                                 {item._unit_content && (
                                                     <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>
-                                                        {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toFixed(0)} {item._unit_label || 'u'}
+                                                        {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
                                                     </span>
                                                 )}
                                                 {isLocked && (
@@ -1359,8 +1359,8 @@ export default function InvoiceForm(props) {
                     }
 
                     return (
-                        <div className={s.flowPanel}>
-                          <div className={s.relationsBar} style={{ minHeight: '100%', height: '100%', display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                        <div className={`${s.flowPanel} ${v.flowPanel}`}>
+                          <div className={`${s.relationsBar} ${v.flowStrip}`}>
                               <div className={s.relationCard} style={{ opacity: (originStatus !== "Directo") ? 1 : 0.5 }}>
                                   <div className={s.nodeTitle} style={{ color: originColor }}>ORIGEN</div>
                                   <div className={s.nodeStatus} style={{ color: originColor }}>{originStatus}</div>
@@ -1713,8 +1713,8 @@ export default function InvoiceForm(props) {
 
 
         {/* Operational Summary */}
-        <div className={s.balancePanel}>
-            <div className={s.summaryPanel}>
+        <div className={`${s.balancePanel} ${v.bottomRegion}`}>
+            <div className={`${s.summaryPanel} ${v.statusStrip}`}>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>CLIENTE</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
