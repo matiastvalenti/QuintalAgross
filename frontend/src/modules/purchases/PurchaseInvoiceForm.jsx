@@ -228,7 +228,7 @@ export default function PurchaseInvoiceForm(props) {
                   const factor = parseFloat(l._unit_content || l.package_size || 1);
                   const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                   let qtyPackages = l.qty_packages;
-                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                       qtyPackages = qty / factor;
                   }
                   return {
@@ -237,7 +237,7 @@ export default function PurchaseInvoiceForm(props) {
                       description: l.product_name || l.description,
                       qty: qty,
                       qty_packages: qtyPackages,
-                      _unit_content: factor > 1 ? factor : undefined,
+                      _unit_content: factor > 0 ? factor : 1,
                       _unit_label: l._unit_label || l.package_unit || 'u',
                       _container_name: l._container_name || 'Unidad',
                       unit_price: l.unit_price,
