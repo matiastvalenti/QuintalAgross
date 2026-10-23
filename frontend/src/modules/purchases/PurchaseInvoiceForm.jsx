@@ -14,6 +14,8 @@ import {
   Building, User, Link2, Plus, Pencil, CheckCircle, Clock, Activity, FileText, ArrowRight, Landmark, Search
 } from "lucide-react";
 import s from "../sales/SalesOrderForm.module.css";
+import v from "../common/CommercialDocumentWorkspace.module.css";
+import CommercialDocumentNav from "../common/CommercialDocumentNav";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
 export default function PurchaseInvoiceForm(props) {
@@ -466,10 +468,10 @@ export default function PurchaseInvoiceForm(props) {
   if (loading) return <LoadingScreen message="Cargando Factura de Compra..." />; // Changed Factura
 
   return (
-    <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`}>
+    <div data-commercial-document="true" className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${v.shell} ${v.invoice} ${isStandalone ? v.standalone : ''}`}>
         
         {/* Header Area */}
-        <div className={s.headerLine}>
+        <div className={`${s.headerLine} ${v.header}`}>
             <div className={s.titleGroup}>
                 <div className={s.compactHeaderTitle}>
                     <h1>
@@ -517,28 +519,30 @@ export default function PurchaseInvoiceForm(props) {
             </div>
         </div>
 
+        <CommercialDocumentNav invoice />
+
         {/* Body: 2 Column Layout */}
-        <div className={s.bodyTwoColumns}>
+        <div className={`${s.bodyTwoColumns} ${v.body}`}>
             
             {/* Columna Izquierda: Ítems y Productos */}
-            <div className={s.leftCol}>
+            <div data-document-section="items" className={`${s.leftCol} ${v.left}`}>
                 {!isReadOnly && (
                     <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <Autocomplete 
                                 onSearch={searchProducts} 
                                 onSelect={(p) => {
-                                    const qtyPerContainer = p.quantity_per_container && p.quantity_per_container > 1 
-                                        ? p.quantity_per_container 
-                                        : null;
-                                    const hasContainer = qtyPerContainer !== null;
+                                    const qtyPerContainer = Number(p.quantity_per_container) > 0
+                                        ? Number(p.quantity_per_container)
+                                        : 1;
+                                    const hasContainer = !!p.container || Number(p.quantity_per_container) > 0;
                                     setItems([...items, { 
                                         id: Math.random(), 
                                         product_id: p.id, 
                                         description: p.name, 
                                         // Si el producto tiene envases, qty_packages=1 (bidón), qty=litros equivalentes
-                                        qty_packages: hasContainer ? 1 : undefined,
-                                        qty: hasContainer ? qtyPerContainer : 1, 
+                                        qty_packages: 1,
+                                        qty: qtyPerContainer, 
                                         _unit_content: qtyPerContainer,
                                         _unit_label: p.unit_of_measure || 'u',
                                         unit_price: p.cost_price || 0, // Use cost_price for purchases
@@ -567,11 +571,11 @@ export default function PurchaseInvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={s.bentoContainer} style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+                <div className={`${s.bentoContainer} ${v.bento}`} style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
                     {items.length > 0 ? (
                         <div style={{ minWidth: '100%' }}>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px' }}>
+                                <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px' }}>
                                     <div className={s.th}>PRODUCTO / CONCEPTO</div>
                                     <div className={s.th}>ENVASES</div>
                                     <div className={s.th}>CANTIDAD</div>
@@ -615,7 +619,7 @@ export default function PurchaseInvoiceForm(props) {
                                     }
                                     
                                     return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
+                                    <div key={item.id} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden' }}>
                                             <input 
                                                 type="text" 
@@ -691,10 +695,10 @@ export default function PurchaseInvoiceForm(props) {
             </div>
 
             {/* Columna Derecha: Panel Lateral Administrativo */}
-            <div className={s.rightCol}>
+            <div data-document-section="details" className={`${s.rightCol} ${v.right}`}>
                 {/* Bloque Cliente */}
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><Building size={12}/> PROVEEDOR</div>
+                <div className={`${s.sideBlock} ${v.panel}`}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Building size={12}/> PROVEEDOR</div>
                     <div className={s.sideField}>
                         <label>NOMBRE</label>
                         {isReadOnly ? (
@@ -736,8 +740,8 @@ export default function PurchaseInvoiceForm(props) {
                 </div>
 
                 {/* Bloque Comercial */}
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><ShoppingBag size={12}/> COMERCIAL</div>
+                <div className={`${s.sideBlock} ${v.panel}`}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><ShoppingBag size={12}/> COMERCIAL</div>
 
                     {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE' || docType === 'PURCHASE_DEBIT_NOTE' || docType === 'PURCHASE_CREDIT_NOTE') && (
                         <div className={s.sideField}>
@@ -821,8 +825,8 @@ export default function PurchaseInvoiceForm(props) {
                     </div>
                 </div>
 
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><Truck size={12}/> GASTO DE FLOTA</div>
+                <div className={`${s.sideBlock} ${v.panel}`}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Truck size={12}/> GASTO DE FLOTA</div>
                     <p>Asocia el total con impuestos al vehículo o equipo, sin repartirlo entre trabajos.</p>
                     {legacyVehicleExpenses ? <p>Este comprobante tiene una distribución previa que se conserva sin cambios.</p> : <>
                       <label htmlFor="expense-vehicle">Vehículo / equipo</label>
@@ -843,8 +847,8 @@ export default function PurchaseInvoiceForm(props) {
                     </>}
                 </div>
                 {/* Bloque Observaciones */}
-                <div className={s.sideBlock} style={{ flexShrink: 0, paddingBottom: 16 }}>
-                    <div className={s.sideBlockTitle}><FileText size={12}/> OBSERVACIONES</div>
+                <div className={`${s.sideBlock} ${v.panel}`} style={{ flexShrink: 0, paddingBottom: 16 }}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><FileText size={12}/> OBSERVACIONES</div>
                     {isReadOnly ? (
                         <div style={{ fontSize: 11, color: '#475569', minHeight: 40 }}>{observations || 'Sin observaciones'}</div>
                     ) : (
@@ -948,7 +952,7 @@ export default function PurchaseInvoiceForm(props) {
         </div>
 
         {/* Footer with Totals */}
-        <div className={s.footerCompact}>
+        <div data-document-section="total" className={`${s.footerCompact} ${v.footer}`}>
             <div className={s.footerCompactItem}>
                 <span className={s.footerCompactLabel}>NETO GRAVADO</span>
                 <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
