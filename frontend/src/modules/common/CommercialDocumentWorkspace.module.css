@@ -397,3 +397,303 @@
   .shell :global([class*="relationsBar"]) {flex-wrap:wrap;}
   .shell :global([class*="relationCard"]) {min-width:120px;}
 }
+
+/* Layout real dentro de WindowFrame: el contenido NO debe estirarse entre
+   el cuadro de productos y los totales del documento. */
+.shell {
+  align-content: start;
+  gap: 9px;
+  padding: 14px 16px 12px !important;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.shell .header {min-height: 53px !important;padding-bottom: 9px !important;}
+.shell .sections {gap: 5px;padding-bottom: 0;}
+.shell .sectionLink {
+  min-height: 30px;
+  padding: 6px 11px;
+  font-size: 11px;
+  background: #283751;
+  border-color: #425471;
+  border-radius: 7px;
+}
+.shell .sectionLink:hover {background:#3c4c71;}
+.shell .documentGrid,
+.shell .body {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0;
+  align-items: start !important;
+  grid-template-columns: minmax(0, 1fr) minmax(275px, 298px) !important;
+  gap: 12px !important;
+}
+.shell .documentLeft,
+.shell .left {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 9px !important;
+  min-height: 0;
+  height: auto !important;
+  justify-content: flex-start !important;
+}
+.shell .documentRight,
+.shell .right {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0;
+  overflow: visible !important;
+}
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #edf3ff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 2px 0;
+  line-height: 20px;
+}
+.sectionCount {
+  display: inline-flex;
+  min-width: 60px;
+  justify-content: center;
+  border: 1px solid #46577a;
+  background: #293855;
+  color: #cfdcf4;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.shell :global([class*="searchRibbon"]) {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  padding: 7px 9px !important;
+  background: #202c46 !important;
+  border: 1px solid #3e4f6c !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  z-index: 3;
+}
+.shell.invoice .bento,
+.shell.remito .bento {
+  background:#1c2842 !important;
+  min-height:175px !important;
+  height:auto !important;
+  max-height:310px !important;
+  flex:0 0 auto !important;
+  display:flex;
+  border:1px solid #455673 !important;
+  border-radius:11px !important;
+  box-shadow: none !important;
+  overflow-x:auto !important;
+  overflow-y:auto !important;
+}
+.shell.invoice :global([class*="itemsPanel"]) {
+  height:auto !important;
+  min-height:195px !important;
+  max-height:310px !important;
+}
+.shell.invoice .tableHeader,
+.shell.invoice .tableRow {
+  grid-template-columns:
+    minmax(190px,2.25fr) 70px 78px 49px minmax(74px,.9fr)
+    55px 48px minmax(92px,1.15fr) 34px !important;
+  min-width:790px !important;
+  gap:7px !important;
+}
+.shell.remito .tableHeader,
+.shell.remito .tableRow {
+  min-width:690px !important;
+  gap:7px !important;
+}
+.shell .tableRow {
+  min-height:50px !important;
+  background:#1c2842 !important;
+}
+.shell :global([class*="tableInput"]) {
+  font-variant-numeric: tabular-nums;
+  font-size:12px;
+}
+.shell :global([class*="itemsList"]) {
+  background:#1c2842 !important;
+  min-height:90px;
+  max-height: none !important;
+  width: 100%;
+  overflow-y:auto !important;
+}
+.shell :global([class*="th"]) {
+  color:#d4e0f3 !important;
+  font-size:9px !important;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.flowPanel {
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow:visible !important;
+  margin:0 !important;
+}
+.flowStrip,
+.shell .flowStrip {
+  display:flex !important;
+  gap:7px !important;
+  min-height:72px !important;
+  max-height:none !important;
+  height:auto !important;
+  overflow-x:auto !important;
+  padding:7px 9px !important;
+  margin:0 !important;
+  background:#202c46 !important;
+  border:1px solid #42516d !important;
+  border-radius:10px !important;
+  align-items:stretch !important;
+}
+.shell .flowStrip :global([class*="relationCard"]) {
+  background:#17243d !important;
+  border:1px solid #4a5c7c !important;
+  border-radius:8px !important;
+  flex:1 0 125px;
+  min-width:125px;
+  padding:7px 9px;
+  opacity:1 !important;
+}
+.shell .flowStrip :global([class*="relationCard"]):nth-last-child(1) {
+  flex:0 1 115px;
+  min-width:100px;
+}
+.shell .flowStrip :global([class*="nodeTitle"]) {font-size:9px;letter-spacing:.05em;}
+.shell .flowStrip :global([class*="nodeStatus"]) {font-size:10px;}
+.shell .flowStrip :global([class*="nodeMetric"]) {
+  font-size:11px !important;
+  font-variant-numeric:tabular-nums;
+  color:#f7faff !important;
+  overflow-wrap:anywhere;
+}
+.bottomRegion {
+  display:flex;
+  flex:0 0 auto;
+  flex-direction:column;
+  gap:8px;
+  margin-top:0 !important;
+  min-width:0;
+}
+.statusStrip,
+.shell .statusStrip {
+  display:flex !important;
+  align-items:center;
+  flex-wrap:wrap;
+  column-gap:18px;
+  row-gap:6px;
+  border-radius:10px;
+  margin:0 !important;
+  padding:8px 12px !important;
+  min-height:42px;
+  background:#202c46 !important;
+  border:1px solid #42516d !important;
+  color:#f8fafc !important;
+}
+.statusStrip :global([class*="summaryItem"]) {
+  min-width:65px;
+  flex:1 1 115px;
+  gap:3px;
+}
+.statusStrip :global([class*="summaryLabel"]) {
+  font-size:9px;
+  color:#9eafc9 !important;
+  letter-spacing:.04em;
+}
+.statusStrip :global([class*="summaryValue"]) {
+  font-size:11px;
+  font-weight:750;
+  color:#f1f5fd !important;
+}
+.shell .footer {
+  display:flex !important;
+  justify-content:flex-end;
+  align-items:center;
+  flex-wrap:wrap;
+  position:relative !important;
+  inset:auto !important;
+  margin:0 !important;
+  padding:10px 14px !important;
+  min-height:54px;
+  gap:12px 24px;
+  border-radius:10px;
+  background:#273753 !important;
+  border:1px solid #5a6993 !important;
+  box-shadow:none !important;
+}
+.shell .footer :global([class*="footerCompactTotal"]) {
+  font-size:19px !important;
+  color:#c8b9ff !important;
+  font-weight:900;
+}
+.shell .footer :global([class*="footerCompactValue"]) {font-size:14px !important;}
+.shell .footer :global([class*="footerCompactLabel"]) {
+  color:#acbbd4 !important;
+  font-size:9px;
+}
+.shell :global([class*="clientPanel"]),
+.shell :global([class*="middleRightPanel"]),
+.shell :global([class*="bottomRightPanel"]) {
+  width:100%;
+  margin:0 !important;
+  padding:11px 13px !important;
+  min-width:0;
+  box-sizing:border-box;
+  background:#202c46 !important;
+  border:1px solid #42516d !important;
+  border-radius:11px;
+}
+.shell :global([class*="clientPanel"]) {min-height:142px;}
+.shell :global([class*="middleRightPanel"]) {min-height:190px;}
+.shell :global([class*="bottomRightPanel"]) {min-height:108px;}
+.shell :global([class*="panelTitle"]),
+.shell :global([class*="sideBlockTitle"]) {
+  font-size:10px;
+  font-weight:850;
+  color:#e7eeff !important;
+  background:transparent !important;
+}
+.shell :global([class*="clientField"]) label,
+.shell :global([class*="commercialField"]) label,
+.shell :global([class*="sideField"]) label {
+  color:#aec0db !important;
+  font-size:10px;
+  font-weight:800;
+}
+.shell :global([class*="clientInput"]),
+.shell :global([class*="commercialInput"]),
+.shell :global([class*="sideInput"]) {
+  min-height:29px;
+  padding:5px 8px !important;
+}
+.shell :global([class*="observationsTextarea"]),
+.shell :global([class*="sideTextarea"]) {
+  min-height:60px;
+  background:#152037 !important;
+  color:#f8fafc !important;
+}
+@container (max-width:1000px) {
+  .shell .documentGrid,
+  .shell .body {grid-template-columns:minmax(0,1fr) !important;}
+  .shell .documentRight,
+  .shell .right {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .shell .documentRight > :last-child,
+  .shell .right > :last-child {grid-column:1 / -1;}
+  .shell.invoice .bento {max-height:270px !important;}
+}
+@container (max-width:600px) {
+  .shell .documentRight,
+  .shell .right {display:flex !important;flex-direction:column;}
+  .shell .footer {justify-content:space-between;}
+  .shell .statusStrip {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));}
+}
