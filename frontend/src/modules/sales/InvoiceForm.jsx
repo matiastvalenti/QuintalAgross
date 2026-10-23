@@ -132,6 +132,7 @@ export default function InvoiceForm(props) {
     initialSourceId = null,
     initialEntityId = null,
     preselectedLines = null,
+    initialDnIds = null,
     draftId = null,
     isStandalone = false,
     initialDocType = "INVOICE"
@@ -219,6 +220,9 @@ export default function InvoiceForm(props) {
     fetchInitialData();
     fetchProductsCatalog();
     if (mode === "edit" && id) fetchInvoice();
+    else if (mode === "new" && Array.isArray(initialDnIds) && initialDnIds.length > 0) {
+        fetchFromMultipleRemitos(initialDnIds);
+    }
     else if (mode === "new" && (initialSourceType === "sales-order" || initialSourceType === "delivery-note") && initialSourceId) {
         fetchFromSource();
     }
@@ -302,6 +306,51 @@ export default function InvoiceForm(props) {
       setItems(newItems);
     }
   }, [products, items]);
+
+  const fetchFromMultipleRemitos = async (ids) => {
+    setLoading(true);
+    try {
+        const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+        const responses = await Promise.all(ids.map(id =>
+            fetch(`${API_URL}/sales/delivery-notes/${id}`, { headers })
+        ));
+        if (responses.some(response => !response.ok)) throw new Error("No se pudieron recuperar todos los remitos.");
+        const notes = await Promise.all(responses.map(response => response.json()));
+        const customerId = notes[0]?.entity_id;
+        if (!customerId || notes.some(note => String(note.entity_id) !== String(customerId))) {
+            throw new Error("Los remitos deben pertenecer al mismo cliente.");
+        }
+        setEntity({ id: customerId, name: notes[0].entity_name || "Cliente" });
+        setSourceNumber(notes.map(note => note.number).filter(Boolean).join(", "));
+        setCurrency(notes[0].currency || "ARS");
+        setExchangeRate(Number(notes[0].exchange_rate) || 1);
+        const lines = notes.flatMap(note => (note.lines || []).map(line => {
+            const factor = Number(line.package_size || line.product?.quantity_per_container || 1) || 1;
+            const qty = Math.max(0, Number(line.qty || 0) - Number(line.qty_invoiced || 0));
+            return {
+                id: `${note.id}-${line.id}`,
+                product_id: line.product_id,
+                description: line.description || line.product_name || "",
+                qty,
+                qty_packages: qty / factor,
+                _unit_content: factor,
+                _unit_label: line.package_unit || line.product?.container?.unit?.short_name || "u",
+                unit_price: Number(line.unit_price || 0),
+                vat_rate: line.vat_rate ?? 0.21,
+                discount_pct: Number(line.discount_pct || 0),
+                source_sales_line_id: line.source_sales_line_id || null,
+                source_dn_line_id: line.id,
+                accounting_account_id: line.accounting_account_id || null,
+            };
+        })).filter(line => line.qty > 0);
+        if (!lines.length) throw new Error("Los remitos seleccionados no tienen cantidades pendientes de facturar.");
+        setItems(lines);
+    } catch (error) {
+        showToast(error.message || "Error al cargar remitos de venta", "error");
+    } finally {
+        setLoading(false);
+    }
+  };
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("token");
