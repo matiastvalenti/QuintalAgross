@@ -405,7 +405,7 @@ export default function InvoiceForm(props) {
         // Para cada línea con producto, recuperar el contenido por envase
         // Funciona incluso para facturas viejas sin package_size guardado
         const enrichedLines = await Promise.all(data.lines.map(async (l) => {
-            let unitContent = l.package_size && parseFloat(l.package_size) > 1 
+            let unitContent = l.package_size && parseFloat(l.package_size) > 0 
                 ? parseFloat(l.package_size) 
                 : undefined;
             
@@ -417,7 +417,7 @@ export default function InvoiceForm(props) {
                     });
                     if (pRes.ok) {
                         const prod = await pRes.json();
-                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 1) {
+                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 0) {
                             unitContent = parseFloat(prod.quantity_per_container);
                         }
                     }
@@ -559,7 +559,7 @@ export default function InvoiceForm(props) {
                   const factor = parseFloat(l._unit_content || l.package_size || l.quantity_per_container || 1);
                   const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                   let qtyPackages = l.qty_packages;
-                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                       qtyPackages = qty / factor;
                   }
                   const resolvedAccount = resolveProductSalesAccount(l, products);
@@ -569,7 +569,7 @@ export default function InvoiceForm(props) {
                       description: getInvoiceLineName(l),
                       qty: qty,
                       qty_packages: qtyPackages,
-                      _unit_content: factor > 1 ? factor : undefined,
+                      _unit_content: factor > 0 ? factor : 1,
                       _unit_label: l._unit_label || l.package_unit || l.unit_short_name || 'u',
                       _container_name: l._container_name || l.container_name || 'Unidad',
                       unit_price: parseFloat(l.unit_price || 0),
@@ -615,7 +615,7 @@ export default function InvoiceForm(props) {
                       const factor = parseFloat(l._unit_content || l.package_size || 1);
                       const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       const resolvedAccount = resolveProductSalesAccount(l, products);
@@ -626,7 +626,7 @@ export default function InvoiceForm(props) {
                           qty: qty,
                           _max_qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l._unit_label || l.package_unit || 'u',
                           _container_name: l._container_name || 'Unidad',
                           unit_price: parseFloat(l.unit_price || 0),
@@ -648,7 +648,7 @@ export default function InvoiceForm(props) {
                       const factor = l.product?.quantity_per_container ? parseFloat(l.product.quantity_per_container) : (l.package_size ? parseFloat(l.package_size) : 1);
                       const qty = l.qty - (l.qty_invoiced || 0);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       const resolvedAccount = resolveProductSalesAccount(l, products);
@@ -659,7 +659,7 @@ export default function InvoiceForm(props) {
                           qty: qty,
                           _max_qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l.product?.container?.unit?.short_name || l.package_unit || 'u',
                           _container_name: l.product?.container?.name || 'Unidad',
                           unit_price: l.unit_price,
@@ -943,8 +943,12 @@ export default function InvoiceForm(props) {
         let updated = { ...i, [field]: numericVal };
         
         // Al cambiar envases, recalcular la cantidad total equivalente
+        if (field === 'qty') {
+            const factor = Number(updated._unit_content || updated.package_size || 1);
+            updated.qty_packages = factor > 0 ? numericVal / factor : numericVal;
+        }
         if (field === 'qty_packages') {
-            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
+            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 0 ? parseFloat(updated.package_size) : null);
             if (unitContent) {
                 updated.qty = numericVal * unitContent;
             }
