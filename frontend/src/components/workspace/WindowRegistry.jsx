@@ -18,6 +18,8 @@ import SimpleConfigPage from "../../modules/config/SimpleConfigPage";
 import BankConfigPage from "../../modules/config/BankConfigPage";
 import PdfViewer from "./PdfViewer";
 import PurchaseOrderForm from "../../modules/purchases/PurchaseOrderForm";
+import PurchaseDeliveryNoteForm from "../../modules/purchases/PurchaseDeliveryNoteForm";
+import PurchaseInvoiceForm from "../../modules/purchases/PurchaseInvoiceForm";
 import LedgerPage from "../../modules/reports/LedgerPage";
 import ReceiptForm from "../../modules/finance/ReceiptForm";
 import ReceiptsPage from "../../modules/finance/ReceiptsPage";
@@ -47,6 +49,7 @@ export const registry = {
   "sales-order": SalesOrderForm,
   "purchase-order": PurchaseOrderForm,
   "delivery-note": DeliveryNoteForm,
+  "purchase-delivery-note": PurchaseDeliveryNoteForm,
   "articles-manager": ArticlesManager,
   "entities-manager": EntitiesManager,
   "sale-conditions": SaleConditionsPage,
@@ -76,9 +79,7 @@ export const registry = {
   "credit-note-form": (props) => (
     <InvoiceForm {...props} initialDocType="CREDIT_NOTE" />
   ),
-  "purchase-invoice-form": (props) => (
-    <InvoiceForm {...props} context="purchases" />
-  ),
+  "purchase-invoice-form": PurchaseInvoiceForm,
   "receipt-form": ReceiptForm,
   "receipt-list": ReceiptsPage,
   "statement-page": StatementPage,
