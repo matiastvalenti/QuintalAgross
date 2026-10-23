@@ -66,6 +66,7 @@ import {
   openNuevoRemitoEntrada,
   openNuevaFacturaCompra,
 } from "../../utils/openStandaloneWindow";
+import OrderEmailDialog from "../common/OrderEmailDialog";
 
 
 const getPurchaseLineName = (line) => {
@@ -128,6 +129,7 @@ export default function PurchaseOrderForm(props) {
 
   // --- Remito Selection Modal ---
   const [showRemitoModal, setShowRemitoModal] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
   // remitoQtys: { [lineId]: qty_to_remit }
   const [remitoQtys, setRemitoQtys] = useState({});
 
@@ -1149,12 +1151,7 @@ export default function PurchaseOrderForm(props) {
               <button
                 className={s.actionBtn}
                 disabled={!id}
-                onClick={() =>
-                  showToast(
-                    "Funcionalidad de envío por correo en desarrollo",
-                    "info",
-                  )
-                }
+                onClick={() => setShowEmailDialog(true)}
                 title="Enviar por Email"
               >
                 <Mail size={18} /><span className={w.actionLabel}>Correo</span>
@@ -2267,6 +2264,14 @@ export default function PurchaseOrderForm(props) {
         </div>
       </Drawer>
 
+      <OrderEmailDialog
+          open={showEmailDialog}
+          onClose={() => setShowEmailDialog(false)}
+          endpoint={id ? `${API_URL}/purchases/purchase-orders/${id}/email` : ""}
+          defaultRecipient={supplier?.email || ""}
+          defaultSubject={`Orden de Compra ${joinFullNumber(pv, number)} - Quintal Agross`}
+          onSent={() => showToast("Orden de compra enviada por correo", "success")}
+        />
       {/* Remito Selection Modal */}
       <Modal
         open={showRemitoModal}
