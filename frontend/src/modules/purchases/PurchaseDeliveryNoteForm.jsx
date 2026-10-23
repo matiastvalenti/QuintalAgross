@@ -8,7 +8,7 @@ import Drawer from "../../components/ui/Drawer";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { useWindow } from '../../context/WindowContext';
-import { openEditPurchaseOrder } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
@@ -71,7 +71,8 @@ export default function PurchaseDeliveryNoteForm(props) {
     initialData = null,
     isStandalone = false,
   } = props;
-  const { closeWindow, openWindow } = useWindow(); // Keep for now, might be removed if standalone
+  const { closeWindow, openWindow } = useWindow();
+  const { openEditPurchaseOrder } = useInternalCommercialDocuments(); // Keep for now, might be removed if standalone
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
