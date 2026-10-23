@@ -845,7 +845,8 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
 
   return (
     <>
-      <DocumentListPage 
+      <DocumentListPage
+        theme="quintal" 
         title="Libro de Remitos"
         breadcrumbs={[{ label: 'Suite Comercial' }, { label: 'Remitos' }]}
         kpis={!loading && !error ? kpis : []}

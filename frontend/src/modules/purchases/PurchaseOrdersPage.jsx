@@ -390,7 +390,8 @@ export default function PurchaseOrdersPage() {
 
   return (
     <>
-      <DocumentListPage 
+      <DocumentListPage
+        theme="quintal" 
         title="Libro de Compras"
         breadcrumbs={[{ label: 'Suite de Compras' }, { label: 'Órdenes de Compra' }]}
         kpis={kpis}
