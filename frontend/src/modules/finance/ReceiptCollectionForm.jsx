@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, 
@@ -43,6 +43,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
   const [applications, setApplications] = useState([]);
   const [payments, setPayments] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submittingRef = useRef(false);
   
   const [showInvoicesModal, setShowInvoicesModal] = useState(false);
   const [showVoidModal, setShowVoidModal] = useState(false);
@@ -493,7 +494,8 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
   };
 
   const handleSubmit = async () => {
-    if (!validation.valid || isSubmitting) return;
+    if (!validation.valid || isSubmitting || submittingRef.current) return;
+    submittingRef.current = true;
     setIsSubmitting(true);
     
     try {
@@ -529,6 +531,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         // the user said: "Si el backend no permite editar recibos aplicados, bloquear guardado y mostrar alerta"
         if (initialData.applications?.length > 0) {
           showToast("La edición de recibos con comprobantes aplicados aún no está soportada. Anule y vuelva a crear.", "error");
+          submittingRef.current = false;
           setIsSubmitting(false);
           return;
         }
@@ -600,6 +603,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
     } catch (err) {
       console.error(err);
       showToast(err.response?.data?.detail || "Error al registrar el recibo", "error");
+      submittingRef.current = false;
       setIsSubmitting(false);
     }
   };
