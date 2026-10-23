@@ -21,9 +21,9 @@ def calculate_line_totals(
     """
     
     # Contrato: fallback_qty ya esta expresada en unidades fisicas (LT/KG/UNI).
-    # Solo convertir cuando qty_packages fue suministrado explicitamente.
+    # Solo convertir cuando qty_packages fue suministrado explicitamente, incluso para envases fraccionarios.
     size = float(package_size) if package_size is not None else None
-    if size is not None and size > 1:
+    if size is not None and size > 0:
         if qty_packages is not None:
             used_qty_packages = float(qty_packages)
             total_units = used_qty_packages * size
@@ -45,7 +45,7 @@ def calculate_line_totals(
     return {
         "qty_packages": used_qty_packages,
         "package_size": used_package_size,
-        "qty": round(total_units, 2),
+        "qty": round(total_units, 6),
         "unit_price": round(float(unit_price), 2),
         "discount_pct": round(float(discount_pct), 2),
         "vat_rate": round(float(vat_rate), 4),
