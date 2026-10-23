@@ -18,6 +18,7 @@ import v from "../common/CommercialDocumentWorkspace.module.css";
 import w from "../common/InvoiceWorkbench.module.css";
 import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
 import BnaDivisasRateField, { argentinaToday } from "../common/BnaDivisasRateField";
+import { normalizeRemitoVatRate } from "../../utils/remitoPackages";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
 export default function PurchaseInvoiceForm(props) {
@@ -54,6 +55,7 @@ export default function PurchaseInvoiceForm(props) {
   const [exchangeRate, setExchangeRate] = useState(1);
   const [status, setStatus] = useState("DRAFT");
   const [docType, setDocType] = useState(initialDocType);
+  const [sourceInvoiceId, setSourceInvoiceId] = useState(initialSourceType === "invoice" ? initialSourceId : null);
   const [letter, setLetter] = useState("A");
   const [observations, setObservations] = useState("");
   const [vehicles, setVehicles] = useState([]);
@@ -85,7 +87,7 @@ export default function PurchaseInvoiceForm(props) {
     else if (mode === "new" && Array.isArray(initialDnIds) && initialDnIds.length > 0) {
         fetchFromMultipleRemitos(initialDnIds);
     }
-    else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note") && initialSourceId) {
+    else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note" || initialSourceType === "invoice") && initialSourceId) {
         fetchFromSource();
     }
   }, []);
@@ -120,7 +122,7 @@ export default function PurchaseInvoiceForm(props) {
                 _unit_content: factor,
                 _unit_label: line.package_unit || line.product?.container?.unit?.short_name || "u",
                 unit_price: Number(line.unit_price || 0),
-                vat_rate: line.vat_rate ?? 0.21,
+                vat_rate: normalizeRemitoVatRate(line.vat_rate),
                 discount_pct: Number(line.discount_pct || 0),
                 source_purchase_line_id: line.source_purchase_line_id || null,
                 source_dn_line_id: line.id,
@@ -179,6 +181,9 @@ export default function PurchaseInvoiceForm(props) {
         }
         setStatus(data.status || "DRAFT");
         setDocType(data.doc_type || "PURCHASE_INVOICE"); // Default to PURCHASE_INVOICE
+        setReasonType(data.reason_type || "");
+        setReturnStock(data.return_stock ?? true);
+        setSourceInvoiceId(data.source_invoice_id || null);
         setLetter(data.line || "A");
         
         // Para cada línea con producto, recuperar el contenido por envase
@@ -216,7 +221,8 @@ export default function PurchaseInvoiceForm(props) {
                 ...l, 
                 id: l.id || Math.random(),
                 _unit_content: unitContent,
-                qty_packages: qtyPackages
+                qty_packages: qtyPackages,
+                vat_rate: normalizeRemitoVatRate(l.vat_rate)
             };
         }));
         setItems(enrichedLines);
@@ -298,7 +304,7 @@ export default function PurchaseInvoiceForm(props) {
                       _container_name: l._container_name || 'Unidad',
                       unit_price: l.unit_price,
                       discount_pct: Number(l.discount_pct ?? 0),
-                      vat_rate: l.vat_rate ?? 0.21,
+                      vat_rate: normalizeRemitoVatRate(l.vat_rate),
                       source_purchase_line_id: l.source_purchase_line_id || null,
                       source_dn_line_id: l.source_dn_line_id || null, // Recibo vinculado cuando corresponde
                       _account_code: l._account_code || null,
@@ -330,7 +336,7 @@ export default function PurchaseInvoiceForm(props) {
                           _container_name: l._container_name || 'Unidad',
                           unit_price: parseFloat(l.unit_price || 0),
                           discount_pct: parseFloat(l.discount_pct || 0),
-                          vat_rate: parseFloat(l.vat_rate || 0.21),
+                          vat_rate: normalizeRemitoVatRate(l.vat_rate),
                           source_purchase_line_id: initialSourceType === 'delivery-note' ? (l.source_purchase_line_id || null) : (l.source_purchase_line_id || l.id),
                           source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: l.accounting_account_id || null,
@@ -360,7 +366,7 @@ export default function PurchaseInvoiceForm(props) {
                           _container_name: l.product?.container?.name || 'Unidad',
                           unit_price: l.unit_price,
                           discount_pct: l.discount_pct || 0,
-                          vat_rate: l.vat_rate || 0.21,
+                          vat_rate: normalizeRemitoVatRate(l.vat_rate),
                           source_purchase_line_id: initialSourceType === 'delivery-note' ? (l.source_purchase_line_id || null) : l.id,
                           source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: null,
@@ -380,7 +386,7 @@ export default function PurchaseInvoiceForm(props) {
         const sub = qty * (i.unit_price || 0);
         const bonif = sub * ((i.discount_pct || 0) / 100);
         const net = sub - bonif;
-        const vat = net * (i.vat_rate ?? 0.21);
+        const vat = net * normalizeRemitoVatRate(i.vat_rate);
         acc.subtotal += sub;
         acc.net += net;
         acc.vat += vat;
@@ -426,7 +432,7 @@ export default function PurchaseInvoiceForm(props) {
         total_amount: totals.total,
         reason_type: reasonType || null,
         return_stock: returnStock,
-        source_invoice_id: initialSourceType === 'invoice' ? initialSourceId : null,
+        source_invoice_id: sourceInvoiceId || null,
         lines: items.map(l => ({
             product_id: l.product_id,
             description: l.description,
@@ -434,7 +440,7 @@ export default function PurchaseInvoiceForm(props) {
             qty: l.qty,
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
-            vat_rate: l.vat_rate,
+            vat_rate: normalizeRemitoVatRate(l.vat_rate),
             accounting_account_id: l.accounting_account_id,
             source_purchase_line_id: l.source_purchase_line_id || null,
             source_dn_line_id: l.source_dn_line_id || null,
@@ -452,7 +458,7 @@ export default function PurchaseInvoiceForm(props) {
             body: JSON.stringify(payload)
         });
         if (res.ok) {
-            showToast("Factura de Compra guardada correctamente", "success"); // Changed Factura
+            showToast(`${documentLabel} guardada correctamente`, "success"); // Changed Factura
             const evtName = docType === 'PURCHASE_INVOICE' ? 'purchase-invoice-changed' : 'invoice-changed';
             window.dispatchEvent(new Event(evtName));
             if (window.opener) window.opener.dispatchEvent(new Event(evtName));
@@ -462,7 +468,7 @@ export default function PurchaseInvoiceForm(props) {
         } else {
             const err = await res.json();
             console.error("ERROR FROM BACKEND:", err);
-            showToast(err.detail || err.message || "Error al guardar la factura de compra", "error"); // Changed Factura
+            showToast(err.detail || err.message || `Error al guardar ${documentLabel.toLowerCase()}`, "error"); // Changed Factura
         }
     } catch (e) {
         console.error("NETWORK ERROR:", e);
@@ -517,8 +523,9 @@ export default function PurchaseInvoiceForm(props) {
 
   const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency === 'USD' ? 'USD' : 'ARS' }).format(val || 0);
   const fmtValue = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency }).format(val || 0);
+  const documentLabel = docType === 'PURCHASE_CREDIT_NOTE' ? 'Nota de Crédito de Compra' : docType === 'PURCHASE_DEBIT_NOTE' ? 'Nota de Débito de Compra' : 'Factura de Compra';
 
-  if (loading) return <LoadingScreen message="Cargando Factura de Compra..." />; // Changed Factura
+  if (loading) return <LoadingScreen message={`Cargando ${documentLabel.toLowerCase()}...`} />;
 
   return (
     <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} className={`${s.formCard} ${w.root} ${w.withExpense} ${isStandalone ? w.standalone : ''}`}>
@@ -565,7 +572,7 @@ export default function PurchaseInvoiceForm(props) {
                   </button>
                 )}
                 <div className={s.actionGroup}>
-                    <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title="Imprimir Factura de Compra">
+                    <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title={`Imprimir ${documentLabel.toLowerCase()}`}>
                         <Printer size={18} />
                     </button>
                 </div>
@@ -599,7 +606,7 @@ export default function PurchaseInvoiceForm(props) {
                                         _unit_content: qtyPerContainer,
                                         _unit_label: p.unit_of_measure || 'u',
                                         unit_price: p.cost_price || 0, // Use cost_price for purchases
-                                        vat_rate: p.tax_type?.rate ?? 0.21, 
+                                        vat_rate: normalizeRemitoVatRate(p.tax_type?.rate), 
                                         discount_pct: 0,
                                         // Cuenta contable de compra del producto (puede ser null si no está configurada)
                                         accounting_account_id: p.purchase_account_id || null, // Changed sales_account_id
@@ -647,7 +654,7 @@ export default function PurchaseInvoiceForm(props) {
                                         const qty = item.qty || 0;
                                         const hasPackages = qtyPackages !== undefined && qtyPackages !== null;
                                         const subtotal = qty * (item.unit_price || 0) * (1 - (item.discount_pct || 0) / 100);
-                                        const vatAmount = subtotal * (item.vat_rate || 0.21);
+                                        const vatAmount = subtotal * normalizeRemitoVatRate(item.vat_rate);
                                         const totalAmount = subtotal + vatAmount;
                                         
                                         return (
@@ -723,9 +730,9 @@ export default function PurchaseInvoiceForm(props) {
                                         <div style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#64748b', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{item._unit_label || 'u'}</div>
                                         <input type="number" className={s.tableInput} value={item.unit_price ?? 0} onChange={(e) => handleUpdateItem(item.id, 'unit_price', e.target.value)} />
                                         <input type="number" className={s.tableInput} value={item.discount_pct ?? 0} onChange={(e) => handleUpdateItem(item.id, 'discount_pct', e.target.value)} />
-                                        <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{((item.vat_rate || 0.21) * 100).toFixed(0)}%</div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{(normalizeRemitoVatRate(item.vat_rate) * 100).toFixed(0)}%</div>
                                         <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--primary)', textAlign: 'right', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
-                                            {fmtValue((item.qty * item.unit_price * (1 - (item.discount_pct||0)/100)) * (1 + (item.vat_rate||0.21)))}
+                                            {fmtValue((item.qty * item.unit_price * (1 - (item.discount_pct||0)/100)) * (1 + normalizeRemitoVatRate(item.vat_rate)))}
                                         </div>
                                         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '36px' }}>
                                             <button type="button" style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }} onClick={() => setItems(items.filter(i => i.id !== item.id))} title="Eliminar línea">
@@ -740,8 +747,8 @@ export default function PurchaseInvoiceForm(props) {
                     ) : (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 0', minHeight: 80 }}>
                             <Search size={24} style={{ marginBottom: 8, opacity: 0.3, color: 'var(--text-secondary)' }} />
-                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>Sin ítems a facturar</div>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Buscá un producto para agregarlo a la factura</div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>Sin ítems cargados</div>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Agregá un producto o concepto para continuar</div>
                         </div>
                     )}
                 </div>
@@ -928,10 +935,10 @@ export default function PurchaseInvoiceForm(props) {
               <div className={s.relationCard} style={{ opacity: initialSourceType ? 1 : 0.5 }}>
                   <div className={s.nodeTitle} style={{ color: initialSourceType ? '#10b981' : '#0b132b' }}>ORIGEN</div>
                   <div className={s.nodeStatus} style={{ color: initialSourceType ? '#10b981' : '#eab308' }}>
-                      {initialSourceType === 'sales-order' ? 'Completado' : initialSourceType === 'delivery-note' ? 'Remito' : initialSourceType === 'invoice' ? 'Factura' : 'Directo'}
+                      {initialSourceType === 'purchase-order' ? 'Orden de compra' : initialSourceType === 'delivery-note' ? 'Remito' : initialSourceType === 'invoice' ? 'Factura' : 'Directo'}
                   </div>
                   <div className={s.nodeMetric} style={{ color: '#0f172a' }}>
-                      {initialSourceType === 'sales-order' && sourceNumber ? `OV ${sourceNumber}` : 
+                      {initialSourceType === 'purchase-order' && sourceNumber ? `OC ${sourceNumber}` : 
                        initialSourceType === 'invoice' && sourceNumber ? `FC ${sourceNumber}` :
                        initialSourceType ? 'Vinculado' : 'Sin origen'}
                   </div>
@@ -939,7 +946,7 @@ export default function PurchaseInvoiceForm(props) {
 
               <ArrowRight size={14} color="#cbd5e1" style={{ flexShrink: 0 }} />
 
-              {docType !== 'DEBIT_NOTE' && (
+              {docType === 'PURCHASE_INVOICE' && (
                   <>
                       <div className={s.relationCard}>
                           <div className={s.nodeTitle} style={{ color: '#0b132b' }}>REMITO</div>
@@ -951,7 +958,7 @@ export default function PurchaseInvoiceForm(props) {
               )}
 
               <div className={s.relationCard} style={{ background: '#eff6ff', border: '1.5px solid #bfdbfe' }}>
-                  <div className={s.nodeTitle} style={{ color: '#1d4ed8' }}>{docType === 'CREDIT_NOTE' ? 'NOTA DE CRÉDITO' : docType === 'DEBIT_NOTE' ? 'NOTA DE DÉBITO' : 'FACTURA'}</div>
+                  <div className={s.nodeTitle} style={{ color: '#1d4ed8' }}>{docType === 'PURCHASE_CREDIT_NOTE' ? 'NOTA DE CRÉDITO' : docType === 'PURCHASE_DEBIT_NOTE' ? 'NOTA DE DÉBITO' : 'FACTURA'}</div>
                   <div className={s.nodeStatus} style={{ color: '#1d4ed8' }}>Activa</div>
                   <div className={s.nodeMetric} style={{ color: '#0f172a' }}>{fmt(totals.total)}</div>
               </div>
@@ -1023,7 +1030,7 @@ export default function PurchaseInvoiceForm(props) {
                 <span className={s.footerCompactValue}>{fmt(totals.vat)}</span>
             </div>
             <div className={s.footerCompactItem}>
-                <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>TOTAL FACTURA</span>
+                <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>{`TOTAL ${documentLabel.toUpperCase()}`}</span>
                 <span className={s.footerCompactTotal}>{fmt(totals.total)}</span>
             </div>
         </div>
