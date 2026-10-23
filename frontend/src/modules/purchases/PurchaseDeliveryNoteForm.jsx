@@ -472,7 +472,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                  qty_received: l.qty_fulfilled, // Changed from qty_fulfilled
                  qty_pending: l.qty_pending,
                  qty: l.qty_pending, // User requested total pendiente by default
-                 qty_packages: uc > 1 ? l.qty_pending / uc : l.qty_pending,
+                 qty_packages: Number(uc) > 0 ? l.qty_pending / Number(uc) : 0,
                  unit_price: l.unit_price, // This is COST
                  discount_pct: l.discount_pct,
                  vat_rate: l.vat_rate,
@@ -675,6 +675,7 @@ export default function PurchaseDeliveryNoteForm(props) {
     const payload = {
         entity_id: entity.id,
         warehouse_id: warehouseId,
+        sourceId: sourceType === 'purchase-order' ? (sourceOrderId || sourceId) : null,
         number: number,
         date: date,
         due_date: dueDate,
@@ -697,8 +698,8 @@ export default function PurchaseDeliveryNoteForm(props) {
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
             vat_rate: l.vat_rate,
-            source_purchase_line_id: l.source_purchase_line_id || l.id,
-            purchase_order_id: l.purchase_order_id
+            source_purchase_line_id: l.source_purchase_line_id || null,
+            purchase_order_id: l.purchase_order_id || (sourceType === 'purchase-order' ? (sourceOrderId || sourceId) : null)
         }))
     };
 
@@ -708,11 +709,6 @@ export default function PurchaseDeliveryNoteForm(props) {
         let url = `${API_URL}/purchases/delivery-notes/`;
         if (isEdit) {
             url = `${API_URL}/purchases/delivery-notes/${id}`; // Changed sales to purchases
-        } else if (sourceId) {
-            const actualSourceId = sourceOrderId || sourceId;
-            if (sourceType === 'purchase-order') { // Changed sales-order
-                url = `${API_URL}/purchases/delivery-notes/from-oc/${actualSourceId}`; // Changed sales to purchases, from-ov to from-oc
-            }
         }
         
         const finalPayload = { 
