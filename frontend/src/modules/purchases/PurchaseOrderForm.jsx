@@ -729,7 +729,7 @@ export default function PurchaseOrderForm(props) {
 
   // Open remito selection modal — show all order lines with pending qty
   const handleOpenRemitoModal = () => {
-    if (!id) return showToast("Guarde la orden antes de remitir", "warning");
+    if (!id) return showToast("Guarde la orden antes de recibir", "warning");
     // Build initial qty map: qty_pending for each line
     const initial = {};
     items.forEach(item => {
@@ -790,7 +790,7 @@ export default function PurchaseOrderForm(props) {
     console.log("[OC MODAL] draft final a localStorage:", draftLines);
 
     if (draftLines.length === 0) {
-      return showToast("Seleccioná al menos un ítem para remitir", "warning");
+      return showToast("Seleccioná al menos un ítem para recibir", "warning");
     }
 
     // Guardar líneas en localStorage para que la ventana standalone las lea
@@ -1347,7 +1347,7 @@ export default function PurchaseOrderForm(props) {
                                     borderRadius: 4,
                                   }}
                                 >
-                                  Remitido: {qtyDelivered} / {qtyOrdered} · Pte:{" "}
+                                  Recibido: {qtyDelivered} / {qtyOrdered} · Pte:{" "}
                                   {(qtyOrdered - qtyDelivered).toFixed(2)}
                                 </div>
                               )}
@@ -2450,7 +2450,7 @@ export default function PurchaseOrderForm(props) {
                           marginTop: 2,
                         }}
                       >
-                        ✓ Totalmente remitido
+                        ✓ Totalmente recibido
                       </div>
                     )}
                   </div>
@@ -2472,7 +2472,7 @@ export default function PurchaseOrderForm(props) {
                       {unitLabel}
                     </div>
                   </div>
-                  {/* YA REMIT. */}
+                  {/* YA RECIBIDO */}
                   <div style={{ textAlign: "center" }}>
                     <div
                       style={{
