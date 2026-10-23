@@ -425,25 +425,29 @@ export default function SalesOrdersPage({ isWindow }) {
         <th className={s.th} style={{ textAlign: 'right' }}>DILIGENCIAS</th>
       </>
     ),
+    emptyContent: (
+      <EmptyState
+        icon={Layers}
+        title={orders.length ? "Sin órdenes coincidentes" : "Todavía no hay órdenes de venta"}
+        description={orders.length ? "Probá con otros filtros o cambiá la búsqueda." : "Comenzá registrando una orden de venta."}
+        actionLabel="Nueva Orden"
+        onAction={handleOpenNew}
+        style={{
+          width: "100%",
+          maxWidth: 440,
+          boxSizing: "border-box",
+          padding: "22px 16px",
+          border: "none",
+          background: "transparent",
+          gap: 10,
+        }}
+      />
+    ),
     body: loading ? (
         <TableRowSkeleton rows={10} cols={8} />
     ) : error ? (
         <tr><td colSpan="8"><ErrorState message={error} onRetry={fetchAll} /></td></tr>
-    ) : sorted.length === 0 ? (
-      <tr>
-        <td colSpan="8">
-          <div className={s.salesEmptyState}>
-          <EmptyState 
-              icon={Layers} 
-              title="Sin órdenes coincidentes"
-              description="Ajustá los filtros o registrá una nueva orden."
-              actionLabel="Nueva Orden"
-              onAction={handleOpenNew}
-          />
-          </div>
-        </td>
-      </tr>
-    ) : (
+    ) : sorted.length === 0 ? null : (
       paginatedData.map((o) => (
         <Fragment key={o.id}>
         <tr className={`${s.row} ${quickViewId === o.id ? s.selectedRow : ''}`} onClick={() => handleRowClick(o.id)} onDoubleClick={() => handleOpenDetail(o.id, o.number)}>
