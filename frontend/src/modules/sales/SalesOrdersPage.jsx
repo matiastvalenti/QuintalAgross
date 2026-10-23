@@ -412,6 +412,7 @@ export default function SalesOrdersPage({ isWindow }) {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
         <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>NUMERAL</th>
