@@ -2275,7 +2275,7 @@ export default function PurchaseOrderForm(props) {
       {/* Remito Selection Modal */}
       <Modal
         open={showRemitoModal}
-        title="Seleccionar ítems a remitir"
+        title="Seleccionar productos a recibir"
         onClose={() => setShowRemitoModal(false)}
         wide
       >
@@ -2288,7 +2288,7 @@ export default function PurchaseOrderForm(props) {
               marginTop: 0,
             }}
           >
-            Seleccioná los productos y cantidades a incluir en este remito. Lo
+            Seleccioná los productos y cantidades a ingresar con este remito. Lo
             restante quedará como pendiente.
           </p>
 
@@ -2321,9 +2321,9 @@ export default function PurchaseOrderForm(props) {
               <div></div>
               <div>PRODUCTO</div>
               <div style={{ textAlign: "center" }}>PEDIDO</div>
-              <div style={{ textAlign: "center" }}>YA REMIT.</div>
+              <div style={{ textAlign: "center" }}>RECIBIDO</div>
               <div style={{ textAlign: "center" }}>PENDIENTE</div>
-              <div style={{ textAlign: "center" }}>A REMITIR</div>
+              <div style={{ textAlign: "center" }}>A RECIBIR</div>
             </div>
             {items.map((item) => {
               const factor = parseFloat(
@@ -2409,7 +2409,7 @@ export default function PurchaseOrderForm(props) {
                       <AlertCircle
                         size={18}
                         style={{ color: "#059669" }}
-                        title="Totalmente remitido"
+                        title="Totalmente recibido"
                       />
                     )}
                   </div>
