@@ -597,10 +597,8 @@ export default function InvoicesPage() {
         <td colSpan="7">
           <EmptyState 
               icon={Layers} 
-              title="Sin facturas coincidentes"
-              description="Ajustá los filtros o registrá una nueva factura."
-              actionLabel="Nueva Factura"
-              onAction={handleOpenNew}
+              title={invoices.length ? "No hay facturas que coincidan" : "Todavía no hay facturas"}
+              description={invoices.length ? "Probá con otros filtros o cambiá la búsqueda." : "Usá Nueva Factura para registrar el primer comprobante."}
           />
         </td>
       </tr>
