@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, X } from 'lucide-react';
 import s from './Autocomplete.module.css';
+import { useWindowVisibility } from '../workspace/WindowVisibilityContext';
 
 /**
  * Autocomplete Component
@@ -33,6 +34,16 @@ export default function Autocomplete({
     const [isOpen, setIsOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [highlightIndex, setHighlightIndex] = useState(-1);
+    const { isWindowMinimized } = useWindowVisibility();
+
+    // Los resultados se renderizan en document.body (portal). Ocultarlos en
+    // el mismo commit de minimizar evita que queden flotando sobre el ERP.
+    useLayoutEffect(() => {
+        if (isWindowMinimized) {
+            setIsOpen(false);
+            setHighlightIndex(-1);
+        }
+    }, [isWindowMinimized]);
     
     // If we have an initial value (or selected), show it in input?
     // Usually for search-select, we want the input to show the selected name.
@@ -185,7 +196,7 @@ export default function Autocomplete({
                 {loading && <div className={s.spinner} />}
             </div>
 
-            {isOpen && createPortal(
+            {isOpen && !isWindowMinimized && createPortal(
                 <div ref={dropdownRef} className={`${s.dropdown} ${s.open} ${variant === "invoice" ? s.invoiceDropdown : ""}`} style={dropdownStyle}>
                     {results.length > 0 ? (
                         results.map((item, index) => (
