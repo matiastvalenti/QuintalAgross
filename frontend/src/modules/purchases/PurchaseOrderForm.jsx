@@ -64,6 +64,7 @@ import LoadingScreen from "../../components/ui/LoadingScreen";
 
 import { useInternalCommercialDocuments } from "../common/useInternalCommercialDocuments";
 import OrderEmailDialog from "../common/OrderEmailDialog";
+import BnaDivisasRateField, { argentinaToday } from "../common/BnaDivisasRateField";
 
 
 const getPurchaseLineName = (line) => {
@@ -104,9 +105,9 @@ export default function PurchaseOrderForm(props) {
   const [purchaseTab, setPurchaseTab] = useState("products");
   const [saving, setSaving] = useState(false);
   // --- Header Data ---
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(argentinaToday());
   const [dueDate, setDueDate] = useState(
-    new Date().toISOString().split("T")[0],
+    argentinaToday(),
   );
   const [ctroCosto, setCtroCosto] = useState(String(costCenter || 1));
   const [supplier, setSupplier] = useState(null);
@@ -194,7 +195,6 @@ export default function PurchaseOrderForm(props) {
   useEffect(() => {
     if (mode === "edit" && id) fetchPurchaseOrder(id);
     else if (mode === "new") {
-      fetchExchangeRate();
       fetchNextNumber(pv);
     }
   }, [mode, id, pv]);
@@ -448,17 +448,6 @@ export default function PurchaseOrderForm(props) {
       showToast("Error al cargar orden", "error");
     } finally {
       if (!silent) setLoading(false);
-    }
-  };
-
-  const fetchExchangeRate = async () => {
-    const token = localStorage.getItem("token");
-    const res = await fetch(`${API_URL}/accounting/fx/usd`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setExchangeRate(data.rate);
     }
   };
 
@@ -1839,24 +1828,22 @@ export default function PurchaseOrderForm(props) {
                   </select>
                 )}
               </div>
-              <div className={s.sideField}>
-                <label>T. CAMBIO</label>
-                {isReadOnly ? (
-                  <div className={s.sideInput}>
-                    {Number(exchangeRate || 1).toLocaleString("es-AR", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
-                  </div>
-                ) : (
-                  <input
-                    type="number"
-                    className={s.sideInput}
+              {isReadOnly ? (
+                <div className={s.sideField}>
+                  <label>T. CAMBIO</label>
+                  <div className={s.sideInput}>{Number(exchangeRate || 1).toLocaleString("es-AR", { maximumFractionDigits: 4 })}</div>
+                </div>
+              ) : (
+                <div className={w.fxOrderField}>
+                  <BnaDivisasRateField
                     value={exchangeRate}
-                    onChange={(e) => setExchangeRate(e.target.value)}
+                    onChange={setExchangeRate}
+                    date={date}
+                    currency={currency}
+                    isNew={mode === "new"}
                   />
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
