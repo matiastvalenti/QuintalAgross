@@ -5,6 +5,7 @@ import ErrorBoundary from "../common/ErrorBoundary";
 import Badge from "../ui/Badge";
 import s from "./WindowFrame.module.css";
 import { clampWindowBounds, DOCK_HEIGHT, WINDOW_MARGIN } from "./windowGeometry";
+import { WindowVisibilityContext } from "./WindowVisibilityContext";
 
 export default function WindowFrame({ window: win, component: Component }) {
   const {
@@ -171,16 +172,18 @@ export default function WindowFrame({ window: win, component: Component }) {
 
       <div className={s.content}>
         <ErrorBoundary onClose={() => closeWindow(win.id)}>
-          {Component ? (
-            <Component
-              {...win.props}
-              isWindow
-              windowId={win.id}
-              onClose={() => closeWindow(win.id)}
-            />
-          ) : (
-            <div>Component Not Found</div>
-          )}
+          <WindowVisibilityContext.Provider value={{ isWindowMinimized: Boolean(win.isMinimized) }}>
+            {Component ? (
+              <Component
+                {...win.props}
+                isWindow
+                windowId={win.id}
+                onClose={() => closeWindow(win.id)}
+              />
+            ) : (
+              <div>Component Not Found</div>
+            )}
+          </WindowVisibilityContext.Provider>
         </ErrorBoundary>
       </div>
 
