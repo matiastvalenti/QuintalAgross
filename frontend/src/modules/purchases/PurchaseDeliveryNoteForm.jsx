@@ -337,8 +337,8 @@ export default function PurchaseDeliveryNoteForm(props) {
              // Changed from sales_order_id
         }
         setBuyer(data.buyer || ''); // Changed from vendedor
-        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
-        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
+        setBuyerId(data.salesperson_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -410,8 +410,8 @@ export default function PurchaseDeliveryNoteForm(props) {
         setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
                 setBuyer(data.buyer || ''); // Changed from vendedor
-        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
-        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
+        setBuyerId(data.salesperson_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -441,8 +441,8 @@ export default function PurchaseDeliveryNoteForm(props) {
         setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
                 setBuyer(data.buyer || ''); // Changed from vendedor
-        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
-        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
+        setBuyerId(data.salesperson_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -687,8 +687,8 @@ export default function PurchaseDeliveryNoteForm(props) {
         currency: currency,
         exchange_rate: exchangeRate,
         buyer: buyer,
-        buyer_id: buyerId,
-        purchase_condition_id: selectedConditionId,
+        salesperson_id: buyerId,
+        sale_condition_id: selectedConditionId,
         cost_center: parseInt(ctroCosto),
         notes: observations,
         vehicle_driver: vehicleDriver,
