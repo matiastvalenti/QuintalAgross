@@ -54,6 +54,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import s from "./PurchaseOrderForm.module.css";
+import { getPendingContainers, validateDocumentSelection } from "../../utils/documentQuantities";
 import w from "../sales/SalesOrderWorkspace.module.css";
 import {
   TraceabilityStatusBadge,
@@ -728,20 +729,9 @@ export default function PurchaseOrderForm(props) {
     if (!id) return showToast("Guarde la orden antes de remitir", "warning");
     // Build initial qty map: qty_pending for each line
     const initial = {};
-    items.forEach((item) => {
-      const realId = item.id;
-      const qtyDelivered = parseFloat(item.qty_received || 0);
-      const qtyOrdered = parseFloat(item.qty || 0);
-      const factor = parseFloat(
-        item.product?.quantity_per_container ||
-          item.quantity_per_container ||
-          item._unit_content ||
-          1,
-      );
-      const pendingBase = Math.max(0, qtyOrdered - qtyDelivered);
-      if (pendingBase > 0) {
-        initial[realId] = Number((pendingBase / factor).toFixed(2));
-      }
+    items.forEach(item => {
+      const pending = getPendingContainers(item, "qty_received");
+      if (pending > 0) initial[item.id] = pending;
     });
     setRemitoQtys(initial);
     setShowRemitoModal(true);
@@ -749,19 +739,8 @@ export default function PurchaseOrderForm(props) {
 
   // Confirm and open the DeliveryNote with the selected lines
   const handleConfirmRemito = () => {
-    // Validate in base units before creating a delivery-note draft.
-    for (const line of items) {
-      const packages = Number(remitoQtys[line.id] || 0);
-      if (!Number.isFinite(packages) || packages < 0) {
-        return showToast("La cantidad de envases debe ser válida", "warning");
-      }
-      if (packages === 0) continue;
-      const factor = Number(line.product?.quantity_per_container || line.quantity_per_container || line._unit_content || 1);
-      const pending = Math.max(0, Number(line.qty || 0) - Number(line.qty_received || 0));
-      if (!Number.isFinite(factor) || factor <= 0 || packages * factor > pending + 0.000001) {
-        return showToast(`La cantidad a remitir supera el pendiente de ${line.description || line.name || "un producto"}`, "warning");
-      }
-    }
+    const check = validateDocumentSelection(items, remitoQtys, "qty_received");
+    if (!check.valid) return showToast(check.reason, "warning");
     const selectedLines = items
       .filter((item) => {
         const qty = parseFloat(remitoQtys[item.id] || 0);
@@ -849,12 +828,9 @@ export default function PurchaseOrderForm(props) {
     }
 
     const initial = {};
-    items.forEach((item) => {
-      const factor = parseFloat(item._unit_content || 1);
-      const pendingUnits =
-        parseFloat(item.qty || 0) - parseFloat(item.qty_invoiced || 0);
-      const pendingPkgs = factor > 0 ? pendingUnits / factor : 0;
-      if (pendingPkgs > 0) initial[item.id] = pendingPkgs;
+    items.forEach(item => {
+      const pending = getPendingContainers(item, "qty_invoiced");
+      if (pending > 0) initial[item.id] = pending;
     });
 
     if (Object.keys(initial).length === 0) {
@@ -866,16 +842,8 @@ export default function PurchaseOrderForm(props) {
   };
 
   const handleConfirmInvoice = () => {
-    for (const item of items) {
-      const packages = Number(invoiceQtys[item.id] || 0);
-      if (!Number.isFinite(packages) || packages < 0) return showToast("Cantidad a facturar inválida", "warning");
-      if (packages === 0) continue;
-      const factor = Number(item._unit_content || item.quantity_per_container || 1);
-      const pending = Math.max(0, Number(item.qty || 0) - Number(item.qty_invoiced || 0));
-      if (!Number.isFinite(factor) || factor <= 0 || packages * factor > pending + 0.000001) {
-        return showToast("La cantidad a facturar supera el pendiente", "warning");
-      }
-    }
+    const check = validateDocumentSelection(items, invoiceQtys, "qty_invoiced");
+    if (!check.valid) return showToast(check.reason, "warning");
     const selectedLines = items
       .filter((item) => parseFloat(invoiceQtys[item.id] || 0) > 0)
       .map((item) => {
