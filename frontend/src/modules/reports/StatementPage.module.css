@@ -763,3 +763,49 @@
 /* Scrollbar */
 .container::-webkit-scrollbar { width: 6px; }
 .container::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+/* Cuenta corriente: lectura consistente con las ventanas comerciales dark. */
+.pageLayout {
+  background: #101729;
+  color: #f8fafc;
+}
+.topBar {
+  background: #202c46;
+  border-color: #394861;
+}
+.summaryCard, .filterBar, .tableWrapper, .tableContainer, .remitosSection {
+  background: #202c46;
+  color: #f8fafc;
+  border-color: #394861;
+}
+.summaryCard :is(.cardTitle, .cardSubLabel), .filterLabel,
+.cell, .totalLabelCell, .remitosHeader, .emptyRemitosBox strong {
+  color: #c5d1e2;
+}
+.summaryCard .balanceValue, .docTitle, .numberCell { color: #f8fafc; }
+.thead, .thead .th, .groupHeader th, .remitosTable th, .tableFoot, .tfoot td {
+  background: #273551;
+  color: #c5d1e2;
+  border-color: #394861;
+}
+.row { border-color: #394861; }
+.row:hover { background: #273551; }
+.pageLayout :is(.dateRange, .presetChip, .glassSelect, .toggleButtons, .searchContainer, .dateInp, .searchInp, .exportBtn) {
+  background: #151f35 !important;
+  color: #f8fafc;
+  border-color: #465875;
+  color-scheme: dark;
+}
+.pageLayout input::placeholder { color: #99aac0; }
+.tglBtn.active { background: #6955cf; color: #fff; }
+.advancedToggleBtn:hover, .presetChip:hover { background: #324260; color: #fff; }
+.remitosTable td { border-color: #394861; color: #c5d1e2; }
+
+.pageLayout { container-type: inline-size; }
+@container (max-width: 1050px) {
+  .summaryHeader { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .filterRowPrimary { flex-wrap: wrap; }
+}
+@container (max-width: 680px) {
+  .summaryHeader { grid-template-columns: minmax(0,1fr); }
+  .topBar { flex-wrap: wrap; gap: 10px; }
+}
