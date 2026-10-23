@@ -945,7 +945,7 @@ export default function DeliveryNoteForm(props) {
 
   return (
     <>
-      <div data-commercial-document="true" className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${v.shell} ${v.remito} ${isStandalone ? v.standalone : ''}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
+      <div data-commercial-document="true" data-has-items={items.length > 0} className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${v.shell} ${v.remito} ${isStandalone ? v.standalone : ''}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
           {isLocked && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(37, 99, 235, 0.05)', color: '#1d4ed8', padding: '8px 24px', fontSize: 10, fontWeight: 900, textAlign: 'center', borderBottom: '1px solid rgba(37, 99, 235, 0.1)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, backdropFilter: 'blur(4px)' }}>
                 <Receipt size={14} /> DOCUMENTO BLOQUEADO POR FACTURACIÓN. NO SE PERMITEN MODIFICACIONES.
