@@ -1,0 +1,265 @@
+/* Shared layout for Remitos and Facturas in the internal ERP tabbed workspace.
+   OV / OC keep their own tabbed order workspace. */
+.shell {
+  --doc-bg: #101729;
+  --doc-panel: #202c46;
+  --doc-control: #151f35;
+  --doc-line: #394861;
+  --doc-text: #f8fafc;
+  --doc-muted: #bdcbe0;
+  --text: var(--doc-text);
+  --text-primary: var(--doc-text);
+  --text-secondary: var(--doc-muted);
+  --border-color: var(--doc-line);
+  --border-light: var(--doc-line);
+  --bg-page: var(--doc-bg);
+  --panel-bg: var(--doc-panel);
+  --primary: #9e8bff;
+  background: var(--doc-bg) !important;
+  color: var(--doc-text);
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 15px 20px 14px !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-color: #51617f transparent;
+  container-type: inline-size;
+}
+.shell:focus-within {scroll-behavior: smooth;}
+.standalone {min-height: 100%;height: 100%;padding: 18px 22px !important;}
+.header {
+  flex: 0 0 auto;
+  min-height: 56px !important;
+  height: auto !important;
+  padding: 0 0 12px !important;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--doc-line) !important;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+}
+.header :global(h1) {
+  color: #f8fafc !important;
+  font-size: 16px !important;
+  line-height: 1.4;
+  font-weight: 850;
+  margin: 0;
+}
+.header :global(button) {min-height: 34px;}
+.header :global(button:focus-visible),
+.sectionLink:focus-visible {outline: 2px solid #b7a7ff;outline-offset:2px;}
+.header :global([class*="headerMeta"]) {
+  color: var(--doc-muted);
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.sections {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 0 0 2px;
+}
+.sectionLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--doc-line);
+  background: var(--doc-panel);
+  color: #d4def0;
+  border-radius: 8px;
+  min-height: 34px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sectionLink:hover {background:#334466;color:#fff;border-color:#8270e2;}
+.body {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) minmax(270px,305px) !important;
+  gap: 14px !important;
+  align-items: start;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: auto !important;
+  flex: 1 1 auto;
+}
+.left {
+  min-width: 0;
+  min-height: 0;
+  height: auto !important;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.right {
+  min-width: 0;
+  min-height: 0;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding-right: 0 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.panel {
+  background: var(--doc-panel) !important;
+  color: var(--doc-text);
+  border: 1px solid var(--doc-line) !important;
+  border-radius: 12px !important;
+  min-width: 0;
+}
+.panelTitle {color: #d4dff2 !important;font-size:10px;letter-spacing:.07em;}
+.bento {
+  background: var(--doc-panel) !important;
+  border: 1px solid var(--doc-line) !important;
+  border-radius: 12px !important;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 145px;
+  height: auto;
+  max-height: 440px;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  scrollbar-color: #51617f var(--doc-panel);
+}
+.bento :global([class*="itemsList"]) {
+  min-height: 80px;
+  max-height: none;
+  padding-right: 0;
+  overflow: visible;
+}
+.bento :global([class*="searchRibbon"]) {min-width:0;}
+.tableHeader,
+.tableRow {
+  display: grid !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.invoice .tableHeader,
+.invoice .tableRow {
+  grid-template-columns:
+    minmax(220px,2.2fr) minmax(72px,.7fr) minmax(82px,.85fr)
+    58px minmax(90px,.9fr) 62px 60px minmax(95px,.9fr) 46px !important;
+  min-width: 980px !important;
+}
+.remito .tableHeader,
+.remito .tableRow {
+  grid-template-columns: minmax(260px,2fr) 75px 85px 50px 95px 110px 40px !important;
+  min-width: 780px !important;
+}
+.tableHeader {
+  background: #293753 !important;
+  border: 0;
+  border-bottom: 1px solid #465875;
+  border-radius: 10px 10px 0 0 !important;
+  height: auto !important;
+  min-height: 36px !important;
+  padding: 7px 12px !important;
+}
+.tableHeader :global([class*="th"]) {
+  color: #d1dcf0 !important;
+  font-size: 10px !important;
+  white-space: nowrap;
+}
+.tableRow {
+  background: var(--doc-panel) !important;
+  color: var(--doc-text);
+  min-height: 50px !important;
+  height: auto !important;
+  padding: 7px 12px !important;
+  border-bottom: 1px solid var(--doc-line) !important;
+}
+.tableRow > * {min-width:0;}
+.tableRow[data-exceeding="true"] {
+  background: #482939 !important;
+  border-left: 3px solid #ff888d;
+}
+.shell :global(input:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
+.shell :global(select),
+.shell :global(textarea) {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc;
+  background-color: var(--doc-control) !important;
+  border: 1px solid #465875 !important;
+  border-radius: 7px;
+  box-sizing: border-box;
+  color-scheme: dark;
+  min-width: 0;
+}
+.shell :global(input::placeholder),
+.shell :global(textarea::placeholder) {color:#93a6c4 !important;-webkit-text-fill-color:#93a6c4;}
+.shell :global(input:read-only),
+.shell :global(input:disabled),
+.shell :global(select:disabled) {
+  background:#28354c !important;
+  color:#c1cde0 !important;
+  -webkit-text-fill-color:#c1cde0;
+}
+.shell :global(input:focus-visible),
+.shell :global(select:focus-visible),
+.shell :global(textarea:focus-visible) {
+  outline: 2px solid #9783f5 !important;
+  outline-offset: 1px;
+}
+.shell :global(label) {color:#c1cde0;}
+.shell :global([class*="summaryItem"]),
+.shell :global([class*="relationCard"]),
+.shell :global([class*="nodeMetric"]) {
+  background:var(--doc-panel);
+  color:var(--doc-text);
+  border-color:var(--doc-line);
+}
+.shell :global([class*="summaryLabel"]),
+.shell :global([class*="footerCompactLabel"]) {color:#bdcbe0;}
+.shell :global([class*="summaryValue"]),
+.shell :global([class*="footerCompactValue"]),
+.shell :global([class*="footerCompactTotal"]) {color:#f8fafc;}
+.footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  min-width:0;
+  flex: 0 0 auto;
+  background: #202c46 !important;
+  border: 1px solid var(--doc-line) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 -8px 24px rgba(5,11,24,.35);
+  padding: 10px 14px !important;
+  margin-top: auto !important;
+  gap: 14px;
+}
+@container (max-width: 1050px) {
+  .body {grid-template-columns: minmax(0, 1fr) !important;}
+  .right {display:grid;grid-template-columns: repeat(2,minmax(0,1fr));gap:10px;}
+  .header {align-items:flex-start;}
+}
+@container (max-width: 680px) {
+  .shell {padding: 12px !important;}
+  .right {display:flex;flex-direction:column;}
+  .footer {justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .header :global(h1) {font-size:14px !important;}
+}
