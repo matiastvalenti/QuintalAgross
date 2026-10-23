@@ -1024,7 +1024,7 @@ export default function InvoiceForm(props) {
                                 <span>&middot;</span>
                             </>
                         )}
-                        <span className={s.metaDate}>{new Date(date).toLocaleDateString('es-AR')}</span>
+
                         {initialSourceType === 'sales-order' && sourceNumber && (
                             <>
                                 <span style={{ color: '#24389c', fontWeight: 800 }}>OV {sourceNumber} &middot; {entity?.name || 'Cliente'}</span>
