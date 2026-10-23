@@ -605,7 +605,7 @@ export default function PurchaseInvoiceForm(props) {
                                     }]);
                                 }}
                                 placeholder="Escriba para buscar productos para añadir..."
-                                variant="glass"
+                                variant="invoice"
                                 icon={<Search size={16} style={{ color: 'var(--primary)' }}/>}
                                 minChars={0}
                                 clearOnSelect={true}
@@ -757,7 +757,7 @@ export default function PurchaseInvoiceForm(props) {
                             <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text)', textAlign: 'right' }}>{entity?.name || '-'}</div>
                         ) : (
                             <div style={{ flex: 1 }}>
-                                <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
+                                <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="invoice" />
                             </div>
                         )}
                     </div>
