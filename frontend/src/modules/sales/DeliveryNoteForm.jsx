@@ -75,7 +75,7 @@ import v from "../common/CommercialDocumentWorkspace.module.css";
 import CommercialDocumentNav from "../common/CommercialDocumentNav";
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
-import { unitsToPackages, packagesToUnits, formatRemitoQuantity, packageFactor } from "../../utils/remitoPackages";
+import { unitsToPackages, packagesToUnits, formatRemitoQuantity, packageFactor, normalizeRemitoVatRate } from "../../utils/remitoPackages";
 import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
 
 export default function DeliveryNoteForm(props) {
@@ -235,7 +235,7 @@ export default function DeliveryNoteForm(props) {
                 qty_packages: parseFloat(l.qty_packages || 0) || undefined,
                 unit_price: parseFloat(l.unit_price || 0),
                 discount_pct: parseFloat(l.discount_pct || 0),
-                vat_rate: parseFloat(l.vat_rate || 0.21),
+                vat_rate: normalizeRemitoVatRate(l.vat_rate),
                 _account_code: l.sales_account_code || l._account_code || 'S/C',
                 _unit_content: parseFloat(l._unit_content || 1),
                 _container_name: l._container_name || 'Unidad',
@@ -410,7 +410,7 @@ export default function DeliveryNoteForm(props) {
                 qty: l.qty,
                 unit_price: l.unit_price,
                 discount_pct: l.discount_pct,
-                vat_rate: l.vat_rate,
+                vat_rate: normalizeRemitoVatRate(l.vat_rate),
                 _account_code: l.product?.sales_account_code || 'S/C',
                 _unit_content: l.product?.quantity_per_container || 1,
                 _container_name: l.product?.container?.name || 'Unidad',
@@ -514,7 +514,7 @@ export default function DeliveryNoteForm(props) {
               qty: l.qty_pending, // User requested total pendiente by default
               unit_price: l.unit_price,
               discount_pct: l.discount_pct,
-              vat_rate: l.vat_rate,
+              vat_rate: normalizeRemitoVatRate(l.vat_rate),
               _account_code: l.sales_account_code || 'S/C',
               _unit_content: l.quantity_per_container || 1,
               _container_name: l.container_name || 'Unidad',
@@ -571,7 +571,7 @@ export default function DeliveryNoteForm(props) {
       qty_packages: 1,
       unit_price: product.base_price || product.cost_price || 0,
       discount_pct: 0,
-      vat_rate: product.tax_type?.rate || 0.21,
+      vat_rate: normalizeRemitoVatRate(product.tax_type?.rate),
       _account_code: product.sales_account_code || 'S/C',
       _unit_content: product.quantity_per_container || 1,
       _container_name: product.container?.name || 'Unidad',
@@ -640,7 +640,7 @@ export default function DeliveryNoteForm(props) {
         qty_packages: Number(factor) > 0 ? qtyBase / Number(factor) : qtyBase,
         unit_price: finalUnitPrice,
         discount_pct: item.discount_pct || 0,
-        vat_rate: item.vat_rate || 0.21,
+        vat_rate: normalizeRemitoVatRate(item.vat_rate),
         _account_code: item.sales_account_code || 'S/C',
         _unit_content: item.quantity_per_container || 1,
         _container_name: item.container_name || 'Unidad',
@@ -760,7 +760,7 @@ export default function DeliveryNoteForm(props) {
             package_size: l._unit_content,
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
-            vat_rate: l.vat_rate,
+            vat_rate: normalizeRemitoVatRate(l.vat_rate),
             source_sales_line_id: l.source_sales_line_id,
             source_purchase_line_id: l.source_purchase_line_id
         }))
@@ -1095,7 +1095,7 @@ export default function DeliveryNoteForm(props) {
                                         
                                         const totalQty = qty;
                                         const subtotalNeto = totalQty * (item.unit_price || 0) * (1 - (item.discount_pct || 0)/100);
-                                        const vatAmount = subtotalNeto * (item.vat_rate || 0.21);
+                                        const vatAmount = subtotalNeto * normalizeRemitoVatRate(item.vat_rate);
                                         const totalAmount = subtotalNeto + vatAmount;
                                         
                                         return (
