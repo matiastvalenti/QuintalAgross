@@ -23,7 +23,7 @@ import { formatNumberAR, formatDocumentType } from '../../utils/formatters';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-export default function ReceiptCollectionForm({ mode = 'new', source = 'manual', initialData, initialInvoice }) {
+export default function ReceiptCollectionForm({ mode = 'new', source = 'manual', initialData, initialInvoice, onClose, onModeChange, onSaved }) {
   const navigate = useNavigate();
   const { showToast } = useToast();
   
@@ -441,6 +441,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
       setStatus('CANCELLED');
       
       setShowVoidModal(false);
+      window.dispatchEvent(new Event('receipt-changed'));
       
       try {
         const bc = new BroadcastChannel('quintal_events');
@@ -533,7 +534,8 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         }
         await api.put(`/accounting/documents/${initialData.id}`, payload);
         showToast("Recibo actualizado", "success");
-        window.location.replace(`/standalone/recibos/${initialData.id}?mode=view`);
+        if (onSaved) onSaved(initialData.id);
+        else window.location.replace(`/standalone/recibos/${initialData.id}?mode=view`);
       } else {
         const res = await api.post("/accounting/documents/", payload);
         
@@ -592,7 +594,8 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         }
 
         showToast("Recibo creado correctamente", "success");
-        window.location.replace(`/standalone/recibos/${res.id}?mode=view`);
+        if (onSaved) onSaved(res.id);
+        else window.location.replace(`/standalone/recibos/${res.id}?mode=view`);
       }
     } catch (err) {
       console.error(err);
@@ -1010,7 +1013,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                       <button
                         type="button"
                         className={`${s.actionBtn} ${s.primaryActionBtn} ${s.fullWidthAction}`}
-                        onClick={() => navigate(source === 'invoice' ? `/standalone/cobros/recibo/${initialData?.id}?mode=edit` : `/standalone/recibos/${initialData?.id}?mode=edit`)}
+                        onClick={() => onModeChange ? onModeChange('edit') : navigate(source === 'invoice' ? `/standalone/cobros/recibo/${initialData?.id}?mode=edit` : `/standalone/recibos/${initialData?.id}?mode=edit`)}
                       >
                         Editar
                       </button>
@@ -1027,7 +1030,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                         <button
                           type="button"
                           className={`${s.actionBtn} ${s.secondaryActionBtn}`}
-                          onClick={() => window.close()}
+                          onClick={() => onClose ? onClose() : window.close()}
                         >
                           Cerrar
                         </button>
@@ -1048,7 +1051,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                       <button
                         type="button"
                         className={`${s.actionBtn} ${s.secondaryActionBtn} ${s.fullWidthAction}`}
-                        onClick={() => navigate(source === 'invoice' ? `/standalone/cobros/recibo/${initialData?.id}?mode=view` : `/standalone/recibos/${initialData?.id}?mode=view`)}
+                        onClick={() => onModeChange ? onModeChange('view') : navigate(source === 'invoice' ? `/standalone/cobros/recibo/${initialData?.id}?mode=view` : `/standalone/recibos/${initialData?.id}?mode=view`)}
                       >
                         Volver a vista
                       </button>
@@ -1065,7 +1068,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                         <button
                           type="button"
                           className={`${s.actionBtn} ${s.secondaryActionBtn}`}
-                          onClick={() => window.close()}
+                          onClick={() => onClose ? onClose() : window.close()}
                         >
                           Cerrar
                         </button>
@@ -1111,7 +1114,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                         <button
                           type="button"
                           className={`${s.actionBtn} ${s.secondaryActionBtn}`}
-                          onClick={() => window.close()}
+                          onClick={() => onClose ? onClose() : window.close()}
                         >
                           Cerrar
                         </button>
@@ -1132,7 +1135,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                         <button
                           type="button"
                           className={`${s.actionBtn} ${s.secondaryActionBtn}`}
-                          onClick={() => window.close()}
+                          onClick={() => onClose ? onClose() : window.close()}
                         >
                           Cerrar
                         </button>
