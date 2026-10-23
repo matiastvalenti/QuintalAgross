@@ -29,7 +29,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { navigateToError } from '../../utils/errorNavigation';
-import { openNuevaFactura, openEditFactura, openNuevoReciboDesdeFactura } from '../../utils/openStandaloneWindow';
+import { openNuevoReciboDesdeFactura } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import ContentHeader from "../../components/layout/ContentHeader";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
@@ -133,6 +134,7 @@ export default function InvoicesPage() {
   };
   
   const { openWindow } = useWindow();
+  const { openEditFactura } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
