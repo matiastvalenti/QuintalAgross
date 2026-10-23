@@ -3,7 +3,7 @@ name: Quintal ERP - Ventas y Compras
 on:
   push:
     branches:
-      - redesign/quintal-dark-phase2
+      - master
   workflow_dispatch:
 
 jobs:
