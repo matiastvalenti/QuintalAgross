@@ -985,7 +985,7 @@ def create_document(
                 if not line_data.get("accounting_account_id"):
                     # Si tiene product_id y no se pudo inferir, es porque el producto no la tiene
                     if line_data.get("product_id") and prod:
-                        raise HTTPException(status_code=400, detail=f"El producto '{prod.name}' no tiene cuenta contable de venta asignada.")
+                        raise HTTPException(status_code=400, detail=f"El producto '{prod.name}' no tiene cuenta contable de {'compra' if doc.doc_type == models.DocumentType.PURCHASE_INVOICE else 'venta'} asignada.")
                     # Si no tiene producto ni se pudo inferir
                     raise HTTPException(status_code=400, detail=f"La línea {i+1} no tiene cuenta contable asignada.")
                 provided_line_order = line_data.pop("line_order", None)
@@ -1003,13 +1003,13 @@ def create_document(
 
                 if line_data.get("product_id"):
                     prod_tmp = db.query(Product).filter(Product.id == line_data["product_id"]).first()
-                    if prod_tmp and prod_tmp.quantity_per_container and float(prod_tmp.quantity_per_container) > 1:
+                    if prod_tmp and prod_tmp.quantity_per_container and float(prod_tmp.quantity_per_container) > 0:
                         package_size = float(prod_tmp.quantity_per_container)
 
                 # Sales qty is expressed in LT/KG; missing packaging must not
                 # multiply that quantity a second time by the container size.
                 if (doc.doc_type in (models.DocumentType.INVOICE, models.DocumentType.FCE_MIPYME, models.DocumentType.TIQUET_FACTURA)
-                        and qty_packages is None and package_size and float(package_size) > 1):
+                        and qty_packages is None and package_size and float(package_size) > 0):
                     qty_packages = qty / float(package_size)
 
                 from app.utils.pricing import calculate_line_totals
