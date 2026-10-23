@@ -520,7 +520,7 @@ export default function PurchaseInvoiceForm(props) {
   if (loading) return <LoadingScreen message="Cargando Factura de Compra..." />; // Changed Factura
 
   return (
-    <div data-commercial-document="true" data-active-view={invoiceTab} className={`${s.formCard} ${w.root} ${w.withExpense} ${isStandalone ? w.standalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} className={`${s.formCard} ${w.root} ${w.withExpense} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
         <div className={`${s.headerLine} ${w.header}`}>
