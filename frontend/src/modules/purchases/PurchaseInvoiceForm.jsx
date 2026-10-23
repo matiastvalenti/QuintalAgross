@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useId } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import s from "../sales/SalesOrderForm.module.css";
 import v from "../common/CommercialDocumentWorkspace.module.css";
-import CommercialDocumentNav from "../common/CommercialDocumentNav";
+import w from "../common/InvoiceWorkbench.module.css";
+import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
 export default function PurchaseInvoiceForm(props) {
@@ -39,6 +40,8 @@ export default function PurchaseInvoiceForm(props) {
   const [id, setId] = useState(initialId);
   const [loading, setLoading] = useState(initialMode === "edit");
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
+  const [invoiceTab, setInvoiceTab] = useState("products");
+  const invoiceTabId = useId();
 
   // Header State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -517,10 +520,10 @@ export default function PurchaseInvoiceForm(props) {
   if (loading) return <LoadingScreen message="Cargando Factura de Compra..." />; // Changed Factura
 
   return (
-    <div data-commercial-document="true" className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${v.shell} ${v.invoice} ${isStandalone ? v.standalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} className={`${s.formCard} ${w.root} ${w.withExpense} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
-        <div className={`${s.headerLine} ${v.header}`}>
+        <div className={`${s.headerLine} ${w.header}`}>
             <div className={s.titleGroup}>
                 <div className={s.compactHeaderTitle}>
                     <h1>
@@ -568,16 +571,15 @@ export default function PurchaseInvoiceForm(props) {
             </div>
         </div>
 
-        <CommercialDocumentNav invoice />
-
         {/* Body: 2 Column Layout */}
-        <div className={`${s.bodyTwoColumns} ${v.body}`}>
+        <div className={`${s.bodyTwoColumns} ${w.layout}`}>
+            <InvoiceWorkspaceTabs value={invoiceTab} onChange={setInvoiceTab} itemCount={items.length} hasNotes={Boolean(observations.trim())} idPrefix={invoiceTabId} />
             
             {/* Columna Izquierda: Ítems y Productos */}
-            <div data-document-section="items" className={`${s.leftCol} ${v.left}`}>
-                <div className={v.sectionHeading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
+            <div id={`${invoiceTabId}-products`} role="tabpanel" aria-label="Productos y conceptos" data-document-section="items" className={`${s.leftCol} ${w.left}`}>
+                <div className={w.heading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
                 {!isReadOnly && (
-                    <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
+                    <div className={`${s.searchRibbon} ${w.search}`} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <Autocomplete 
                                 onSearch={searchProducts} 
@@ -621,7 +623,7 @@ export default function PurchaseInvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={`${s.bentoContainer} ${v.bento}`} style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+                <div className={`${s.bentoContainer} ${w.items}`} style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
                     {items.length > 0 ? (
                         <div style={{ minWidth: '100%' }}>
                             {isReadOnly ? null : (
@@ -745,9 +747,9 @@ export default function PurchaseInvoiceForm(props) {
             </div>
 
             {/* Columna Derecha: Panel Lateral Administrativo */}
-            <div data-document-section="details" className={`${s.rightCol} ${v.right}`}>
+            <div data-document-section="details" className={`${s.rightCol} ${w.right}`}>
                 {/* Bloque Cliente */}
-                <div className={`${s.sideBlock} ${v.panel}`}>
+                <div className={`${s.sideBlock} ${w.party}`}>
                     <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Building size={12}/> PROVEEDOR</div>
                     <div className={s.sideField}>
                         <label>NOMBRE</label>
@@ -790,7 +792,7 @@ export default function PurchaseInvoiceForm(props) {
                 </div>
 
                 {/* Bloque Comercial */}
-                <div className={`${s.sideBlock} ${v.panel}`}>
+                <div className={`${s.sideBlock} ${w.commercial}`}>
                     <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><ShoppingBag size={12}/> COMERCIAL</div>
 
                     {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE' || docType === 'PURCHASE_DEBIT_NOTE' || docType === 'PURCHASE_CREDIT_NOTE') && (
@@ -875,7 +877,7 @@ export default function PurchaseInvoiceForm(props) {
                     </div>
                 </div>
 
-                <div className={`${s.sideBlock} ${v.panel}`}>
+                <div className={`${s.sideBlock} ${w.expense}`}>
                     <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Truck size={12}/> GASTO DE FLOTA</div>
                     <p>Asocia el total con impuestos al vehículo o equipo, sin repartirlo entre trabajos.</p>
                     {legacyVehicleExpenses ? <p>Este comprobante tiene una distribución previa que se conserva sin cambios.</p> : <>
@@ -897,7 +899,7 @@ export default function PurchaseInvoiceForm(props) {
                     </>}
                 </div>
                 {/* Bloque Observaciones */}
-                <div className={`${s.sideBlock} ${v.panel}`} style={{ flexShrink: 0, paddingBottom: 16 }}>
+                <div id={`${invoiceTabId}-notes`} role="tabpanel" aria-label="Observaciones y gastos" className={`${s.sideBlock} ${w.notes}`} style={{ flexShrink: 0, paddingBottom: 16 }}>
                     <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><FileText size={12}/> OBSERVACIONES</div>
                     {isReadOnly ? (
                         <div style={{ fontSize: 11, color: '#475569', minHeight: 40 }}>{observations || 'Sin observaciones'}</div>
@@ -913,7 +915,7 @@ export default function PurchaseInvoiceForm(props) {
                 </div>
             </div>
             {/* Flujo Inferior */}
-          <div className={`${s.relationsBar} ${v.flowStrip}`}>
+          <div id={`${invoiceTabId}-documents`} role="tabpanel" aria-label="Documentos asociados" className={`${s.relationsBar} ${w.flow}`}>
               <div className={s.relationCard} style={{ opacity: initialSourceType ? 1 : 0.5 }}>
                   <div className={s.nodeTitle} style={{ color: initialSourceType ? '#10b981' : '#0b132b' }}>ORIGEN</div>
                   <div className={s.nodeStatus} style={{ color: initialSourceType ? '#10b981' : '#eab308' }}>
@@ -974,7 +976,7 @@ export default function PurchaseInvoiceForm(props) {
         </div>
 
         {/* Operational Summary */}
-        <div className={`${s.summaryPanel} ${v.statusStrip}`}>
+        <div className={`${s.summaryPanel} ${w.summary}`}>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>PROVEEDOR</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
@@ -1002,7 +1004,7 @@ export default function PurchaseInvoiceForm(props) {
         </div>
 
         {/* Footer with Totals */}
-        <div data-document-section="total" className={`${s.footerCompact} ${v.footer}`}>
+        <div data-document-section="total" className={`${s.footerCompact} ${w.footer}`}>
             <div className={s.footerCompactItem}>
                 <span className={s.footerCompactLabel}>NETO GRAVADO</span>
                 <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
