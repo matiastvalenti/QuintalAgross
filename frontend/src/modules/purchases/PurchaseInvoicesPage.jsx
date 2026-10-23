@@ -373,8 +373,6 @@ export default function PurchaseInvoicesPage() {
               icon={Search} 
               title={hasActiveFilters ? "Sin resultados" : "Sin facturas de compra"}
               description={hasActiveFilters ? "Ajustá los filtros para encontrar lo que buscás." : "Comenzá cargando una factura de proveedor."}
-              actionLabel={!hasActiveFilters ? "Cargar Factura" : null}
-              onAction={!hasActiveFilters ? handleOpenNew : null}
           />
         </td>
       </tr>
