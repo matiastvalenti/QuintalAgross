@@ -3,6 +3,15 @@ import { RefreshCw } from "lucide-react";
 import { API_URL } from "../../config";
 import s from "./BnaDivisasRateField.module.css";
 
+export const argentinaToday = (now = new Date()) => {
+  const pieces = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/Argentina/Buenos_Aires",
+    year: "numeric", month: "2-digit", day: "2-digit",
+  }).formatToParts(now);
+  const values = Object.fromEntries(pieces.map(part => [part.type, part.value]));
+  return `${values.year}-${values.month}-${values.day}`;
+};
+
 const formatDate = (iso) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || "")) return iso || "sin fecha";
   const [year, month, day] = iso.split("-");
@@ -13,8 +22,9 @@ const formatDate = (iso) => {
  * Referencia oficial: BNA / Cotización Divisas / Dólar U.S.A. / Venta.
  * No usa billetes, otro proveedor ni cotizaciones inventadas.
  *
- * En comprobantes nuevos completa el TC sólo si BNA confirma la cotización
- * de la fecha del documento y el campo aún tiene su valor inicial (1).
+ * En comprobantes nuevos completa el TC cuando coincide con el día del
+ * comprobante o, si es hoy, con el último cierre oficialmente publicado.
+ * Los cierres anteriores se muestran con advertencia visible.
  * Nunca modifica facturas existentes ni una cotización ingresada manualmente.
  */
 export default function BnaDivisasRateField({
@@ -26,6 +36,8 @@ export default function BnaDivisasRateField({
 }) {
   const inputId = useId();
   const manuallyEdited = useRef(false);
+  const lastAutoRate = useRef(null);
+  const previousDate = useRef(date);
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -75,11 +87,27 @@ export default function BnaDivisasRateField({
   }, [date, isNew, refreshCounter]);
 
   const rateMatchesDate = Boolean(quote && quote.date === date);
+  // Fuera del horario bancario y durante fines de semana se usa el último
+  // cierre publicado, identificado claramente como tal.
+  const isLatestCloseForToday = Boolean(quote && date === argentinaToday() && quote.date < date);
+  const canUsePublishedRate = rateMatchesDate || isLatestCloseForToday;
+
   useEffect(() => {
-    if (isNew && rateMatchesDate && !manuallyEdited.current && Number(value) <= 1) {
-      onChange(quote.rate);
+    if (previousDate.current === date) return;
+    previousDate.current = date;
+    if (lastAutoRate.current !== null && Number(value) === lastAutoRate.current) {
+      lastAutoRate.current = null;
+      onChange(1);
     }
-  }, [isNew, rateMatchesDate, quote?.rate, value, onChange]);
+  }, [date, onChange, value]);
+
+  useEffect(() => {
+    if (!isNew || !canUsePublishedRate || manuallyEdited.current) return;
+    if (Number(value) <= 1 || Number(value) === lastAutoRate.current) {
+      lastAutoRate.current = quote.rate;
+      if (Number(value) !== quote.rate) onChange(quote.rate);
+    }
+  }, [isNew, canUsePublishedRate, quote?.rate, value, onChange]);
 
   const handleManualChange = (event) => {
     manuallyEdited.current = true;
@@ -87,8 +115,9 @@ export default function BnaDivisasRateField({
   };
 
   const applyBna = () => {
-    if (!rateMatchesDate) return;
+    if (!canUsePublishedRate) return;
     manuallyEdited.current = false;
+    lastAutoRate.current = quote.rate;
     onChange(quote.rate);
   };
 
@@ -109,8 +138,8 @@ export default function BnaDivisasRateField({
           <button
             type="button"
             className={s.refresh}
-            onClick={() => rateMatchesDate ? applyBna() : setRefreshCounter(n => n + 1)}
-            title={rateMatchesDate ? "Aplicar cotización BNA verificada" : "Volver a consultar Banco Nación"}
+            onClick={() => canUsePublishedRate ? applyBna() : setRefreshCounter(n => n + 1)}
+            title={canUsePublishedRate ? "Aplicar cotización BNA publicada" : "Volver a consultar Banco Nación"}
             aria-label="Actualizar tipo de cambio desde Banco Nación"
             disabled={loading}
           >
@@ -124,7 +153,9 @@ export default function BnaDivisasRateField({
           error ? <span className={s.warning}>BNA: {error} Ingresá el TC verificado manualmente.</span> :
           !quote ? "Sin cotización verificada." :
           rateMatchesDate ?
-            <span>Banco Nación · Venta USD {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} · {formatDate(quote.date)}{currency === "ARS" ? " · referencia USD/ARS" : ""}</span> :
+            <span>Banco Nación · Divisas vendedor USD {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} · {formatDate(quote.date)}{currency === "ARS" ? " · referencia USD/ARS" : ""}</span> :
+          isLatestCloseForToday ?
+            <span className={s.warning}>Último cierre BNA divisas vendedor: {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} ({formatDate(quote.date)}). Cotización anterior a hoy: verificá antes de facturar.</span> :
             <span className={s.warning}>BNA publicó {formatDate(quote.date)}. No coincide con {formatDate(date)}; verificá el TC antes de facturar.</span>
         }
       </div>
