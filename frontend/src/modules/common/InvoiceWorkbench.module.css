@@ -201,6 +201,45 @@
 }
 .root :global([class*="clientNameControl"]) {min-width: 0;}
 
+/* Los campos de las tarjetas dejan de usar alturas de la antigua barra lateral. */
+.root .commercial :global([class*="tabContent"]),
+.root .notes :global([class*="tabContent"]) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-content: stretch;
+  gap: 8px;
+  grid-template-rows: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.root .commercial :global([class*="commercialField"]) {
+  display: grid;
+  grid-template-columns: 115px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 31px;
+  margin: 0;
+}
+.root .commercial :global([class*="commercialControl"]) {
+  width: 100%;
+  min-width: 0;
+}
+.root .notes :global([class*="arcaGrid"]) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(130px,1fr));
+  gap: 9px;
+}
+.root .notes :global([class*="arcaItem"]) {
+  background: #17233d;
+  border: 1px solid #405171;
+  border-radius: 8px;
+  padding: 9px;
+  color: #f8fafc;
+}
+.root .notes :global([class*="arcaValue"]) {color:#f8fafc;}
+.root .notes :global([class*="arcaLabel"]) {color:#b6c5dc;}
 /* Las solapas no son botones de scroll: reemplazan el contenido del panel. */
 .tabs {
   order: 2;
