@@ -569,6 +569,7 @@ export default function InvoicesPage() {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
         <th className={s.th} style={{ width: 42, padding: '0 12px', textAlign: 'center' }}>
