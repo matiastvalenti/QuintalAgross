@@ -749,3 +749,41 @@
   min-height: 110px !important;
   max-height: 110px !important;
 }
+
+/* Vista de remitos: tarjetas de producto legibles y pendientes visibles en oscuro. */
+.readonlyRemitoLine {
+  background: #1c2943 !important;
+  color: #eaf1fc !important;
+  border-bottom: 1px solid #40516f !important;
+  min-width: 0;
+}
+.readonlyRemitoLine :global(div),
+.readonlyRemitoLine :global(span) {
+  overflow-wrap: anywhere;
+}
+.readonlyRemitoLine > :global(div):first-child {
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.shell.remito .tableRow :global([class*="tableInput"]) {
+  background: #14213a !important;
+  color: #f8fafc !important;
+  border: 1px solid #526384 !important;
+  font-variant-numeric: tabular-nums;
+}
+.shell.remito .tableRow[data-exceeding="true"] {
+  background: #4b222c !important;
+  border-left: 3px solid #fb7185 !important;
+}
+.shell.remito .tableRow[data-exceeding="true"] :global([class*="tableInput"]) {
+  border-color: #fb7185 !important;
+  color: #ffe8ee !important;
+}
+.shell.remito .bento {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+.shell.remito .bento :global([class*="itemsList"]) {
+  overflow: visible !important;
+  max-height: none !important;
+}
