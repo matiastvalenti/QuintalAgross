@@ -569,3 +569,148 @@
   color: #c2cee2 !important;
   font-size: 14px !important;
 }
+
+
+/* QUINTAL ERP DARK SYSTEM V2 — unifica listados con Dashboard y Orden de Venta */
+.quintalTheme {
+  --bg-page: #101729;
+  --panel: #202c46;
+  --panel-2: #151f35;
+  --text: #f8fafc;
+  --text-secondary: #c2cee2;
+  --muted: #94a3b8;
+  --subtle: #9aa9c1;
+  --border-color: #354361;
+  --border-hover: #6955cf;
+  --primary: #6955cf;
+  --primary-hover: #7b68dc;
+  --secondary: #c4b5fd;
+  --accent: #6955cf;
+  --row-hover: #293956;
+  min-height: 100%;
+  color: #f8fafc;
+  background: #101729;
+}
+.quintalTheme .toolbar,
+.quintalTheme .cardTable,
+.quintalTheme .paginationBar,
+.quintalTheme .kpiCard {
+  background: #202c46;
+  border-color: #354361;
+  color: #f8fafc;
+  box-shadow: 0 8px 24px rgba(0,0,0,.12);
+}
+.quintalTheme .toolbar { padding: 12px 16px; }
+.quintalTheme .kpiCard { border-radius: 12px; }
+.quintalTheme .th {
+  background: #172239;
+  color: #bfcce1;
+  border-color: #354361;
+}
+.quintalTheme .td {
+  color: #e2e8f0;
+  border-color: #354361;
+}
+.quintalTheme .row,
+.quintalTheme tbody tr {
+  background: #202c46;
+  border-color: #354361;
+}
+.quintalTheme .row:hover,
+.quintalTheme tbody tr:hover {
+  background: #293956;
+}
+.quintalTheme .rowSelected,
+.quintalTheme .selectedRow {
+  background: #302b58 !important;
+  border-left-color: #8b7be8;
+}
+.quintalTheme .numberCell,
+.quintalTheme .totalCell,
+.quintalTheme .invoiceMain {
+  color: #f8fafc;
+}
+.quintalTheme .invoiceSub,
+.quintalTheme .invoicePaymentSub,
+.quintalTheme .kpiHeader,
+.quintalTheme .kpiSub,
+.quintalTheme .currencyLabel,
+.quintalTheme .paginationInfo {
+  color: #aebdd7;
+}
+.quintalTheme .searchWrap input,
+.quintalTheme .filterSelect,
+.quintalTheme .dateInput,
+.quintalTheme .filterToggle,
+.quintalTheme .ghostBtn {
+  background: #151f35;
+  color: #f8fafc;
+  border: 1px solid #354361;
+  border-radius: 9px;
+}
+.quintalTheme .searchWrap input::placeholder { color: #94a3b8; }
+.quintalTheme .searchWrap input:focus,
+.quintalTheme .filterSelect:focus,
+.quintalTheme .dateInput:focus {
+  border-color: #8b7be8;
+  box-shadow: 0 0 0 3px rgba(105,85,207,.22);
+  outline: none;
+}
+.quintalTheme .filterToggle:hover,
+.quintalTheme .ghostBtn:hover {
+  background: #293956;
+  color: #fff;
+  border-color: #6955cf;
+}
+.quintalTheme .primaryCta,
+.quintalTheme .pageNum.active {
+  background: #6955cf;
+  color: #fff;
+  border-radius: 9px;
+}
+.quintalTheme .primaryCta:hover,
+.quintalTheme .pageNum.active:hover { background: #7b68dc; }
+.quintalTheme .pageNum {
+  color: #c2cee2;
+  border-color: #354361;
+  border-radius: 9px;
+}
+.quintalTheme .pageNum:hover {
+  background: #293956;
+  border-color: #6955cf;
+  color: #fff;
+}
+.quintalTheme .compactFiltersRow {
+  background: #172239;
+  color: #e2e8f0;
+  border-color: #354361;
+  border-radius: 10px;
+}
+.quintalTheme .userBadge {
+  background: #302b58;
+  color: #c4b5fd;
+  border: 1px solid #55478d;
+}
+.quintalTheme .salesEmptyState > div {
+  background: #202c46 !important;
+  border-color: #3b4a6b !important;
+}
+.quintalTheme .salesEmptyState h3 { color: #f8fafc !important; }
+.quintalTheme .salesEmptyState p { color: #c2cee2 !important; }
+.quintalTheme input,
+.quintalTheme select,
+.quintalTheme button { color-scheme: dark; }
+.quintalTheme input[type="checkbox"] { accent-color: #6955cf; }
+@media (max-width: 900px) {
+  .quintalTheme { padding: 16px; gap: 14px; }
+  .quintalTheme .kpiRow { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .quintalTheme .toolbarMain { flex-wrap: wrap; }
+  .quintalTheme .searchWrap { min-width: min(100%, 280px); }
+  .quintalTheme .cardTable { overflow-x: auto; }
+  .quintalTheme .tableWrap { overflow-x: auto; }
+}
+@media (max-width: 560px) {
+  .quintalTheme .kpiRow { grid-template-columns: 1fr; }
+  .quintalTheme .actionGroup { margin-left: 0; flex-wrap: wrap; }
+  .quintalTheme .paginationBar { gap: 12px; flex-wrap: wrap; }
+}
