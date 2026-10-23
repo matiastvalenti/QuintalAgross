@@ -58,7 +58,7 @@ import v from "../common/CommercialDocumentWorkspace.module.css";
 import CommercialDocumentNav from "../common/CommercialDocumentNav"; // Using SalesOrderForm.module.css for consistent styling
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
-import { selectedRemitoUnits, unitsToPackages, packagesToUnits, formatRemitoQuantity, packageFactor } from "../../utils/remitoPackages";
+import { selectedRemitoUnits, unitsToPackages, packagesToUnits, formatRemitoQuantity, packageFactor, normalizeRemitoVatRate } from "../../utils/remitoPackages";
 import ManualLinkInvoiceModal from "../sales/ManualLinkInvoiceModal"; // Needs to be adapted or removed for purchases
 
 export default function PurchaseDeliveryNoteForm(props) {
@@ -224,7 +224,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                     qty_received: Number(line.qty_received ?? 0),
                     unit_price: Number(line.unit_price ?? 0),
                     discount_pct: Number(line.discount_pct ?? 0),
-                    vat_rate: Number(line.vat_rate ?? 21),
+                    vat_rate: normalizeRemitoVatRate(line.vat_rate),
                     warehouse_id: line.warehouse_id || warehouseId,
                     _account_code: line.purchase_account_code || line._account_code || 'S/C',
                     _unit_content: parseFloat(line._unit_content || 1),
@@ -373,7 +373,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                 qty: l.qty,
                 unit_price: l.unit_price, // This is COST
                 discount_pct: l.discount_pct,
-                vat_rate: l.vat_rate,
+                vat_rate: normalizeRemitoVatRate(l.vat_rate),
                 _account_code: l.product?.purchase_account_code || 'S/C', // Changed from sales_account_code
                 _unit_content: l.product?.quantity_per_container || 1,
                 _container_name: l.product?.container?.name || 'Unidad',
@@ -474,7 +474,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                  qty_packages: Number(uc) > 0 ? l.qty_pending / Number(uc) : 0,
                  unit_price: l.unit_price, // This is COST
                  discount_pct: l.discount_pct,
-                 vat_rate: l.vat_rate,
+                 vat_rate: normalizeRemitoVatRate(l.vat_rate),
                  _account_code: l.purchase_account_code || 'S/C', // Changed from sales_account_code
                  _unit_content: uc,
                  _container_name: l.container_name || 'Unidad',
@@ -512,7 +512,7 @@ export default function PurchaseDeliveryNoteForm(props) {
       qty_packages: 1, // Apply purchase order fix
       unit_price: product.cost_price || 0, // Use cost_price for purchases
       discount_pct: 0,
-      vat_rate: product.tax_type?.rate || 0.21,
+      vat_rate: normalizeRemitoVatRate(product.tax_type?.rate),
       _account_code: product.purchase_account_code || 'S/C', // Changed from sales_account_code
       _unit_content: product.quantity_per_container || 1,
       _container_name: product.container?.name || 'Unidad',
@@ -579,7 +579,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           : Number(item.qty_pending || 0),
         unit_price: finalUnitPrice, // This is COST
         discount_pct: item.discount_pct || 0,
-        vat_rate: item.vat_rate || 0.21,
+        vat_rate: normalizeRemitoVatRate(item.vat_rate),
         _account_code: item.purchase_account_code || 'S/C', // Changed from sales_account_code
         _unit_content: item.quantity_per_container || 1,
         _container_name: item.container_name || 'Unidad',
@@ -700,7 +700,7 @@ export default function PurchaseDeliveryNoteForm(props) {
             package_size: l._unit_content,
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
-            vat_rate: l.vat_rate,
+            vat_rate: normalizeRemitoVatRate(l.vat_rate),
             source_purchase_line_id: l.source_purchase_line_id || null,
             purchase_order_id: l.purchase_order_id || (sourceType === 'purchase-order' ? (sourceOrderId || sourceId) : null)
         }))
