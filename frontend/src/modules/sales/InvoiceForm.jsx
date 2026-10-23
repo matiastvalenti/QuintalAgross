@@ -14,6 +14,8 @@ import {
   Building, User, Link2, Plus, Pencil, CheckCircle, Clock, Activity, FileText, ArrowRight, Search
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
+import v from "../common/CommercialDocumentWorkspace.module.css";
+import CommercialDocumentNav from "../common/CommercialDocumentNav";
 import { padPV, padNumber, joinFullNumber, splitFullNumber, formatNumberAR } from "../../utils/formatters";
 import { openInvoiceCollectionFromInvoice } from "../../utils/openStandaloneWindow";
 import Modal from "../../components/ui/Modal";
@@ -1005,10 +1007,10 @@ export default function InvoiceForm(props) {
   const isAdminLocked = isReadOnly;
 
   return (
-    <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`}>
+    <div data-commercial-document="true" className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${v.shell} ${v.invoice} ${isStandalone ? v.standalone : ''}`}>
         
         {/* Header Area */}
-        <div className={s.headerLine}>
+        <div className={`${s.headerLine} ${v.header}`}>
             <div className={s.titleGroup}>
                 <div className={s.compactHeaderTitle}>
                     <h1>
@@ -1096,31 +1098,33 @@ export default function InvoiceForm(props) {
             </div>
         )}
 
+        <CommercialDocumentNav invoice />
+
         {/* Body: 2 Column Layout */}
-        <div className={s.documentMainGrid}>
+        <div className={`${s.documentMainGrid} ${v.documentGrid}`}>
             
             {/* Columna Izquierda: Ítems y Productos */}
-            <div className={s.leftDocumentArea}>
+            <div data-document-section="items" className={`${s.leftDocumentArea} ${v.documentLeft}`}>
                 {!isMonetaryLocked ? (
                     <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <Autocomplete 
                                 onSearch={searchProducts} 
                                 onSelect={(p) => {
-                                    const qtyPerContainer = p.quantity_per_container && p.quantity_per_container > 1 
-                                        ? p.quantity_per_container 
-                                        : null;
-                                    const hasContainer = qtyPerContainer !== null;
+                                    const qtyPerContainer = Number(p.quantity_per_container) > 0
+                                        ? Number(p.quantity_per_container)
+                                        : 1;
+                                    const hasContainer = !!p.container || Number(p.quantity_per_container) > 0;
                                     setItems([...items, { 
                                         id: Math.random(), 
                                         product_id: p.id, 
                                         description: p.name, 
                                         // Si el producto tiene envases, qty_packages=1 (bidón), qty=litros equivalentes
-                                        qty_packages: hasContainer ? 1 : undefined,
-                                        qty: hasContainer ? qtyPerContainer : 1, 
+                                        qty_packages: 1,
+                                        qty: qtyPerContainer, 
                                         _unit_content: qtyPerContainer,
                                         _unit_label: p.unit_of_measure || 'u',
-                                        unit_price: p.cost_price || 0, 
+                                        unit_price: p.base_price ?? p.cost_price ?? 0, 
                                         vat_rate: p.tax_type?.rate ?? 0.21, 
                                         discount_pct: 0,
                                         // Cuenta contable de venta del producto (puede ser null si no está configurada)
@@ -1164,10 +1168,10 @@ export default function InvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={`${s.bentoContainer} ${s.itemsPanel}`} style={{ padding: 0, overflow: 'hidden' }}>
+                <div className={`${s.bentoContainer} ${s.itemsPanel} ${v.bento}`} style={{ padding: 0, overflow: 'hidden' }}>
                     {items.length > 0 ? (
                         <>
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px' }}>
+                                <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px' }}>
                                     <div className={s.th}>PRODUCTO / CONCEPTO</div>
                                     <div className={s.th}>ENVASES</div>
                                     <div className={s.th}>CANTIDAD</div>
@@ -1183,7 +1187,7 @@ export default function InvoiceForm(props) {
                                     const isLocked = isMonetaryLocked || isSourceLockedLine(item);
                                     
                                     return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px', background: isLocked ? '#f8fafc' : 'transparent', cursor: isLocked ? 'not-allowed' : 'default' }}>
+                                    <div key={item.id} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px', background: isLocked ? '#f8fafc' : 'transparent', cursor: isLocked ? 'not-allowed' : 'default' }}>
                                         <div style={{ padding: '4px 0', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 2 }}>
                                             <input 
                                                 type="text" 
@@ -1398,9 +1402,9 @@ export default function InvoiceForm(props) {
             </div>
 
             {/* Columna Derecha: Panel Lateral Administrativo */}
-            <div className={s.rightDocumentArea}>
+            <div data-document-section="details" className={`${s.rightDocumentArea} ${v.documentRight}`}>
                 {/* Bloque Cliente */}
-                <div className={s.clientPanel}>
+                <div className={`${s.clientPanel} ${v.panel}`}>
                     <div className={s.panelTitle}><User size={12}/> CLIENTE</div>
                     <div className={s.clientPanelBody}>
                         {isMonetaryLocked ? (
@@ -1442,7 +1446,7 @@ export default function InvoiceForm(props) {
                 </div>
 
                 {/* Bloque Medio: Comercial / Ajuste-Origen */}
-                <div className={`${s.sideBlock} ${s.middleRightPanel}`}>
+                <div className={`${s.sideBlock} ${s.middleRightPanel} ${v.panel}`}>
                     {docType !== 'INVOICE' ? (
                         <div className={s.panelTabs}>
                             <button className={`${s.panelTab} ${activeContextTab === 'comercial' ? s.panelTabActive : ''}`} onClick={() => setActiveContextTab('comercial')}>Comercial</button>
@@ -1688,7 +1692,7 @@ export default function InvoiceForm(props) {
         </div>
 
         {/* Footer with Totals */}
-        <div className={s.footerCompact}>
+        <div data-document-section="total" className={`${s.footerCompact} ${v.footer}`}>
             <div className={s.footerCompactItem}>
                 <span className={s.footerCompactLabel}>NETO GRAVADO</span>
                 <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
