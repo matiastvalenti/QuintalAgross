@@ -716,6 +716,7 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
         <th style={{ width: 48, textAlign: 'center' }} className={s.th}>
