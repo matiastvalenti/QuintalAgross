@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { ReceiptShell, ShellSection } from "./components/ReceiptShell/ReceiptShell";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
@@ -96,6 +96,8 @@ export default function ReceiptForm({
   const [currentCheck, setCurrentCheck] = useState(null);
   const [retentions, setRetentions] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+  const submittingRef = useRef(false);
+  const [savedDocumentId, setSavedDocumentId] = useState(null);
   const [showFxModalForDoc, setShowFxModalForDoc] = useState(null);
   const [showInterestModalForDoc, setShowInterestModalForDoc] = useState(null);
 
@@ -483,6 +485,7 @@ export default function ReceiptForm({
   };
 
   const handleSave = async () => {
+    if (submittingRef.current || savedDocumentId) return;
     if (!entity) return showToast(isPayment ? "Seleccioná un proveedor" : "Seleccioná un cliente", "error");
     const totalReceiptValue = totalPayments + totalRetentions;
     if (totalReceiptValue <= 0)
@@ -534,9 +537,12 @@ export default function ReceiptForm({
       })),
     };
 
+    submittingRef.current = true;
+    setIsSaving(true);
     try {
       setLoading(true);
       const savedDoc = await api.post('/accounting/documents/', payload);
+      setSavedDocumentId(savedDoc.id);
       showToast(isPayment ? "Orden de pago guardada" : "Recibo guardado", "success");
       // Notificar a ventanas abiertas (BroadcastChannel + CustomEvent)
       const invoiceIds = applications.map(a => a.to_document_id).filter(Boolean);
@@ -576,7 +582,9 @@ export default function ReceiptForm({
       console.error(e);
       showToast(e.message || "Error al guardar", "error");
     } finally {
+      submittingRef.current = false;
       setIsSaving(false);
+      setLoading(false);
     }
   };
 
@@ -673,7 +681,7 @@ export default function ReceiptForm({
       headerTitle={mode === 'new' ? (isPayment ? 'Nueva Orden de Pago' : 'Nuevo Recibo') : `${isPayment ? 'Orden de Pago' : 'Recibo'} N° ${number || ''}`}
       headerSubtitle={isPayment ? 'Orden de Pago' : 'Recibo de Cobro'}
       headerStats={[
-        { label: 'Estado', value: id ? 'Guardado' : 'Borrador', color: id ? 'var(--primary)' : 'var(--text-secondary)' },
+        { label: 'Estado', value: id || savedDocumentId ? 'Guardado' : 'Borrador', color: id || savedDocumentId ? 'var(--primary)' : 'var(--text-secondary)' },
         { label: 'Entidad', value: entity?.name || 'No seleccionada' },
         { label: isPayment ? 'Total pagado' : 'Total cobrado', value: fmt(totalPayments + totalRetentions) }
       ]}
@@ -773,9 +781,15 @@ export default function ReceiptForm({
               </button>
             </div>
           ) : (
-            <button type="button" className={s.btnPrimary} disabled={isSaving || !entity || totalPayments + totalRetentions <= 0 || difference < -0.01} onClick={handleSave}>
-              <Save size={18} /> Confirmar
-            </button>
+            savedDocumentId ? (
+              <button type="button" className={s.btnSecondary} onClick={() => windowId ? closeWindow(windowId) : window.close()}>
+                <Check size={18} /> Guardado · Cerrar
+              </button>
+            ) : (
+              <button type="button" className={s.btnPrimary} disabled={isSaving || !entity || totalPayments + totalRetentions <= 0 || difference < -0.01} onClick={handleSave}>
+                <Save size={18} /> {isSaving ? 'Guardando...' : 'Confirmar'}
+              </button>
+            )
           )}
         </>
       }
