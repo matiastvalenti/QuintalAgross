@@ -19,11 +19,25 @@ export const WindowProvider = ({ children }) => {
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed)) {
-                    // Sanitation: Remove windows with complex props if needed, or keeping them simple.
-                    // For safety, we could filter out any window that looks corrupt.
-                    setWindows(parsed);
-                    if (parsed.length > 0) {
-                        const maxZ = Math.max(...parsed.map(w => w.zIndex || 100));
+                    // Migrar una sola vez las facturas y remitos que habían quedado
+                    // guardados a 780px y se abrían por debajo del dock del ERP.
+                    const commercialTypes = new Set([
+                        'invoice-form', 'purchase-invoice-form',
+                        'delivery-note', 'purchase-delivery-note',
+                    ]);
+                    const restored = parsed.map(w => {
+                        if (commercialTypes.has(w.type) && w.windowSizeVersion !== 2) {
+                            return {
+                                ...w,
+                                height: Number(w.height) >= 760 ? 680 : w.height,
+                                windowSizeVersion: 2,
+                            };
+                        }
+                        return w;
+                    });
+                    setWindows(restored);
+                    if (restored.length > 0) {
+                        const maxZ = Math.max(...restored.map(w => w.zIndex || 100));
                         zIndexRef.current = maxZ + 1;
                     }
                 }
@@ -143,7 +157,8 @@ export const WindowProvider = ({ children }) => {
                 isMinimized: false,
                 isMaximized: false,
                 zIndex: newZ,
-                singletonKey // Store it for future checks
+                singletonKey, // Store it for future checks
+                windowSizeVersion: 2
             };
 
             return [...prev, newWindow];
