@@ -923,19 +923,19 @@ export default function PurchaseOrderForm(props) {
 
     const draftId = `oc_${id}_${Date.now()}`;
     const draftData = {
-      sourceType: "sales-order",
-      salesOrderId: id,
-      salesOrderNumber: number,
-      customerName: supplier?.name,
+      sourceType: "purchase-order",
+      purchaseOrderId: id,
+      purchaseOrderNumber: number,
+      supplierName: supplier?.name,
       currency: currency,
       exchangeRate: exchangeRate,
       pointOfSale: pv,
       paymentCondition: selectedConditionId,
-      sellerId: buyerId,
+      buyerId: buyerId,
       costCenter: ctroCosto,
       lines: selectedLines,
     };
-    localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify(draftData));
+    localStorage.setItem(`purchase_invoice_draft_${draftId}`, JSON.stringify(draftData));
 
     openNuevaFacturaCompra({ draft_id: draftId });
   };
