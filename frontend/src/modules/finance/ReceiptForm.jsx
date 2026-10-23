@@ -187,7 +187,7 @@ export default function ReceiptForm({
       setPayments(initialPayments);
     }
     if (!initialExchangeRate) fetchExchangeRate();
-    if (mode === "edit" && id) fetchReceipt(id);
+    if (mode !== "new" && id) fetchReceipt(id);
   }, [
     initialEntityId,
     initialEntity,
@@ -483,10 +483,10 @@ export default function ReceiptForm({
   };
 
   const handleSave = async () => {
-    if (!entity) return showToast("Seleccione un cliente", "error");
+    if (!entity) return showToast(isPayment ? "Seleccioná un proveedor" : "Seleccioná un cliente", "error");
     const totalReceiptValue = totalPayments + totalRetentions;
     if (totalReceiptValue <= 0)
-      return showToast("Monto del recibo debe ser > 0", "error");
+      return showToast(isPayment ? "El monto de la orden de pago debe ser mayor a cero" : "El monto del recibo debe ser mayor a cero", "error");
     if (difference < -0.01)
       return showToast("Aplicado superior al valor del recibo", "error");
 
@@ -537,12 +537,12 @@ export default function ReceiptForm({
     try {
       setLoading(true);
       const savedDoc = await api.post('/accounting/documents/', payload);
-      showToast("Recibo guardado", "success");
+      showToast(isPayment ? "Orden de pago guardada" : "Recibo guardado", "success");
       // Notificar a ventanas abiertas (BroadcastChannel + CustomEvent)
       const invoiceIds = applications.map(a => a.to_document_id).filter(Boolean);
       const bcPayload = {
         type: "QUINTAL_DOCUMENT_SAVED",
-        documentType: "receipt",
+        documentType: isPayment ? "payment" : "receipt",
         receiptId: savedDoc.id,
         invoiceIds,
         entityId: entity?.id,
@@ -552,7 +552,7 @@ export default function ReceiptForm({
         type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
         entityId: entity?.id,
         documentId: savedDoc.id,
-        docType: "receipt",
+        docType: isPayment ? "payment" : "receipt",
         timestamp: Date.now()
       };
       if (window.opener) {
@@ -569,7 +569,7 @@ export default function ReceiptForm({
         bc2.postMessage(balanceEvent);
         bc2.close();
       } catch (_) {}
-      window.dispatchEvent(new CustomEvent("receipt-changed", { detail: bcPayload }));
+      window.dispatchEvent(new CustomEvent(isPayment ? "payment-changed" : "receipt-changed", { detail: bcPayload }));
       window.dispatchEvent(new CustomEvent("invoice-changed", { detail: bcPayload }));
       setShowFxModalForDoc(savedDoc.id);
     } catch (e) {
@@ -592,7 +592,7 @@ export default function ReceiptForm({
       // Notificar cambios
       const bcPayload = {
         type: "QUINTAL_DOCUMENT_CANCELLED",
-        documentType: "receipt",
+        documentType: isPayment ? "payment" : "receipt",
         receiptId: id,
         entityId: entity?.id,
         timestamp: Date.now(),
@@ -601,7 +601,7 @@ export default function ReceiptForm({
         type: "QUINTAL_ACCOUNT_BALANCE_CHANGED",
         entityId: entity?.id,
         documentId: id,
-        docType: "receipt",
+        docType: isPayment ? "payment" : "receipt",
         timestamp: Date.now()
       };
       if (window.opener) {
@@ -666,16 +666,16 @@ export default function ReceiptForm({
     }
   };
 
-  if (loading && !isSaving && mode === "edit") return <LoadingScreen message="Cargando información..." />;
+  if (loading && !isSaving && mode !== "new") return <LoadingScreen message="Cargando información..." />;
 
   return (
     <ReceiptShell 
-      headerTitle={mode === 'new' ? 'Nuevo Recibo' : `Recibo N° ${number || ''}`}
+      headerTitle={mode === 'new' ? (isPayment ? 'Nueva Orden de Pago' : 'Nuevo Recibo') : `${isPayment ? 'Orden de Pago' : 'Recibo'} N° ${number || ''}`}
       headerSubtitle={isPayment ? 'Orden de Pago' : 'Recibo de Cobro'}
       headerStats={[
         { label: 'Estado', value: id ? 'Guardado' : 'Borrador', color: id ? 'var(--primary)' : 'var(--text-secondary)' },
         { label: 'Entidad', value: entity?.name || 'No seleccionada' },
-        { label: 'Total Pagado', value: fmt(totalPayments + totalRetentions) }
+        { label: isPayment ? 'Total pagado' : 'Total cobrado', value: fmt(totalPayments + totalRetentions) }
       ]}
       topLeftContent={
         <ShellSection title="Parámetros">
@@ -765,13 +765,10 @@ export default function ReceiptForm({
           )}
           {mode === 'view' ? (
             <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-              <button type="button" className={s.btnPrimary} style={{ flex: 1 }} onClick={() => window.location.href = window.location.href.replace('mode=view', 'mode=edit')}>
-                Editar
-              </button>
               <button type="button" className={s.btnSecondary} onClick={handlePrint}>
                 Imprimir
               </button>
-              <button type="button" className={s.btnSecondary} onClick={() => window.close()}>
+              <button type="button" className={s.btnSecondary} onClick={() => closeWindow(windowId)}>
                 Cerrar
               </button>
             </div>
