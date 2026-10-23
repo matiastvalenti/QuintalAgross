@@ -1,5 +1,5 @@
 import React, { useRef, useState, useEffect } from "react";
-import { X, Minus, Square, Maximize2, ArrowUpRight } from "lucide-react";
+import { X, Minus, Square, Maximize2 } from "lucide-react";
 import { useWindow } from "../../context/WindowContext";
 import ErrorBoundary from "../common/ErrorBoundary";
 import Badge from "../ui/Badge";
@@ -125,18 +125,6 @@ export default function WindowFrame({ window: win, component: Component }) {
           )}
         </div>
         <div className={s.controls}>
-          {win.type === 'sales-order' && win.props?.mode === 'new' && (
-            <button
-              className={s.btn}
-              title="Abrir otra orden nueva en Chrome (no transfiere los datos de esta ventana)"
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open('/standalone/ordenes-venta/nueva', '_blank', 'width=1400,height=900');
-              }}
-            >
-              <ArrowUpRight size={15} />
-            </button>
-          )}
           <button
             onClick={(e) => {
               e.stopPropagation();
