@@ -110,8 +110,8 @@ export default function PurchaseInvoiceForm(props) {
         setNumber(parsedNum.num);
         setCurrency(data.currency || "ARS");
         setExchangeRate(data.exchange_rate || 1);
-        setSelectedConditionId(data.purchase_condition_id || ""); // Changed sale_condition_id
-        setBuyerId(data.buyer_id || ""); // Changed salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ""); // Changed sale_condition_id
+        setBuyerId(data.salesperson_id || ""); // Changed salesperson_id
         setCtroCosto(data.cost_center || "1");
         setObservations(data.notes || "");
         const allocations = data.vehicle_expenses || [];
@@ -181,8 +181,8 @@ export default function PurchaseInvoiceForm(props) {
               setSourceNumber(data.number);
               setCurrency(data.currency || "ARS");
               setExchangeRate(data.exchange_rate || 1);
-              setSelectedConditionId(data.purchase_condition_id || ""); // Changed sale_condition_id
-              setBuyerId(data.buyer_id || ""); // Changed salesperson_id
+              setSelectedConditionId(data.sale_condition_id || ""); // Changed sale_condition_id
+              setBuyerId(data.salesperson_id || ""); // Changed salesperson_id
               setCtroCosto(data.cost_center || "1");
               setItems([]); // Empty lines for debit/credit note, user loads concepts manually.
           }
@@ -220,8 +220,8 @@ export default function PurchaseInvoiceForm(props) {
               setPv(draft.pointOfSale || "0001");
               setCurrency(draft.currency || sourceData.currency || "ARS");
               setExchangeRate(draft.exchangeRate || sourceData.exchange_rate || 1);
-              setSelectedConditionId(draft.paymentCondition || sourceData.purchase_condition_id || ""); // Changed sale_condition_id
-              setBuyerId(draft.buyerId || sourceData.buyer_id || ""); // Changed sellerId, salesperson_id
+              setSelectedConditionId(draft.paymentCondition || sourceData.sale_condition_id || ""); // Changed sale_condition_id
+              setBuyerId(draft.buyerId || sourceData.salesperson_id || ""); // Changed sellerId, salesperson_id
               setCtroCosto(draft.costCenter || sourceData.cost_center || "1");
               
               setItems(draft.lines.map(l => {
@@ -352,9 +352,9 @@ export default function PurchaseInvoiceForm(props) {
         number: finalNumber || "0001-00000000",
         date: date,
         entity_id: entity.id,
-        buyer_id: buyerId || null, // Changed salesperson_id
+        salesperson_id: buyerId || null, // Changed salesperson_id
         warehouse_id: null,
-        purchase_condition_id: selectedConditionId, // Changed sale_condition_id
+        sale_condition_id: selectedConditionId, // Changed sale_condition_id
         currency: currency,
         exchange_rate: exchangeRate,
         notes: observations,
