@@ -600,9 +600,15 @@
   display: flex !important;
   flex-direction: column !important;
   align-items: stretch !important;
-  gap: 4px !important;
-  min-height: 0 !important;
+  justify-content: flex-start !important;
+  gap: 6px !important;
+  height: auto !important;
+  min-height: 56px !important;
+  max-height: none !important;
+  overflow: visible !important;
+  grid-template-columns: none !important;
   margin: 0 !important;
+  padding: 0 !important;
 }
 .root .commercial :global([class*="commercialField"]) label,
 .root .commercial > :global([class*="sideField"]) label {
@@ -610,13 +616,45 @@
   line-height: 1.25;
   color: #bac9e1 !important;
 }
-.root .commercial :global([class*="commercialControl"]),
+.root .commercial :global([class*="commercialControl"]) {
+  width: 100% !important;
+  height: auto !important;
+  min-height: 36px !important;
+  max-height: none !important;
+  box-sizing: border-box;
+}
+.root .commercial :global([class*="commercialControl"]) select,
+.root .commercial :global([class*="commercialControl"]) input,
 .root .commercial :global([class*="sideInput"]),
 .root .commercial :global([class*="sideSelect"]) {
+  display: block;
   width: 100% !important;
   min-width: 0;
   max-width: 100%;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  line-height: normal !important;
+  margin: 0 !important;
+  box-sizing: border-box;
 }
+.root .commercial :global([class*="tabContent"]) {
+  grid-auto-rows: minmax(56px, auto) !important;
+  grid-template-rows: none !important;
+}
+.root .commercial :global([class*="commercialField"]) > label,
+.root .commercial > :global([class*="sideField"]) > label {
+  display: block;
+  position: static !important;
+  transform: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  height: auto !important;
+  min-height: 12px;
+  line-height: 1.3 !important;
+  white-space: nowrap;
+}
+
 @container (max-width: 760px) {
   .root .layout .commercial {grid-template-columns: minmax(0,1fr) !important;}
   .root .commercial > :global([class*="tabContent"]) {
