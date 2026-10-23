@@ -54,12 +54,14 @@ import {
   ArrowRight,
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
+import { getPendingContainers, validateDocumentSelection } from "../../utils/documentQuantities";
 import w from "./SalesOrderWorkspace.module.css"; // QUINTAL_SALES_WORKSPACE_V4
 import { TraceabilityStatusBadge, TraceabilityProgress } from "../../components/ui/TraceabilityStatusBadge";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkDeliveryNoteModal from "./ManualLinkDeliveryNoteModal";
 import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
-import { openNuevoRemito, openNuevaFactura } from "../../utils/openStandaloneWindow";
+import { useInternalCommercialDocuments } from "../common/useInternalCommercialDocuments";
+import OrderEmailDialog from "../common/OrderEmailDialog";
 
 export default function SalesOrderForm(props) {
   const {
@@ -77,6 +79,7 @@ export default function SalesOrderForm(props) {
   }, []);
 
   const { closeWindow, openWindow, updateWindow, minimizeWindow } = useWindow();
+  const { openNuevoRemito, openNuevaFactura } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -108,6 +111,7 @@ export default function SalesOrderForm(props) {
 
   // --- Remito Selection Modal ---
   const [showRemitoModal, setShowRemitoModal] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
   // remitoQtys: { [lineId]: qty_to_remit }
   const [remitoQtys, setRemitoQtys] = useState({});
 
@@ -155,12 +159,13 @@ export default function SalesOrderForm(props) {
           id: Math.random(),
           product_id: l.product_id || null,
           name: l.name || l.description || '',
-          qty: parseFloat(l.qty || 1) / parseFloat(l._unit_content || 1), // Calculate containers from total units
+          qty: Number(l.qty ?? 1), // Las líneas comerciales ya vienen en LT/KG
+          qty_packages: Number(l.qty_packages ?? (Number(l.qty ?? 1) / (Number(l._unit_content ?? l.package_size ?? l.quantity_per_container ?? 1) || 1))),
           unit_price: parseFloat(l.unit_price || 0),
           cost_price: 0,
-          discount_pct: 0,
-          vat_rate: 0.21,
-          _unit_content: parseFloat(l._unit_content || 1),
+          discount_pct: Number(l.discount_pct ?? 0),
+          vat_rate: l.vat_rate ?? 0.21,
+          _unit_content: Number(l._unit_content ?? l.package_size ?? l.quantity_per_container ?? 1) || 1,
           _unit_label: 'u',
         }));
         if (mappedLines.length > 0) setItems(mappedLines);
@@ -596,14 +601,8 @@ export default function SalesOrderForm(props) {
     // Build initial qty map: qty_pending for each line
     const initial = {};
     items.forEach(item => {
-      const realId = item.id;
-      const qtyDelivered = parseFloat(item.qty_delivered || 0);
-      const qtyOrdered = parseFloat(item.qty || 0);
-      const factor = parseFloat(item.product?.quantity_per_container || item.quantity_per_container || item._unit_content || 1);
-      const pendingBase = Math.max(0, qtyOrdered - qtyDelivered);
-      if (pendingBase > 0) {
-        initial[realId] = Number((pendingBase / factor).toFixed(2));
-      }
+      const pending = getPendingContainers(item, "qty_delivered");
+      if (pending > 0) initial[item.id] = pending;
     });
     setRemitoQtys(initial);
     setShowRemitoModal(true);
@@ -611,6 +610,8 @@ export default function SalesOrderForm(props) {
 
   // Confirm and open the DeliveryNote with the selected lines
   const handleConfirmRemito = () => {
+    const check = validateDocumentSelection(items, remitoQtys, "qty_delivered");
+    if (!check.valid) return showToast(check.reason, "warning");
     const selectedLines = items
       .filter(item => {
         const qty = parseFloat(remitoQtys[item.id] || 0);
@@ -640,8 +641,7 @@ export default function SalesOrderForm(props) {
     // Abrir ventana standalone del remito con ov_id + draft_key
     openNuevoRemito(id, { draft_key: draftKey });
 
-    // Intentar cerrar esta ventana (puede fallar por restricciones del navegador)
-    try { window.close(); } catch (e) { /* ignorar */ }
+    // Mantener la orden abierta en su pestaña interna mientras se carga el remito.
   };
 
   const handleOpenInvoiceModal = () => {
@@ -658,10 +658,8 @@ export default function SalesOrderForm(props) {
 
     const initial = {};
     items.forEach(item => {
-      const factor = parseFloat(item._unit_content || 1);
-      const pendingUnits = parseFloat(item.qty || 0) - parseFloat(item.qty_invoiced || 0);
-      const pendingPkgs = factor > 1 ? pendingUnits / factor : pendingUnits;
-      if (pendingPkgs > 0) initial[item.id] = pendingPkgs;
+      const pending = getPendingContainers(item, "qty_invoiced");
+      if (pending > 0) initial[item.id] = pending;
     });
 
     if (Object.keys(initial).length === 0) {
@@ -673,12 +671,14 @@ export default function SalesOrderForm(props) {
   };
 
   const handleConfirmInvoice = () => {
+    const check = validateDocumentSelection(items, invoiceQtys, "qty_invoiced");
+    if (!check.valid) return showToast(check.reason, "warning");
     const selectedLines = items
       .filter(item => (parseFloat(invoiceQtys[item.id] || 0)) > 0)
       .map(item => {
         const qtyPkgs = parseFloat(invoiceQtys[item.id] || 0);
         const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
-        const qtyUnits = factor > 1 ? qtyPkgs * factor : qtyPkgs;
+        const qtyUnits = qtyPkgs * factor;
         const lineName = item.product_name || item.product?.name || item.description || item.name || item.concept || item.item_name || '';
 
         return {
@@ -730,14 +730,14 @@ export default function SalesOrderForm(props) {
 
   const handleAddItem = (p) => {
     if (!p) return;
-    const factor = p.quantity_per_container || 1;
+    const factor = Number(p.quantity_per_container) || 1;
     const newItem = {
       id: Math.random(),
       product_id: p.id,
       name: p.name,
       brand: p.brand?.name || p.brand_name || '',
       qty: factor,
-      qty_packages: factor > 1 ? 1 : null,
+      qty_packages: 1,
       cost_price: p.cost_price || 0,
       unit_price: p.base_price || p.cost_price || 0,
       discount_pct: 0,
@@ -761,8 +761,9 @@ export default function SalesOrderForm(props) {
         }
         if (field === 'qty') {
             newItem.qty = Number(value);
-            const factor = i._unit_content || 1;
-            if (factor > 1) {
+            const factor = Number(i._unit_content) || 1;
+            // Sincronizar también presentaciones fraccionarias, como frascos de 0,35 kg.
+            if (factor > 0) {
                 newItem.qty_packages = Number(value) / factor;
             }
         }
@@ -843,7 +844,7 @@ export default function SalesOrderForm(props) {
                         title={!id ? "Guarde la orden para remitir" : (pendingCount === 0 ? "No hay ítems pendientes de remitir" : `Remitir Pedido — ${pendingCount} ítem(s) pendiente(s)`)}
                         style={pendingCount > 0 && id ? { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' } : {}}
                       >
-                          <Truck size={18} />
+                          <Truck size={18} /><span className={w.actionLabel}>Remito</span>
                       </button>
                       <button
                         className={`${s.actionBtn} ${w.actionBtn}`}
@@ -852,13 +853,13 @@ export default function SalesOrderForm(props) {
                         title={!id ? "Guarde la orden para facturar" : (pendingInvoicedCount === 0 ? "No hay ítems pendientes de facturar" : `Facturar Pedido — ${pendingInvoicedCount} ítem(s) pendiente(s)`)}
                         style={pendingInvoicedCount > 0 && id ? { background: '#f5f3ff', color: '#7c3aed', border: '1.5px solid #ddd6fe' } : {}}
                       >
-                          <Receipt size={18} />
+                          <Receipt size={18} /><span className={w.actionLabel}>Factura</span>
                       </button>
                       <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => window.open(`${API_URL}/sales/sales-orders/${id}/pdf`, '_blank')} title={!id ? "Guarde para imprimir" : "Imprimir Orden de Venta"}>
-                          <Printer size={18} />
+                          <Printer size={18} /><span className={w.actionLabel}>PDF</span>
                       </button>
-                      <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => showToast("Funcionalidad de envío por correo en desarrollo", "info")} title="Enviar por Email">
-                          <Mail size={18} />
+                      <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => setShowEmailDialog(true)} title="Enviar por Email">
+                          <Mail size={18} /><span className={w.actionLabel}>Correo</span>
                       </button>
                   </div>
               </div>
@@ -991,9 +992,12 @@ export default function SalesOrderForm(props) {
                                                     placeholder="Ingrese concepto..."
                                                     style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: 'transparent' }}
                                                 />
-                                                <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>{item.brand || item.product?.brand?.name}</div>
+                                                <div style={{ fontSize: 10, fontWeight: 700, color: '#b9c9e2' }}>
+                                                    {item.brand || item.product?.brand?.name || 'Producto'}
+                                                    {Number(item._unit_content) > 0 && ` · Envase: ${item._unit_content} ${item._unit_label || 'u'}`}
+                                                </div>
                                             </div>
-                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item._unit_content > 1 ? (item.qty_packages ?? 0) : ''} onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)} readOnly={hasProgress || isReadOnly || !(item._unit_content > 1)} placeholder={item._unit_content > 1 ? '0' : '—'} title={item._unit_content > 1 ? `Contenido: ${item._unit_content} unidades por envase` : 'Presentación no configurada: cargar unidades directamente'}  />
+                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={Number(item._unit_content) > 0 ? (item.qty_packages ?? 0) : ''} onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)} readOnly={hasProgress || isReadOnly || !(Number(item._unit_content) > 0)} placeholder={Number(item._unit_content) > 0 ? '0' : '—'} title={Number(item._unit_content) > 0 ? `Contenido: ${item._unit_content} unidades por envase` : 'Presentación no configurada: cargar unidades directamente'}  />
                                             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                                 <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item.qty || 0} onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)} />
                                                 <span style={{ fontSize: 9, fontWeight: 800 }}>{item._unit_label}</span>
@@ -1337,6 +1341,14 @@ export default function SalesOrderForm(props) {
           </div>
       </Drawer>
 
+      <OrderEmailDialog
+          open={showEmailDialog}
+          onClose={() => setShowEmailDialog(false)}
+          endpoint={id ? `${API_URL}/sales/sales-orders/${id}/email` : ""}
+          defaultRecipient={entity?.email || ""}
+          defaultSubject={`Orden de Venta ${joinFullNumber(pv, number)} - Quintal Agross`}
+          onSent={() => showToast("Orden enviada por correo", "success")}
+        />
       {/* Remito Selection Modal */}
       <Modal open={showRemitoModal} title="Seleccionar ítems a remitir" onClose={() => setShowRemitoModal(false)} wide>
           <div style={{ padding: '0 20px 20px' }}>
@@ -1399,17 +1411,17 @@ export default function SalesOrderForm(props) {
                     </div>
                     {/* PEDIDO */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>{factor > 1 ? `${orderedPackages.toString().replace(/\.00$/, '')} env.` : `${orderedBaseQty} und.`}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>{factor > 0 ? `${orderedPackages.toString().replace(/\.00$/, '')} env.` : `${orderedBaseQty} und.`}</div>
                       <div style={{ fontSize: 10, color: '#94a3b8' }}>{orderedBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* YA REMIT. */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{factor > 1 ? `${deliveredPackages.toString().replace(/\.00$/, '')} env.` : `${deliveredBaseQty} und.`}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{factor > 0 ? `${deliveredPackages.toString().replace(/\.00$/, '')} env.` : `${deliveredBaseQty} und.`}</div>
                       <div style={{ fontSize: 10, color: '#94a3b8' }}>{deliveredBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* PENDIENTE */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: pendingBaseQty > 0 ? '#1e293b' : '#059669' }}>{factor > 1 ? `${pendingPackages.toString().replace(/\.00$/, '')} env.` : `${pendingBaseQty} und.`}</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: pendingBaseQty > 0 ? '#1e293b' : '#059669' }}>{factor > 0 ? `${pendingPackages.toString().replace(/\.00$/, '')} env.` : `${pendingBaseQty} und.`}</div>
                       <div style={{ fontSize: 10, color: pendingBaseQty > 0 ? '#64748b' : '#059669' }}>{pendingBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
@@ -1478,8 +1490,8 @@ export default function SalesOrderForm(props) {
                 const qtyInvoicedUnits = parseFloat(item.qty_invoiced || 0);
                 const qtyOrderedUnits = parseFloat(item.qty || 0);
                 const factor = parseFloat(item._unit_content || 1);
-                const orderedPkgs = factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
-                const invoicedPkgs = factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+                const orderedPkgs = factor > 0 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+                const invoicedPkgs = factor > 0 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
                 const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
                 const currentQty = invoiceQtys[item.id] !== undefined ? invoiceQtys[item.id] : pendingPkgs;
                 const isSelected = currentQty > 0;
@@ -1511,15 +1523,15 @@ export default function SalesOrderForm(props) {
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{orderedPkgs} env.</div>
-                      {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyOrderedUnits} {unitLabel}</div>}
+                      {factor > 0 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyOrderedUnits} {unitLabel}</div>}
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{invoicedPkgs} env.</div>
-                      {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyInvoicedUnits} {unitLabel}</div>}
+                      {factor > 0 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyInvoicedUnits} {unitLabel}</div>}
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 13, fontWeight: 900, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{pendingPkgs.toFixed(2)} env.</div>
-                      {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{(pendingPkgs * factor).toFixed(1)} {unitLabel}</div>}
+                      {factor > 0 && <div style={{ fontSize: 10, fontWeight: 600, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{(pendingPkgs * factor).toFixed(1)} {unitLabel}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
                       {pendingPkgs > 0 ? (
@@ -1536,7 +1548,7 @@ export default function SalesOrderForm(props) {
                             }}
                             style={{ width: 90, padding: '6px 10px', borderRadius: 10, border: `2px solid ${isSelected ? '#7c3aed' : '#e2e8f0'}`, textAlign: 'center', fontWeight: 800, fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none' }}
                           />
-                          {factor > 1 && <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {unitLabel}</div>}
+                          {factor > 0 && <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {unitLabel}</div>}
                         </>
                       ) : (
                         <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>—</span>

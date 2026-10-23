@@ -3,28 +3,21 @@ import { useWindow } from '../../context/WindowContext';
 import s from './Dock.module.css';
 
 export default function Dock() {
-    const { windows, focusWindow, activeId, minimizeWindow, closeWindow } = useWindow();
+    const { windows, focusWindow, closeWindow } = useWindow();
+    const minimizedWindows = windows.filter(w => w.isMinimized);
     
-    // Only show if there are windows? Or always?
-    // User requested "Al minimizar, debe aparecer un dock inferior"
-    // Let's show it if any window is open or minimized to access them.
-    if (windows.length === 0) return null;
+    // No ocupar toda la parte inferior si las ventanas están abiertas.
+    // El dock aparece únicamente cuando hay documentos minimizados.
+    if (minimizedWindows.length === 0) return null;
 
     return (
         <div className={s.dockContainer}>
-            {windows.map(w => {
-                 const isActive = w.id === activeId && !w.isMinimized;
+            {minimizedWindows.map(w => {
                  return (
                      <div 
                         key={w.id} 
-                        className={`${s.chip} ${isActive ? s.active : ''} ${w.isMinimized ? s.minimized : ''}`}
-                        onClick={() => {
-                            if (isActive) {
-                                minimizeWindow(w.id);
-                            } else {
-                                focusWindow(w.id);
-                            }
-                        }}
+                        className={`${s.chip} ${s.minimized}`}
+                        onClick={() => focusWindow(w.id)}
                         onMouseDown={(e) => {
                             if (e.button === 1) { // Middle click
                                 e.preventDefault();

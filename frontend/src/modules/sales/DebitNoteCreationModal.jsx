@@ -3,9 +3,10 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import { ShoppingBag, Search, FileText } from 'lucide-react';
 import api from '../../services/api';
-import { openNuevaNotaDebito } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 
 export default function DebitNoteCreationModal({ open, onClose }) {
+  const { openNuevaNotaDebito } = useInternalCommercialDocuments();
   const [step, setStep] = useState(1); 
   const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(false);

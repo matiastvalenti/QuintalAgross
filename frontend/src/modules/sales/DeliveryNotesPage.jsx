@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { openNuevoRemito, openEditRemito, openNuevaFactura } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import ContentHeader from '../../components/layout/ContentHeader';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -31,6 +31,7 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
   const location = useLocation();
   const { showToast } = useToast();
   const { openWindow } = useWindow();
+  const { openNuevoRemito, openEditRemito, openNuevaFactura } = useInternalCommercialDocuments();
   
   const searchParams = new URLSearchParams(location.search);
   const ov_id = prop_ov_id || searchParams.get('ov_id');
@@ -715,6 +716,7 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
         <th style={{ width: 48, textAlign: 'center' }} className={s.th}>

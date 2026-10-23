@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useId } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -14,6 +14,9 @@ import {
   Building, User, Link2, Plus, Pencil, CheckCircle, Clock, Activity, FileText, ArrowRight, Landmark, Search
 } from "lucide-react";
 import s from "../sales/SalesOrderForm.module.css";
+import v from "../common/CommercialDocumentWorkspace.module.css";
+import w from "../common/InvoiceWorkbench.module.css";
+import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
 export default function PurchaseInvoiceForm(props) {
@@ -24,6 +27,7 @@ export default function PurchaseInvoiceForm(props) {
     initialSourceType = null,
     initialSourceId = null, // Can be oc_id or remito_entrada_id
     preselectedLines = null,
+    initialDnIds = null,
     draftId = null,
     isStandalone = false,
     initialDocType = "PURCHASE_INVOICE" // Changed to PURCHASE_INVOICE
@@ -36,6 +40,8 @@ export default function PurchaseInvoiceForm(props) {
   const [id, setId] = useState(initialId);
   const [loading, setLoading] = useState(initialMode === "edit");
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
+  const [invoiceTab, setInvoiceTab] = useState("products");
+  const invoiceTabId = useId();
 
   // Header State
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -75,10 +81,59 @@ export default function PurchaseInvoiceForm(props) {
       .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(setVehicles).catch(() => setVehicleLoadError(true));
     if (mode === "edit" && id) fetchInvoice();
-    else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note") && initialSourceId) { // Changed sales-order
+    else if (mode === "new" && Array.isArray(initialDnIds) && initialDnIds.length > 0) {
+        fetchFromMultipleRemitos(initialDnIds);
+    }
+    else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note") && initialSourceId) {
         fetchFromSource();
     }
   }, []);
+
+  const fetchFromMultipleRemitos = async (ids) => {
+    setLoading(true);
+    try {
+        const token = localStorage.getItem("token");
+        const headers = { Authorization: `Bearer ${token}` };
+        const responses = await Promise.all(ids.map(id =>
+            fetch(`${API_URL}/purchases/delivery-notes/${id}`, { headers })
+        ));
+        if (responses.some(response => !response.ok)) throw new Error("No se pudieron recuperar todos los remitos.");
+        const notes = await Promise.all(responses.map(response => response.json()));
+        const supplierId = notes[0]?.entity_id;
+        if (!supplierId || notes.some(note => String(note.entity_id) !== String(supplierId))) {
+            throw new Error("Todos los remitos deben pertenecer al mismo proveedor.");
+        }
+        setEntity({ id: supplierId, name: notes[0].entity_name || "Proveedor" });
+        setSourceNumber(notes.map(note => note.number).filter(Boolean).join(", "));
+        setCurrency(notes[0].currency || "ARS");
+        setExchangeRate(Number(notes[0].exchange_rate) || 1);
+        const lines = notes.flatMap(note => (note.lines || []).map(line => {
+            const factor = Number(line.package_size || line.product?.quantity_per_container || 1) || 1;
+            const qty = Math.max(0, Number(line.qty || 0) - Number(line.qty_invoiced || 0));
+            return {
+                id: `${note.id}-${line.id}`,
+                product_id: line.product_id,
+                description: line.description || line.product_name || "",
+                qty,
+                qty_packages: qty / factor,
+                _unit_content: factor,
+                _unit_label: line.package_unit || line.product?.container?.unit?.short_name || "u",
+                unit_price: Number(line.unit_price || 0),
+                vat_rate: line.vat_rate ?? 0.21,
+                discount_pct: Number(line.discount_pct || 0),
+                source_purchase_line_id: line.source_purchase_line_id || null,
+                source_dn_line_id: line.id,
+                accounting_account_id: line.accounting_account_id || null,
+            };
+        })).filter(line => line.qty > 0);
+        if (!lines.length) throw new Error("Los remitos seleccionados no tienen cantidades pendientes de facturar.");
+        setItems(lines);
+    } catch (error) {
+        showToast(error.message || "Error cargando remitos de compra", "error");
+    } finally {
+        setLoading(false);
+    }
+  };
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("token");
@@ -110,8 +165,8 @@ export default function PurchaseInvoiceForm(props) {
         setNumber(parsedNum.num);
         setCurrency(data.currency || "ARS");
         setExchangeRate(data.exchange_rate || 1);
-        setSelectedConditionId(data.purchase_condition_id || ""); // Changed sale_condition_id
-        setBuyerId(data.buyer_id || ""); // Changed salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ""); // Changed sale_condition_id
+        setBuyerId(data.salesperson_id || ""); // Changed salesperson_id
         setCtroCosto(data.cost_center || "1");
         setObservations(data.notes || "");
         const allocations = data.vehicle_expenses || [];
@@ -128,7 +183,7 @@ export default function PurchaseInvoiceForm(props) {
         // Para cada línea con producto, recuperar el contenido por envase
         // Funciona incluso para facturas viejas sin package_size guardado
         const enrichedLines = await Promise.all(data.lines.map(async (l) => {
-            let unitContent = l.package_size && parseFloat(l.package_size) > 1 
+            let unitContent = l.package_size && parseFloat(l.package_size) > 0 
                 ? parseFloat(l.package_size) 
                 : undefined;
             
@@ -140,7 +195,7 @@ export default function PurchaseInvoiceForm(props) {
                     });
                     if (pRes.ok) {
                         const prod = await pRes.json();
-                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 1) {
+                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 0) {
                             unitContent = parseFloat(prod.quantity_per_container);
                         }
                     }
@@ -181,8 +236,8 @@ export default function PurchaseInvoiceForm(props) {
               setSourceNumber(data.number);
               setCurrency(data.currency || "ARS");
               setExchangeRate(data.exchange_rate || 1);
-              setSelectedConditionId(data.purchase_condition_id || ""); // Changed sale_condition_id
-              setBuyerId(data.buyer_id || ""); // Changed salesperson_id
+              setSelectedConditionId(data.sale_condition_id || ""); // Changed sale_condition_id
+              setBuyerId(data.salesperson_id || ""); // Changed salesperson_id
               setCtroCosto(data.cost_center || "1");
               setItems([]); // Empty lines for debit/credit note, user loads concepts manually.
           }
@@ -193,7 +248,7 @@ export default function PurchaseInvoiceForm(props) {
       // Logic for purchase-order or delivery-note (remito de entrada)
       let draft = null;
       if (draftId) {
-          const draftStr = localStorage.getItem(`invoice_draft_${draftId}`);
+          const draftStr = localStorage.getItem(`purchase_invoice_draft_${draftId}`);
           if (draftStr) {
               draft = JSON.parse(draftStr);
           } else {
@@ -220,15 +275,15 @@ export default function PurchaseInvoiceForm(props) {
               setPv(draft.pointOfSale || "0001");
               setCurrency(draft.currency || sourceData.currency || "ARS");
               setExchangeRate(draft.exchangeRate || sourceData.exchange_rate || 1);
-              setSelectedConditionId(draft.paymentCondition || sourceData.purchase_condition_id || ""); // Changed sale_condition_id
-              setBuyerId(draft.buyerId || sourceData.buyer_id || ""); // Changed sellerId, salesperson_id
+              setSelectedConditionId(draft.paymentCondition || sourceData.sale_condition_id || ""); // Changed sale_condition_id
+              setBuyerId(draft.buyerId || sourceData.salesperson_id || ""); // Changed sellerId, salesperson_id
               setCtroCosto(draft.costCenter || sourceData.cost_center || "1");
               
               setItems(draft.lines.map(l => {
                   const factor = parseFloat(l._unit_content || l.package_size || 1);
                   const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                   let qtyPackages = l.qty_packages;
-                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                       qtyPackages = qty / factor;
                   }
                   return {
@@ -237,13 +292,14 @@ export default function PurchaseInvoiceForm(props) {
                       description: l.product_name || l.description,
                       qty: qty,
                       qty_packages: qtyPackages,
-                      _unit_content: factor > 1 ? factor : undefined,
+                      _unit_content: factor > 0 ? factor : 1,
                       _unit_label: l._unit_label || l.package_unit || 'u',
                       _container_name: l._container_name || 'Unidad',
                       unit_price: l.unit_price,
-                      discount_pct: 0,
-                      vat_rate: l.vat_rate || 0.21,
-                      source_purchase_line_id: l.source_purchase_line_id, // Changed source_sales_line_id
+                      discount_pct: Number(l.discount_pct ?? 0),
+                      vat_rate: l.vat_rate ?? 0.21,
+                      source_purchase_line_id: l.source_purchase_line_id || null,
+                      source_dn_line_id: l.source_dn_line_id || null, // Recibo vinculado cuando corresponde
                       _account_code: l._account_code || null,
                   };
               }));
@@ -259,7 +315,7 @@ export default function PurchaseInvoiceForm(props) {
                       const factor = parseFloat(l._unit_content || l.package_size || 1);
                       const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       return {
@@ -268,13 +324,14 @@ export default function PurchaseInvoiceForm(props) {
                           description: l.product?.name || l.name || l.description || '',
                           qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l._unit_label || l.package_unit || 'u',
                           _container_name: l._container_name || 'Unidad',
                           unit_price: parseFloat(l.unit_price || 0),
                           discount_pct: parseFloat(l.discount_pct || 0),
                           vat_rate: parseFloat(l.vat_rate || 0.21),
-                          source_purchase_line_id: l.source_purchase_line_id || l.id, // Changed source_sales_line_id
+                          source_purchase_line_id: initialSourceType === 'delivery-note' ? (l.source_purchase_line_id || null) : (l.source_purchase_line_id || l.id),
+                          source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: l.accounting_account_id || null,
                           _account_code: l._account_code || null,
                       };
@@ -288,7 +345,7 @@ export default function PurchaseInvoiceForm(props) {
                       const factor = l.product?.quantity_per_container ? parseFloat(l.product.quantity_per_container) : (l.package_size ? parseFloat(l.package_size) : 1);
                       const qty = l.qty - (l.qty_invoiced || 0);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       return {
@@ -297,13 +354,14 @@ export default function PurchaseInvoiceForm(props) {
                           description: l.description,
                           qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l.product?.container?.unit?.short_name || l.package_unit || 'u',
                           _container_name: l.product?.container?.name || 'Unidad',
                           unit_price: l.unit_price,
                           discount_pct: l.discount_pct || 0,
                           vat_rate: l.vat_rate || 0.21,
-                          source_purchase_line_id: l.id, // Changed source_sales_line_id
+                          source_purchase_line_id: initialSourceType === 'delivery-note' ? (l.source_purchase_line_id || null) : l.id,
+                          source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: null,
                           _account_code: l.product?.purchase_account_code || null, // Changed sales_account_code
                       };
@@ -349,9 +407,9 @@ export default function PurchaseInvoiceForm(props) {
         number: finalNumber || "0001-00000000",
         date: date,
         entity_id: entity.id,
-        buyer_id: buyerId || null, // Changed salesperson_id
+        salesperson_id: buyerId || null, // Changed salesperson_id
         warehouse_id: null,
-        purchase_condition_id: selectedConditionId, // Changed sale_condition_id
+        sale_condition_id: selectedConditionId, // Changed sale_condition_id
         currency: currency,
         exchange_rate: exchangeRate,
         notes: observations,
@@ -377,8 +435,9 @@ export default function PurchaseInvoiceForm(props) {
             discount_pct: l.discount_pct,
             vat_rate: l.vat_rate,
             accounting_account_id: l.accounting_account_id,
-            source_purchase_line_id: l.source_purchase_line_id, // Changed source_sales_line_id
-            source_dn_line_id: l.source_dn_line_id // Still source_dn_line_id for now, might need change
+            source_purchase_line_id: l.source_purchase_line_id || null,
+            source_dn_line_id: l.source_dn_line_id || null,
+            package_size: Number(l._unit_content) > 0 ? Number(l._unit_content) : null
         }))
     };
     
@@ -434,14 +493,14 @@ export default function PurchaseInvoiceForm(props) {
         
         // Al cambiar envases, recalcular la cantidad total equivalente
         if (field === 'qty_packages') {
-            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
+            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 0 ? parseFloat(updated.package_size) : null);
             if (unitContent) {
                 updated.qty = numericVal * unitContent;
             } else { // If no unit content, qty_packages is same as qty
                 updated.qty = numericVal;
             }
         } else if (field === 'qty') { // If qty is changed directly and there's unit content, update qty_packages
-            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
+            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 0 ? parseFloat(updated.package_size) : null);
             if (unitContent && unitContent > 0) {
                 updated.qty_packages = numericVal / unitContent;
             } else { // If no unit content, qty is same as qty_packages
@@ -455,16 +514,16 @@ export default function PurchaseInvoiceForm(props) {
     }));
   };
 
-  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val || 0);
+  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency === 'USD' ? 'USD' : 'ARS' }).format(val || 0);
   const fmtValue = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency }).format(val || 0);
 
   if (loading) return <LoadingScreen message="Cargando Factura de Compra..." />; // Changed Factura
 
   return (
-    <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} className={`${s.formCard} ${w.root} ${w.withExpense} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
-        <div className={s.headerLine}>
+        <div className={`${s.headerLine} ${w.header}`}>
             <div className={s.titleGroup}>
                 <div className={s.compactHeaderTitle}>
                     <h1>
@@ -478,7 +537,7 @@ export default function PurchaseInvoiceForm(props) {
                                 <span>&middot;</span>
                             </>
                         )}
-                        <span className={s.metaDate}>{new Date(date).toLocaleDateString('es-AR')}</span>
+
                         {(initialSourceType === 'purchase-order' || initialSourceType === 'delivery-note') && sourceNumber && ( // Changed sales-order
                             <>
                                 <span style={{ color: '#24389c', fontWeight: 800 }}>{initialSourceType === 'purchase-order' ? 'OC' : 'RE'} {sourceNumber} &middot; {entity?.name || 'Proveedor'}</span> {/* Changed OV, Cliente */}
@@ -513,27 +572,29 @@ export default function PurchaseInvoiceForm(props) {
         </div>
 
         {/* Body: 2 Column Layout */}
-        <div className={s.bodyTwoColumns}>
+        <div className={`${s.bodyTwoColumns} ${w.layout}`}>
+            <InvoiceWorkspaceTabs value={invoiceTab} onChange={setInvoiceTab} itemCount={items.length} hasNotes={Boolean(observations.trim())} idPrefix={invoiceTabId} />
             
             {/* Columna Izquierda: Ítems y Productos */}
-            <div className={s.leftCol}>
+            <div id={`${invoiceTabId}-products`} role="tabpanel" aria-label="Productos y conceptos" data-document-section="items" className={`${s.leftCol} ${w.left}`}>
+                <div className={w.heading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
                 {!isReadOnly && (
-                    <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
+                    <div className={`${s.searchRibbon} ${w.search}`} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <Autocomplete 
                                 onSearch={searchProducts} 
                                 onSelect={(p) => {
-                                    const qtyPerContainer = p.quantity_per_container && p.quantity_per_container > 1 
-                                        ? p.quantity_per_container 
-                                        : null;
-                                    const hasContainer = qtyPerContainer !== null;
+                                    const qtyPerContainer = Number(p.quantity_per_container) > 0
+                                        ? Number(p.quantity_per_container)
+                                        : 1;
+                                    const hasContainer = !!p.container || Number(p.quantity_per_container) > 0;
                                     setItems([...items, { 
                                         id: Math.random(), 
                                         product_id: p.id, 
                                         description: p.name, 
                                         // Si el producto tiene envases, qty_packages=1 (bidón), qty=litros equivalentes
-                                        qty_packages: hasContainer ? 1 : undefined,
-                                        qty: hasContainer ? qtyPerContainer : 1, 
+                                        qty_packages: 1,
+                                        qty: qtyPerContainer, 
                                         _unit_content: qtyPerContainer,
                                         _unit_label: p.unit_of_measure || 'u',
                                         unit_price: p.cost_price || 0, // Use cost_price for purchases
@@ -544,7 +605,7 @@ export default function PurchaseInvoiceForm(props) {
                                     }]);
                                 }}
                                 placeholder="Escriba para buscar productos para añadir..."
-                                variant="glass"
+                                variant="invoice"
                                 icon={<Search size={16} style={{ color: 'var(--primary)' }}/>}
                                 minChars={0}
                                 clearOnSelect={true}
@@ -562,11 +623,11 @@ export default function PurchaseInvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={s.bentoContainer} style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
+                <div className={`${s.bentoContainer} ${w.items}`} style={{ padding: 0, overflowX: 'auto', overflowY: 'hidden' }}>
                     {items.length > 0 ? (
                         <div style={{ minWidth: '100%' }}>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px' }}>
+                                <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px' }}>
                                     <div className={s.th}>PRODUCTO / CONCEPTO</div>
                                     <div className={s.th}>ENVASES</div>
                                     <div className={s.th}>CANTIDAD</div>
@@ -610,7 +671,7 @@ export default function PurchaseInvoiceForm(props) {
                                     }
                                     
                                     return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
+                                    <div key={item.id} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden' }}>
                                             <input 
                                                 type="text" 
@@ -623,7 +684,7 @@ export default function PurchaseInvoiceForm(props) {
                                             />
                                             {item._unit_content && (
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginTop: 2 }}>
-                                                    {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toFixed(0)} {item._unit_label || 'u'}
+                                                    {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
                                                 </div>
                                             )}
                                             <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
@@ -686,17 +747,17 @@ export default function PurchaseInvoiceForm(props) {
             </div>
 
             {/* Columna Derecha: Panel Lateral Administrativo */}
-            <div className={s.rightCol}>
+            <div data-document-section="details" className={`${s.rightCol} ${w.right}`}>
                 {/* Bloque Cliente */}
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><Building size={12}/> PROVEEDOR</div>
+                <div className={`${s.sideBlock} ${w.party}`}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Building size={12}/> PROVEEDOR</div>
                     <div className={s.sideField}>
                         <label>NOMBRE</label>
                         {isReadOnly ? (
                             <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text)', textAlign: 'right' }}>{entity?.name || '-'}</div>
                         ) : (
                             <div style={{ flex: 1 }}>
-                                <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
+                                <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="invoice" />
                             </div>
                         )}
                     </div>
@@ -731,8 +792,8 @@ export default function PurchaseInvoiceForm(props) {
                 </div>
 
                 {/* Bloque Comercial */}
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><ShoppingBag size={12}/> COMERCIAL</div>
+                <div className={`${s.sideBlock} ${w.commercial}`}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><ShoppingBag size={12}/> COMERCIAL</div>
 
                     {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE' || docType === 'PURCHASE_DEBIT_NOTE' || docType === 'PURCHASE_CREDIT_NOTE') && (
                         <div className={s.sideField}>
@@ -816,8 +877,8 @@ export default function PurchaseInvoiceForm(props) {
                     </div>
                 </div>
 
-                <div className={s.sideBlock}>
-                    <div className={s.sideBlockTitle}><Truck size={12}/> GASTO DE FLOTA</div>
+                <div className={`${s.sideBlock} ${w.expense}`}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Truck size={12}/> GASTO DE FLOTA</div>
                     <p>Asocia el total con impuestos al vehículo o equipo, sin repartirlo entre trabajos.</p>
                     {legacyVehicleExpenses ? <p>Este comprobante tiene una distribución previa que se conserva sin cambios.</p> : <>
                       <label htmlFor="expense-vehicle">Vehículo / equipo</label>
@@ -838,8 +899,8 @@ export default function PurchaseInvoiceForm(props) {
                     </>}
                 </div>
                 {/* Bloque Observaciones */}
-                <div className={s.sideBlock} style={{ flexShrink: 0, paddingBottom: 16 }}>
-                    <div className={s.sideBlockTitle}><FileText size={12}/> OBSERVACIONES</div>
+                <div id={`${invoiceTabId}-notes`} role="tabpanel" aria-label="Observaciones y gastos" className={`${s.sideBlock} ${w.notes}`} style={{ flexShrink: 0, paddingBottom: 16 }}>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><FileText size={12}/> OBSERVACIONES</div>
                     {isReadOnly ? (
                         <div style={{ fontSize: 11, color: '#475569', minHeight: 40 }}>{observations || 'Sin observaciones'}</div>
                     ) : (
@@ -854,7 +915,7 @@ export default function PurchaseInvoiceForm(props) {
                 </div>
             </div>
             {/* Flujo Inferior */}
-          <div className={s.relationsBar}>
+          <div id={`${invoiceTabId}-documents`} role="tabpanel" aria-label="Documentos asociados" className={`${s.relationsBar} ${w.flow} ${w.flowList}`}>
               <div className={s.relationCard} style={{ opacity: initialSourceType ? 1 : 0.5 }}>
                   <div className={s.nodeTitle} style={{ color: initialSourceType ? '#10b981' : '#0b132b' }}>ORIGEN</div>
                   <div className={s.nodeStatus} style={{ color: initialSourceType ? '#10b981' : '#eab308' }}>
@@ -915,7 +976,7 @@ export default function PurchaseInvoiceForm(props) {
         </div>
 
         {/* Operational Summary */}
-        <div className={s.summaryPanel}>
+        <div className={`${s.summaryPanel} ${w.summary}`}>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>PROVEEDOR</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
@@ -943,7 +1004,7 @@ export default function PurchaseInvoiceForm(props) {
         </div>
 
         {/* Footer with Totals */}
-        <div className={s.footerCompact}>
+        <div data-document-section="total" className={`${s.footerCompact} ${w.footer}`}>
             <div className={s.footerCompactItem}>
                 <span className={s.footerCompactLabel}>NETO GRAVADO</span>
                 <span className={s.footerCompactValue}>{fmt(totals.net)}</span>

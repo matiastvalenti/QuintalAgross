@@ -9,9 +9,11 @@ import t from '../../components/ui/Table.module.css';
 import s from '../../components/layout/DocumentListPage.module.css';
 import { openNuevaOrdenCompra, openEditOrdenCompra } from '../../utils/openStandaloneWindow';
 import { useToast } from '../../context/ToastContext';
+import { useWindow } from '../../context/WindowContext';
 import { TraceabilityProgress } from '../../components/ui/TraceabilityStatusBadge';
 import StatusBadge from '../../components/ui/StatusBadge';
 import api from '../../services/api';
+import { exportToExcel } from '../../utils/ReportExporter';
 import { TableRowSkeleton } from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
@@ -63,6 +65,7 @@ export default function PurchaseOrdersPage() {
   const pageSize = 12;
   
   const { showToast } = useToast();
+  const { openWindow } = useWindow();
 
   useEffect(() => { fetchAll(); }, []);
 
@@ -98,11 +101,25 @@ export default function PurchaseOrdersPage() {
   };
 
   const handleOpenNew = () => {
-    openNuevaOrdenCompra();
+    openWindow('purchase-order', { mode: 'new' }, {
+      title: 'Nueva Orden de Compra',
+      width: 1280,
+      height: 820,
+      minWidth: 720,
+      minHeight: 480,
+      singletonKey: 'purchase-order-new',
+    });
   };
 
   const handleOpenDetail = (id) => {
-    openEditOrdenCompra(id);
+    openWindow('purchase-order', { mode: 'edit', id }, {
+      title: 'Orden de Compra',
+      width: 1280,
+      height: 820,
+      minWidth: 720,
+      minHeight: 480,
+      singletonKey: `purchase-order-${id}`,
+    });
   };
 
   const handleDelete = async (id, number) => {
@@ -214,12 +231,41 @@ export default function PurchaseOrdersPage() {
   const warehouseName = (id) => warehouses.find(w => String(w.id) === String(id))?.name || "-";
 
   const kpis = [
-    { label: "Compras del Mes", value: fmt(stats.totalMonth, 'ARS'), sub: `${stats.countMonth} comprobantes`, type: "Primary" },
+    { label: "Órdenes del Mes", value: stats.countMonth, sub: "Órdenes de compra emitidas", type: "Primary" },
     { label: "A Confirmar", value: stats.toConfirm, sub: "Órdenes en borrador", type: "Warning" },
     { label: "Pdte. Recibir", value: stats.pendingReceipt, sub: "Ingresos pendientes", type: "Info" },
     { label: "Completadas", value: orders.filter(o => o.status === 'RECEIVED').length, sub: "Histórico recepciones", type: "Success" },
     { label: "Total Histórico", value: orders.length, sub: "Registros totales", type: "Default" }
   ];
+
+  const clearFilters = () => {
+    setSearch("");
+    setSelectedEntityId("");
+    setSelectedStatus("");
+    setSelectedWarehouseId("");
+    setDateFrom("");
+    setDateTo("");
+    setHideCancelled(true);
+    setCurrentPage(1);
+    setShowFilters(false);
+  };
+
+  const exportOrders = () => {
+    const rows = sorted.map(o => ({
+      "Orden": o.number || "",
+      "Fecha": o.date ? new Date(o.date).toLocaleDateString("es-AR") : "",
+      "Proveedor": o.entity_name || entityName(o.entity_id),
+      "Moneda": o.currency || "ARS",
+      "Importe": Number(o.total_amount) || 0,
+      "Depósito": warehouseName(o.warehouse_id),
+      "Estado": o.status || "",
+      "Usuario": o.created_by || "",
+    }));
+    if (!rows.length) return showToast("No hay órdenes para exportar", "warning");
+    if (!exportToExcel(rows, "ordenes_compra", "Órdenes")) {
+      showToast("No se pudo exportar el listado", "error");
+    }
+  };
 
   const toolbar = {
     searchWrap: (
@@ -246,9 +292,8 @@ export default function PurchaseOrdersPage() {
     ),
     actions: (
       <>
-        <button className={s.ghostBtn} title="Próximamente">Exportar</button>
-        <button className={s.ghostBtn} title="Próximamente">Columnas</button>
-        <button className={s.ghostBtn} style={{ color: '#ef4444' }} title="Próximamente">Limpiar</button>
+        <button className={s.ghostBtn} onClick={exportOrders} title="Exportar órdenes filtradas a Excel">Exportar</button>
+        <button className={s.ghostBtn} style={{ color: '#e38b92' }} onClick={clearFilters} title="Restablecer filtros">Limpiar</button>
         <button className={s.primaryCta} onClick={handleOpenNew}>
             <PlusCircle size={16} />
             Nueva Orden
@@ -297,16 +342,17 @@ export default function PurchaseOrdersPage() {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
-        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>NUMERAL</th>
-        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>REGISTRO</th>
-        <th className={s.th} onClick={() => toggleSort('provider')} style={{ cursor: 'pointer' }}>TITULAR DE CUENTA</th>
-        <th className={s.th} style={{ textAlign: 'right' }} onClick={() => toggleSort('total')}>IMPORTE NETO</th>
-        <th className={s.th}>BASE</th>
+        <th className={s.th} onClick={() => toggleSort('number')} style={{ cursor: 'pointer' }}>ORDEN</th>
+        <th className={s.th} onClick={() => toggleSort('date')} style={{ cursor: 'pointer' }}>FECHA</th>
+        <th className={s.th} onClick={() => toggleSort('provider')} style={{ cursor: 'pointer' }}>PROVEEDOR</th>
+        <th className={s.th} style={{ textAlign: 'right' }} onClick={() => toggleSort('total')}>IMPORTE</th>
+        <th className={s.th}>DEPÓSITO</th>
         <th className={s.th} style={{ textAlign: 'center' }}>ESTADO</th>
-        <th className={s.th} style={{ textAlign: 'center' }}>USUARIO</th>
-        <th className={s.th} style={{ textAlign: 'right' }}>DILIGENCIAS</th>
+        <th className={s.th} style={{ textAlign: 'center' }}>CARGADO POR</th>
+        <th className={s.th} style={{ textAlign: 'right' }}>ACCIONES</th>
       </>
     ),
     body: loading ? (
@@ -318,10 +364,8 @@ export default function PurchaseOrdersPage() {
         <td colSpan="8">
           <EmptyState 
               icon={Layers} 
-              title="Sin Registros Coincidentes"
-              description="Ajustá los parámetros del ledger o registrá una nueva operación de compra."
-              actionLabel="Nueva Orden"
-              onAction={handleOpenNew}
+              title={orders.length ? "No hay órdenes que coincidan" : "Todavía no hay órdenes de compra"}
+              description={orders.length ? "Probá quitando filtros o cambiando la búsqueda." : "Empezá creando una orden para registrar la compra."}
           />
         </td>
       </tr>
@@ -329,15 +373,15 @@ export default function PurchaseOrdersPage() {
       paginatedData.map((o) => (
         <tr key={o.id} className={s.row} onClick={() => handleOpenDetail(o.id, o.number)}>
           <td className={`${s.td} ${s.numberCell}`}>{o.number}</td>
-          <td className={s.td} style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>
+          <td className={s.td} style={{ color: '#aebdd7', fontSize: 13, fontWeight: 600 }}>
             {new Date(o.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
           </td>
-          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{o.entity_name || entityName(o.entity_id)}</td>
+          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{o.entity_name || entityName(o.entity_id)}</td>
           <td className={`${s.td} ${s.totalCell}`}>
             <span className={s.currencyLabel}>{o.currency}</span>
             {Number(o.total_amount)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
           </td>
-          <td className={s.td} style={{ fontSize: 13, color: '#64748b' }}>{warehouseName(o.warehouse_id)}</td>
+          <td className={s.td} style={{ fontSize: 13, color: '#aebdd7' }}>{warehouseName(o.warehouse_id)}</td>
           <td className={s.td} style={{ textAlign: 'center', width: 220 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <StatusBadge status={o.status} />
@@ -392,7 +436,7 @@ export default function PurchaseOrdersPage() {
     <>
       <DocumentListPage
         theme="quintal" 
-        title="Libro de Compras"
+        title="Órdenes de Compra"
         breadcrumbs={[{ label: 'Suite de Compras' }, { label: 'Órdenes de Compra' }]}
         kpis={kpis}
         toolbar={toolbar}

@@ -1244,3 +1244,278 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* QUINTAL PURCHASE WORKSPACE — misma identidad visual que Orden de Venta.
+   Overrides limitados al formulario; no alteran reglas de negocio. */
+.formCard {
+  --bg-page: #101729;
+  --panel: #202c46;
+  --text: #f8fafc;
+  --text-secondary: #c2cee2;
+  --muted: #aebdd7;
+  --border-color: #354361;
+  --primary: #6955cf;
+  --primary-hover: #7b68dc;
+  --secondary: #c4b5fd;
+  --subtle: #354361;
+  background: #101729;
+  color: #f8fafc;
+  border: 1px solid #354361;
+  border-radius: 14px;
+  box-shadow: 0 18px 45px rgba(0,0,0,.22);
+  color-scheme: dark;
+}
+.formCardStandalone {
+  border-radius: 0;
+  box-shadow: none;
+  min-height: 100vh;
+}
+.formCard .headerLine { border-color: #354361 !important; }
+.formCard .titleGroup h1,
+.formCard .compactHeaderTitle,
+.formCard .headerMeta { color: #f8fafc; }
+.formCard .bodyTwoColumns,
+.formCard .leftCol,
+.formCard .rightCol,
+.formCard .bentoContainer { background: #101729; }
+.formCard .sideBlock,
+.formCard .relationsBar,
+.formCard .relationCard,
+.formCard .summaryPanel,
+.formCard .footerCompact,
+.formCard .searchRibbon,
+.formCard .observationsPanel,
+.formCard .itemsPanel,
+.formCard .flowPanel,
+.formCard .balancePanel,
+.formCard .contextPanel,
+.formCard .clientPanel,
+.formCard .middleRightPanel,
+.formCard .bottomRightPanel,
+.formCard .formBlock,
+.formCard .productsPanelCompact,
+.formCard .accordion,
+.formCard .tabContent {
+  background: #202c46;
+  color: #f8fafc;
+  border-color: #354361;
+}
+.formCard .itemsList { background: #202c46; }
+.formCard .tableHeader,
+.formCard .panelTabs,
+.formCard .tabsBar { background: #172239; border-color: #354361; }
+.formCard .tableRow { background: #202c46; border-color: #354361; }
+.formCard .tableRow:hover { background: #293956; }
+.formCard .sideBlockTitle,
+.formCard .blockTitle,
+.formCard .panelTitle,
+.formCard .contextPanelTitle,
+.formCard .th,
+.formCard .nodeTitle,
+.formCard .footerCompactLabel,
+.formCard .summaryLabel,
+.formCard .sideField label,
+.formCard .field label,
+.formCard .clientField label,
+.formCard .commercialField label,
+.formCard .contextField label { color: #b8aaff; }
+.formCard .footerCompactValue,
+.formCard .summaryValue,
+.formCard .nodeMetric,
+.formCard .readonlyControl { color: #f8fafc; }
+.formCard .sideInput,
+.formCard .sideSelect,
+.formCard .tableInput,
+.formCard .input,
+.formCard .select,
+.formCard .contextSelect,
+.formCard .contextButton,
+.formCard .contextInput,
+.formCard .readonlyControl,
+.formCard .clientInput,
+.formCard .clientSelect,
+.formCard .commercialInput,
+.formCard .commercialSelect,
+.formCard .observationsTextarea,
+.formCard .obsInput,
+.formCard input:not([type="checkbox"]):not([type="radio"]),
+.formCard select,
+.formCard textarea {
+  background: #151f35;
+  border-color: #354361;
+  color: #f8fafc;
+  -webkit-text-fill-color: #f8fafc;
+  color-scheme: dark;
+}
+.formCard input::placeholder,
+.formCard textarea::placeholder { color: #94a3b8; -webkit-text-fill-color: #94a3b8; }
+.formCard input:focus,
+.formCard select:focus,
+.formCard textarea:focus { outline-color: #8b7be8; border-color: #8b7be8; }
+.formCard .saveBtn,
+.formCard .tabActive,
+.formCard .panelTabActive,
+.formCard .contextTabActive { background: #6955cf; color: #fff; border-color: #6955cf; }
+.formCard .saveBtn:hover { background: #7b68dc; }
+.formCard .actionGroup,
+.formCard .actionBtn,
+.formCard .relationAction,
+.formCard .contextTab { background: #19253c; color: #dbe4f5; border-color: #354361; }
+.formCard .actionBtn:hover,
+.formCard .relationAction:hover { background: #293956; border-color: #6955cf; }
+.formCard .nodeBadge { background: #302b58; color: #c4b5fd; }
+.formCard .footerCompactTotal { color: #c4b5fd; }
+.formCard .readOnlyBadge { background: #302b58; color: #c4b5fd; border-color: #55478d; }
+@media (max-width: 900px) {
+  .formCard { padding: 12px; }
+  .formCard .bodyTwoColumns { gap: 12px; }
+}
+
+/* Purchase order: desktop workspace parity with Sales Order.
+   Arrange provider/commercial first, then tabs and full-width items. */
+.formCard .bodyTwoColumns {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1.2fr);
+  gap:12px 16px;
+  align-content:start;
+  align-items:start;
+}
+.formCard .rightCol { display:contents; }
+.formCard .rightCol > .sideBlock:first-child {order:1;grid-column:1;}
+.formCard .rightCol > .sideBlock:nth-child(2) {order:2;grid-column:2;}
+.formCard .rightCol > .sideBlock {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:12px;
+  padding:15px;
+  border-radius:12px;
+  min-width:0;
+  height:100%;
+  align-content:start;
+}
+.formCard .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(3,minmax(0,1fr));}
+.formCard .sideBlockTitle {grid-column:1/-1;margin:0;}
+.formCard .rightCol .sideField {
+  display:flex;
+  flex-direction:column;
+  align-items:stretch;
+  gap:5px;
+  min-width:0;
+  margin:0;
+  height:auto;
+}
+.formCard .rightCol .sideField label {font-size:10px;line-height:1.4;}
+.formCard .rightCol .sideField > div {width:100%;min-width:0;}
+.formCard .rightCol .sideInput,
+.formCard .rightCol .sideSelect,
+.formCard .rightCol .sideField input,
+.formCard .rightCol .sideField select,
+.formCard .rightCol .sideField button {
+  width:100%!important;
+  max-width:100%!important;
+  min-width:0;
+  min-height:38px;
+  height:38px;
+  padding:7px 10px;
+  text-align:left;
+  font-size:12px;
+  border-radius:8px;
+}
+.formCard .bodyTwoColumns > nav {
+  order:3;
+  grid-column:1/-1;
+  margin:0;
+}
+.formCard .leftCol {display:contents;}
+.formCard .leftCol > .searchRibbon {order:4;grid-column:1/-1;min-width:0;}
+.formCard .leftCol > .bentoContainer {order:5;grid-column:1/-1;min-width:0;min-height:250px!important;}
+.formCard .bodyTwoColumns > section {order:6;grid-column:1/-1;min-width:0;}
+.formCard .bodyTwoColumns > section textarea {
+  background:#151f35!important;
+  color:#f8fafc!important;
+  -webkit-text-fill-color:#f8fafc;
+  border-color:#354361!important;
+  min-height:100px;
+}
+.formCard .bodyTwoColumns > section .sideBlock {
+  height:auto!important;
+  min-height:145px;
+}
+.formCard .bodyTwoColumns > section .sideBlock > div:not(.sideBlockTitle) {color:#f8fafc!important;}
+.formCard .footerCompact {margin-top:auto;}
+@container (max-width:850px) {
+  .formCard .bodyTwoColumns {grid-template-columns:minmax(0,1fr);}
+  .formCard .rightCol > .sideBlock:first-child,
+  .formCard .rightCol > .sideBlock:nth-child(2) {grid-column:1;}
+  .formCard .rightCol > .sideBlock:nth-child(2) {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+/* Fix: the purchase item table has exactly EIGHT visible cells.
+   Legacy grid defined ten tracks, causing narrow/clipped package fields. */
+.formCard .tableHeader,
+.formCard .tableRow {
+  grid-template-columns:
+    minmax(240px,2.5fr)
+    minmax(100px,.85fr)
+    minmax(125px,1.1fr)
+    minmax(120px,1fr)
+    minmax(100px,.85fr)
+    minmax(65px,.55fr)
+    minmax(105px,.95fr)
+    38px !important;
+  gap:10px;
+  min-width:1010px;
+  box-sizing:border-box;
+}
+.formCard .bentoContainer {
+  overflow-x:auto !important;
+  scrollbar-color:#566688 #182239;
+}
+.formCard .itemsList {
+  overflow-x:visible;
+  padding-right:0;
+  max-height:420px;
+}
+.formCard .tableRow {min-height:48px;height:auto;padding-top:5px;padding-bottom:5px;}
+.formCard .tableRow > * {min-width:0;}
+.formCard .tableRow .tableInput {
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+  background:#151f35 !important;
+  border:1px solid #40516f !important;
+  color:#f8fafc !important;
+  -webkit-text-fill-color:#f8fafc !important;
+  padding:7px 9px;
+  font-size:12px;
+  font-weight:650;
+}
+.formCard .tableRow .tableInput:read-only {
+  background:#27344d !important;
+  color:#b9c8dd !important;
+  -webkit-text-fill-color:#b9c8dd !important;
+}
+.formCard .tableRow > div:first-child .tableInput {
+  background:#151f35 !important;
+  text-overflow:ellipsis;
+}
+.formCard .tableHeader .th {white-space:nowrap;font-size:10px;}
+
+/* Alineación de acciones de compra con la Orden de Venta. */
+.formCard .actionGroup .actionBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  white-space: nowrap;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 800;
+}
+.formCard .actionGroup .actionBtn:focus-visible {
+  outline: 2px solid #b9abff;
+  outline-offset: 2px;
+}
+@container (max-width: 940px) {
+  .formCard .actionGroup .actionBtn {padding:9px;}
+}

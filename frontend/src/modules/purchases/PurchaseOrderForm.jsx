@@ -54,16 +54,16 @@ import {
   ArrowRight,
 } from "lucide-react";
 import s from "./PurchaseOrderForm.module.css";
+import { getPendingContainers, validateDocumentSelection } from "../../utils/documentQuantities";
+import w from "../sales/SalesOrderWorkspace.module.css";
 import {
   TraceabilityStatusBadge,
   TraceabilityProgress,
 } from "../../components/ui/TraceabilityStatusBadge";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 
-import {
-  openNuevoRemitoEntrada,
-  openNuevaFacturaCompra,
-} from "../../utils/openStandaloneWindow";
+import { useInternalCommercialDocuments } from "../common/useInternalCommercialDocuments";
+import OrderEmailDialog from "../common/OrderEmailDialog";
 
 
 const getPurchaseLineName = (line) => {
@@ -93,6 +93,7 @@ export default function PurchaseOrderForm(props) {
   }, []);
 
   const { closeWindow, openWindow, updateWindow, minimizeWindow } = useWindow();
+  const { openNuevoRemitoEntrada, openNuevaFacturaCompra } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -100,6 +101,7 @@ export default function PurchaseOrderForm(props) {
   const [id, setId] = useState(initialId || null);
   const [loading, setLoading] = useState(initialMode === "edit");
   const [secondaryTab, setSecondaryTab] = useState("billing");
+  const [purchaseTab, setPurchaseTab] = useState("products");
   const [saving, setSaving] = useState(false);
   // --- Header Data ---
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -125,6 +127,7 @@ export default function PurchaseOrderForm(props) {
 
   // --- Remito Selection Modal ---
   const [showRemitoModal, setShowRemitoModal] = useState(false);
+  const [showEmailDialog, setShowEmailDialog] = useState(false);
   // remitoQtys: { [lineId]: qty_to_remit }
   const [remitoQtys, setRemitoQtys] = useState({});
 
@@ -174,12 +177,13 @@ export default function PurchaseOrderForm(props) {
           id: Math.random(),
           product_id: l.product_id || null,
           name: l.name || l.description || "",
-          qty: parseFloat(l.qty || 1) / parseFloat(l._unit_content || 1), // Calculate containers from total units
+          qty: Number(l.qty ?? 1), // Cantidad expresada en LT/KG, no en envases
+          qty_packages: Number(l.qty_packages ?? (Number(l.qty ?? 1) / (Number(l._unit_content ?? l.package_size ?? l.quantity_per_container ?? 1) || 1))),
           unit_price: parseFloat(l.unit_price || 0),
           cost_price: 0,
-          discount_pct: 0,
-          vat_rate: 0.21,
-          _unit_content: parseFloat(l._unit_content || 1),
+          discount_pct: Number(l.discount_pct ?? 0),
+          vat_rate: l.vat_rate ?? 0.21,
+          _unit_content: Number(l._unit_content ?? l.package_size ?? l.quantity_per_container ?? 1) || 1,
           _unit_label: "u",
         }));
         if (mappedLines.length > 0) setItems(mappedLines);
@@ -200,6 +204,8 @@ export default function PurchaseOrderForm(props) {
       if (mode === "edit" && id) fetchPurchaseOrder(id);
     };
     window.addEventListener("delivery-note-changed", refreshOC);
+    window.addEventListener("purchase-delivery-note-changed", refreshOC);
+    window.addEventListener("purchase-invoice-changed", refreshOC);
 
     // Escuchar eventos de la red de documentos
     const handleDocumentMessage = (e) => {
@@ -208,8 +214,8 @@ export default function PurchaseOrderForm(props) {
 
       // Si el documento salvado está relacionado con esta OC, refrescar
       if (
-        payload.salesOrderId === id ||
-        payload.documentType === "sales-order"
+        (payload.purchaseOrderId && String(payload.purchaseOrderId) === String(id)) ||
+        (payload.documentType === "purchase-order" && String(payload.documentId) === String(id))
       ) {
         refreshOC();
       }
@@ -226,6 +232,8 @@ export default function PurchaseOrderForm(props) {
 
     return () => {
       window.removeEventListener("delivery-note-changed", refreshOC);
+      window.removeEventListener("purchase-delivery-note-changed", refreshOC);
+      window.removeEventListener("purchase-invoice-changed", refreshOC);
       window.removeEventListener("message", handleDocumentMessage);
       if (bc) bc.close();
     };
@@ -256,7 +264,7 @@ export default function PurchaseOrderForm(props) {
     );
     if (totalQty === 0) return { delivered: 0, invoiced: 0, paid: 0 };
     const delivered = items.reduce(
-      (acc, i) => acc + (parseFloat(i.qty_delivered) || 0),
+      (acc, i) => acc + (parseFloat(i.qty_received) || 0),
       0,
     );
     const invoiced = items.reduce(
@@ -298,7 +306,7 @@ export default function PurchaseOrderForm(props) {
   const deliveredLts = useMemo(
     () =>
       items.reduce(
-        (acc, item) => acc + (parseFloat(item.qty_delivered) || 0),
+        (acc, item) => acc + (parseFloat(item.qty_received) || 0),
         0,
       ),
     [items],
@@ -319,7 +327,7 @@ export default function PurchaseOrderForm(props) {
   const hasProgress = useMemo(() => {
     return items.some(
       (i) =>
-        (parseFloat(i.qty_delivered) || 0) > 0 ||
+        (parseFloat(i.qty_received) || 0) > 0 ||
         (parseFloat(i.qty_invoiced) || 0) > 0,
     );
   }, [items]);
@@ -335,7 +343,7 @@ export default function PurchaseOrderForm(props) {
       const lineLink = linkManagerDoc.lines.find(
         (l) => l.source_purchase_line_id === item.id,
       );
-      let simD = parseFloat(item.qty_delivered || 0);
+      let simD = parseFloat(item.qty_received || 0);
       let simI = parseFloat(item.qty_invoiced || 0);
       if (lineLink) {
         if (isDN)
@@ -471,7 +479,7 @@ export default function PurchaseOrderForm(props) {
 
     const hasP = (data.lines || []).some(
       (l) =>
-        (parseFloat(l.qty_delivered) || 0) > 0 ||
+        (parseFloat(l.qty_received) || 0) > 0 ||
         (parseFloat(l.qty_invoiced) || 0) > 0,
     );
     if (hasP) {
@@ -629,7 +637,7 @@ export default function PurchaseOrderForm(props) {
             newQty: l.qty,
             // Attach OC context
             ovQty: ovLine ? parseFloat(ovLine.qty || 0) : 0,
-            ovDelivered: ovLine ? parseFloat(ovLine.qty_delivered || 0) : 0,
+            ovDelivered: ovLine ? parseFloat(ovLine.qty_received || 0) : 0,
             unitLabel: ovLine ? ovLine._unit_label : "",
             unitFactor: ovLine ? parseFloat(ovLine._unit_content || 1) : 1,
           };
@@ -684,7 +692,7 @@ export default function PurchaseOrderForm(props) {
 
       showToast("Vínculos actualizados correctamente", "success");
       setLinkManagerDoc(null);
-      fetchPurchaseOrder(); // Refresh to see updated qty_delivered
+      fetchPurchaseOrder(); // Refresh to see updated qty_received
     } catch (e) {
       showToast("Error al actualizar vínculos", "error");
     }
@@ -719,23 +727,12 @@ export default function PurchaseOrderForm(props) {
 
   // Open remito selection modal — show all order lines with pending qty
   const handleOpenRemitoModal = () => {
-    if (!id) return showToast("Guarde la orden antes de remitir", "warning");
+    if (!id) return showToast("Guarde la orden antes de recibir", "warning");
     // Build initial qty map: qty_pending for each line
     const initial = {};
-    items.forEach((item) => {
-      const realId = item.id;
-      const qtyDelivered = parseFloat(item.qty_delivered || 0);
-      const qtyOrdered = parseFloat(item.qty || 0);
-      const factor = parseFloat(
-        item.product?.quantity_per_container ||
-          item.quantity_per_container ||
-          item._unit_content ||
-          1,
-      );
-      const pendingBase = Math.max(0, qtyOrdered - qtyDelivered);
-      if (pendingBase > 0) {
-        initial[realId] = Number((pendingBase / factor).toFixed(2));
-      }
+    items.forEach(item => {
+      const pending = getPendingContainers(item, "qty_received");
+      if (pending > 0) initial[item.id] = pending;
     });
     setRemitoQtys(initial);
     setShowRemitoModal(true);
@@ -743,6 +740,8 @@ export default function PurchaseOrderForm(props) {
 
   // Confirm and open the DeliveryNote with the selected lines
   const handleConfirmRemito = () => {
+    const check = validateDocumentSelection(items, remitoQtys, "qty_received");
+    if (!check.valid) return showToast(check.reason, "warning");
     const selectedLines = items
       .filter((item) => {
         const qty = parseFloat(remitoQtys[item.id] || 0);
@@ -758,7 +757,7 @@ export default function PurchaseOrderForm(props) {
         );
         const qtyUnits = Number((qtyPackages * factor).toFixed(2));
         const orderedBaseQty = parseFloat(line.qty || 0);
-        const deliveredBaseQty = parseFloat(line.qty_delivered || 0);
+        const deliveredBaseQty = parseFloat(line.qty_received || 0);
         const pendingBaseQty = Math.max(0, orderedBaseQty - deliveredBaseQty);
 
         const qtyToReceive = qtyUnits;
@@ -773,7 +772,7 @@ export default function PurchaseOrderForm(props) {
           qty_to_receive: qtyToReceive,
           qty_to_remit: qtyToReceive,
           qty_pending: qtyPending,
-          qty_received: Number(line.qty_received ?? line.qty_delivered ?? 0),
+          qty_received: Number(line.qty_received ?? line.qty_received ?? 0),
           product_id: line.product_id,
           product_name: line.product_name || line.product?.name || line.description,
           description: line.description || line.product_name || line.product?.name,
@@ -789,7 +788,7 @@ export default function PurchaseOrderForm(props) {
     console.log("[OC MODAL] draft final a localStorage:", draftLines);
 
     if (draftLines.length === 0) {
-      return showToast("Seleccioná al menos un ítem para remitir", "warning");
+      return showToast("Seleccioná al menos un ítem para recibir", "warning");
     }
 
     // Guardar líneas en localStorage para que la ventana standalone las lea
@@ -805,12 +804,7 @@ export default function PurchaseOrderForm(props) {
     // Abrir ventana standalone del remito con ov_id + draft_key
     openNuevoRemitoEntrada(id, { draft_key: draftKey });
 
-    // Intentar cerrar esta ventana (puede fallar por restricciones del navegador)
-    try {
-      window.close();
-    } catch (e) {
-      /* ignorar */
-    }
+    // La Orden de Compra permanece abierta bajo el remito de entrada.
   };
 
   const handleOpenInvoiceModal = () => {
@@ -830,12 +824,9 @@ export default function PurchaseOrderForm(props) {
     }
 
     const initial = {};
-    items.forEach((item) => {
-      const factor = parseFloat(item._unit_content || 1);
-      const pendingUnits =
-        parseFloat(item.qty || 0) - parseFloat(item.qty_invoiced || 0);
-      const pendingPkgs = factor > 1 ? pendingUnits / factor : pendingUnits;
-      if (pendingPkgs > 0) initial[item.id] = pendingPkgs;
+    items.forEach(item => {
+      const pending = getPendingContainers(item, "qty_invoiced");
+      if (pending > 0) initial[item.id] = pending;
     });
 
     if (Object.keys(initial).length === 0) {
@@ -847,6 +838,8 @@ export default function PurchaseOrderForm(props) {
   };
 
   const handleConfirmInvoice = () => {
+    const check = validateDocumentSelection(items, invoiceQtys, "qty_invoiced");
+    if (!check.valid) return showToast(check.reason, "warning");
     const selectedLines = items
       .filter((item) => parseFloat(invoiceQtys[item.id] || 0) > 0)
       .map((item) => {
@@ -854,7 +847,7 @@ export default function PurchaseOrderForm(props) {
         const factor = parseFloat(
           item._unit_content || item.quantity_per_container || 1,
         );
-        const qtyUnits = factor > 1 ? qtyPkgs * factor : qtyPkgs;
+        const qtyUnits = qtyPkgs * factor;
         const lineName =
           item.product_name ||
           item.product?.name ||
@@ -896,28 +889,28 @@ export default function PurchaseOrderForm(props) {
 
     setShowInvoiceModal(false);
 
-    const draftId = `ov_${id}_${Date.now()}`;
+    const draftId = `oc_${id}_${Date.now()}`;
     const draftData = {
-      sourceType: "sales-order",
-      salesOrderId: id,
-      salesOrderNumber: number,
-      customerName: supplier?.name,
+      sourceType: "purchase-order",
+      purchaseOrderId: id,
+      purchaseOrderNumber: number,
+      supplierName: supplier?.name,
       currency: currency,
       exchangeRate: exchangeRate,
       pointOfSale: pv,
       paymentCondition: selectedConditionId,
-      sellerId: buyerId,
+      buyerId: buyerId,
       costCenter: ctroCosto,
       lines: selectedLines,
     };
-    localStorage.setItem(`invoice_draft_${draftId}`, JSON.stringify(draftData));
+    localStorage.setItem(`purchase_invoice_draft_${draftId}`, JSON.stringify(draftData));
 
     openNuevaFacturaCompra({ draft_id: draftId });
   };
 
   const handleAddItem = (p) => {
     if (!p) return;
-    const factor = p.quantity_per_container || 1;
+    const factor = Number(p.quantity_per_container) || 1;
     const newItem = {
       id: Math.random(),
       product_id: p.id,
@@ -925,7 +918,7 @@ export default function PurchaseOrderForm(props) {
       description: p.name,
       brand: p.brand?.name || p.brand_name || "",
       qty: factor,
-      qty_packages: factor > 1 ? 1 : null,
+      qty_packages: 1,
       cost_price: p.cost_price || 0,
       unit_price: p.cost_price || p.base_price || 0,
       discount_pct: 0,
@@ -962,8 +955,10 @@ export default function PurchaseOrderForm(props) {
         }
         if (field === "qty") {
           newItem.qty = Number(value);
-          const factor = i._unit_content || 1;
-          if (factor > 1) {
+          const factor = Number(i._unit_content) || 1;
+          // Presentaciones menores a una unidad (ej. frasco de 0,35 kg)
+          // también deben sincronizar la cantidad de envases.
+          if (factor > 0) {
             newItem.qty_packages = Number(value) / factor;
           }
         }
@@ -1014,7 +1009,7 @@ export default function PurchaseOrderForm(props) {
 
   // Pending items aggregate
   const pendingCount = items.filter(
-    (i) => parseFloat(i.qty || 0) - parseFloat(i.qty_delivered || 0) > 0,
+    (i) => parseFloat(i.qty || 0) - parseFloat(i.qty_received || 0) > 0,
   ).length;
   const pendingInvoicedCount = items.filter(
     (i) => parseFloat(i.qty || 0) - parseFloat(i.qty_invoiced || 0) > 0,
@@ -1026,18 +1021,18 @@ export default function PurchaseOrderForm(props) {
         <LoadingScreen message="Cargando Gestor de Vínculos..." />
       )}
       <div
-        className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ""}`}
+        className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ""} ${w.workspace} ${isStandalone ? w.workspaceStandalone : ""}`}
       >
         {/* Header Section */}
         <div
-          className={s.headerLine}
+          className={`${s.headerLine} ${w.headerLine}`}
           style={{
             paddingBottom: 12,
             borderBottom: "1px solid var(--border-color)",
             marginBottom: 12,
           }}
         >
-          <div className={s.compactHeaderTitle}>
+          <div className={`${s.compactHeaderTitle} ${w.compactHeaderTitle}`}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <h1
                 style={{
@@ -1055,7 +1050,7 @@ export default function PurchaseOrderForm(props) {
                   <span className={s.readOnlyBadge}>MODO VISTA</span>
                 )}
               </h1>
-              <div className={s.headerMeta}>
+              <div className={`${s.headerMeta} ${w.headerMeta}`}>
                 <span>
                   {mode === "new"
                     ? "Nueva Orden"
@@ -1083,39 +1078,7 @@ export default function PurchaseOrderForm(props) {
               </div>
             </div>
           </div>
-          <div className={s.headerActions}>
-            {isReadOnly ? (
-              <button
-                className={s.saveBtn}
-                style={{ background: "#64748b", cursor: "pointer" }}
-                onClick={() => {
-                  if (hasProgress) {
-                    showToast(
-                      "Atención: esta orden tiene remitos o facturas vinculadas. Edite con cuidado.",
-                      "warning",
-                    );
-                  }
-                  setIsReadOnly(false);
-                }}
-                title="Activar modo edición"
-              >
-                <Pencil size={16} />
-                {hasProgress ? "Bloqueado" : "Editar"}
-              </button>
-            ) : (
-              <button
-                className={s.saveBtn}
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <div className={s.spinnerSmall} />
-                ) : (
-                  <Save size={16} />
-                )}
-                {saving ? "Guardando..." : "Guardar"}
-              </button>
-            )}
+          <div className={`${s.headerActions} ${w.headerActions}`}>
             <div className={s.actionGroup}>
               <button
                 className={s.actionBtn}
@@ -1123,10 +1086,10 @@ export default function PurchaseOrderForm(props) {
                 onClick={handleOpenRemitoModal}
                 title={
                   !id
-                    ? "Guarde la orden para remitir"
+                    ? "Guarde la orden para recibir"
                     : pendingCount === 0
-                      ? "No hay ítems pendientes de remitir"
-                      : `Remitir Pedido — ${pendingCount} ítem(s) pendiente(s)`
+                      ? "No hay ítems pendientes de recibir"
+                      : `Recibir Pedido — ${pendingCount} ítem(s) pendiente(s)`
                 }
                 style={
                   pendingCount > 0 && id
@@ -1138,7 +1101,7 @@ export default function PurchaseOrderForm(props) {
                     : {}
                 }
               >
-                <Truck size={18} />
+                <Truck size={18} /><span className={w.actionLabel}>Recibir</span>
               </button>
               <button
                 className={s.actionBtn}
@@ -1161,7 +1124,7 @@ export default function PurchaseOrderForm(props) {
                     : {}
                 }
               >
-                <Receipt size={18} />
+                <Receipt size={18} /><span className={w.actionLabel}>Factura</span>
               </button>
               <button
                 className={s.actionBtn}
@@ -1176,29 +1139,29 @@ export default function PurchaseOrderForm(props) {
                   !id ? "Guarde para imprimir" : "Imprimir Orden de Compra"
                 }
               >
-                <Printer size={18} />
+                <Printer size={18} /><span className={w.actionLabel}>PDF</span>
               </button>
               <button
                 className={s.actionBtn}
                 disabled={!id}
-                onClick={() =>
-                  showToast(
-                    "Funcionalidad de envío por correo en desarrollo",
-                    "info",
-                  )
-                }
+                onClick={() => setShowEmailDialog(true)}
                 title="Enviar por Email"
               >
-                <Mail size={18} />
+                <Mail size={18} /><span className={w.actionLabel}>Correo</span>
               </button>
             </div>
           </div>
         </div>
 
         {/* Body: 2 Column Layout */}
-        <div className={s.bodyTwoColumns}>
+        <div className={`${s.bodyTwoColumns} ${w.bodyTwoColumns}`}>
+          <nav className={w.salesTabs} aria-label="Secciones de la compra">
+            <button type="button" className={purchaseTab === "products" ? w.salesTabActive : ""} onClick={() => setPurchaseTab("products")}><ShoppingBag size={15}/> Productos <span>{items.length}</span></button>
+            <button type="button" className={purchaseTab === "notes" ? w.salesTabActive : ""} onClick={() => setPurchaseTab("notes")}><FileText size={15}/> Observaciones</button>
+            <button type="button" className={purchaseTab === "docs" ? w.salesTabActive : ""} onClick={() => setPurchaseTab("docs")}><Receipt size={15}/> Documentos asociados</button>
+          </nav>
           {/* Columna Izquierda: Ítems y Productos */}
-          <div className={s.leftCol}>
+          <div className={`${s.leftCol} ${w.leftCol}`} style={{display: purchaseTab === "products" ? undefined : "none"}}>
             {!isReadOnly && (
               <div className={s.searchRibbon}>
                 <Autocomplete
@@ -1309,7 +1272,7 @@ export default function PurchaseOrderForm(props) {
                     {items.map((item) => {
                       if (isReadOnly) {
                         const qtyDelivered =
-                          parseFloat(item.qty_delivered) || 0;
+                          parseFloat(item.qty_received) || 0;
                         const qtyOrdered = parseFloat(item.qty) || 0;
                         const qtyPackages = item.qty_packages;
                         const hasPackages =
@@ -1377,7 +1340,7 @@ export default function PurchaseOrderForm(props) {
                                     borderRadius: 4,
                                   }}
                                 >
-                                  Remitido: {qtyDelivered} / {qtyOrdered} · Pte:{" "}
+                                  Recibido: {qtyDelivered} / {qtyOrdered} · Pte:{" "}
                                   {(qtyOrdered - qtyDelivered).toFixed(2)}
                                 </div>
                               )}
@@ -1455,7 +1418,7 @@ export default function PurchaseOrderForm(props) {
                         );
                       }
 
-                      const qtyDelivered = parseFloat(item.qty_delivered) || 0;
+                      const qtyDelivered = parseFloat(item.qty_received) || 0;
                       const qtyOrdered = parseFloat(item.qty) || 0;
                       const isPending = qtyOrdered - qtyDelivered > 0;
                       return (
@@ -1495,7 +1458,8 @@ export default function PurchaseOrderForm(props) {
                                 color: "#64748b",
                               }}
                             >
-                              {item.brand || item.product?.brand?.name}
+                              {item.brand || item.product?.brand?.name || "Producto"}
+                              {Number(item._unit_content) > 0 && ` · Envase: ${item._unit_content} ${item._unit_label || "u"}`}
                             </div>
                           </div>
                           <input
@@ -1675,7 +1639,10 @@ export default function PurchaseOrderForm(props) {
               )}
             </div>
 
-            {/* OBSERVACIONES (Debajo de productos, misma columna) */}
+          </div>
+          <section className={w.notesTabPanel} style={{display: purchaseTab === "notes" ? undefined : "none"}} aria-label="Observaciones de la compra">
+            <h3>Observaciones de la compra</h3>
+            {/* OBSERVACIONES */}
             <div
               className={s.sideBlock}
               style={{
@@ -1726,10 +1693,10 @@ export default function PurchaseOrderForm(props) {
                 />
               )}
             </div>
-          </div>
+          </section>
 
           {/* Columna Derecha: Panel Lateral Administrativo */}
-          <div className={s.rightCol}>
+          <div className={`${s.rightCol} ${w.rightCol}`}>
             {/* Bloque Proveedor */}
             <div className={s.sideBlock}>
               <div className={s.sideBlockTitle}>
@@ -1894,6 +1861,8 @@ export default function PurchaseOrderForm(props) {
           </div>
         </div>
 
+        <section className={w.documentsTabPanel} style={{display: purchaseTab === "docs" ? undefined : "none"}} aria-label="Documentos asociados">
+          <div className={w.documentsIntro}><strong>Documentos asociados y seguimiento</strong><span>Orden · Remitos de entrada · Facturas · Pagos</span></div>
         {/* Secondary Bottom Tray - Relaciones y Estado */}
         <div className={s.relationsBar}>
           {/* OC */}
@@ -2109,8 +2078,9 @@ export default function PurchaseOrderForm(props) {
           </div>
         </div>
 
+        </section>
         {/* Footer with Totals */}
-        <div className={s.footerCompact}>
+        <div className={`${s.footerCompact} ${w.footerCompact}`}>
           <div className={s.footerCompactItem}>
             <span className={s.footerCompactLabel}>NETO GRAVADO</span>
             <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
@@ -2127,6 +2097,9 @@ export default function PurchaseOrderForm(props) {
               TOTAL COMPRA
             </span>
             <span className={s.footerCompactTotal}>{fmt(totals.total)}</span>
+          </div>
+          <div className={w.saveArea}>
+            {isReadOnly ? <button type="button" className={s.saveBtn} onClick={() => { if (hasProgress) showToast("Esta orden tiene documentos vinculados. Edite con cuidado.", "warning"); setIsReadOnly(false); }}><Pencil size={16}/> Editar</button> : <button type="button" className={s.saveBtn} onClick={handleSave} disabled={saving}>{saving ? "Guardando..." : <><Save size={16}/> Guardar</>}</button>}
           </div>
         </div>
       </div>
@@ -2284,10 +2257,18 @@ export default function PurchaseOrderForm(props) {
         </div>
       </Drawer>
 
+      <OrderEmailDialog
+          open={showEmailDialog}
+          onClose={() => setShowEmailDialog(false)}
+          endpoint={id ? `${API_URL}/purchases/purchase-orders/${id}/email` : ""}
+          defaultRecipient={supplier?.email || ""}
+          defaultSubject={`Orden de Compra ${joinFullNumber(pv, number)} - Quintal Agross`}
+          onSent={() => showToast("Orden de compra enviada por correo", "success")}
+        />
       {/* Remito Selection Modal */}
       <Modal
         open={showRemitoModal}
-        title="Seleccionar ítems a remitir"
+        title="Seleccionar productos a recibir"
         onClose={() => setShowRemitoModal(false)}
         wide
       >
@@ -2300,7 +2281,7 @@ export default function PurchaseOrderForm(props) {
               marginTop: 0,
             }}
           >
-            Seleccioná los productos y cantidades a incluir en este remito. Lo
+            Seleccioná los productos y cantidades a ingresar con este remito. Lo
             restante quedará como pendiente.
           </p>
 
@@ -2333,9 +2314,9 @@ export default function PurchaseOrderForm(props) {
               <div></div>
               <div>PRODUCTO</div>
               <div style={{ textAlign: "center" }}>PEDIDO</div>
-              <div style={{ textAlign: "center" }}>YA REMIT.</div>
+              <div style={{ textAlign: "center" }}>RECIBIDO</div>
               <div style={{ textAlign: "center" }}>PENDIENTE</div>
-              <div style={{ textAlign: "center" }}>A REMITIR</div>
+              <div style={{ textAlign: "center" }}>A RECIBIR</div>
             </div>
             {items.map((item) => {
               const factor = parseFloat(
@@ -2348,7 +2329,7 @@ export default function PurchaseOrderForm(props) {
                 item._unit_label || item.unit_of_measure || "LT";
 
               const orderedBaseQty = parseFloat(item.qty || 0);
-              const deliveredBaseQty = parseFloat(item.qty_delivered || 0);
+              const deliveredBaseQty = parseFloat(item.qty_received || 0);
               const pendingBaseQty = Math.max(
                 0,
                 orderedBaseQty - deliveredBaseQty,
@@ -2421,7 +2402,7 @@ export default function PurchaseOrderForm(props) {
                       <AlertCircle
                         size={18}
                         style={{ color: "#059669" }}
-                        title="Totalmente remitido"
+                        title="Totalmente recibido"
                       />
                     )}
                   </div>
@@ -2462,7 +2443,7 @@ export default function PurchaseOrderForm(props) {
                           marginTop: 2,
                         }}
                       >
-                        ✓ Totalmente remitido
+                        ✓ Totalmente recibido
                       </div>
                     )}
                   </div>
@@ -2475,7 +2456,7 @@ export default function PurchaseOrderForm(props) {
                         color: "#475569",
                       }}
                     >
-                      {factor > 1
+                      {factor > 0
                         ? `${orderedPackages.toString().replace(/\.00$/, "")} env.`
                         : `${orderedBaseQty} und.`}
                     </div>
@@ -2484,7 +2465,7 @@ export default function PurchaseOrderForm(props) {
                       {unitLabel}
                     </div>
                   </div>
-                  {/* YA REMIT. */}
+                  {/* YA RECIBIDO */}
                   <div style={{ textAlign: "center" }}>
                     <div
                       style={{
@@ -2493,7 +2474,7 @@ export default function PurchaseOrderForm(props) {
                         color: "#94a3b8",
                       }}
                     >
-                      {factor > 1
+                      {factor > 0
                         ? `${deliveredPackages.toString().replace(/\.00$/, "")} env.`
                         : `${deliveredBaseQty} und.`}
                     </div>
@@ -2511,7 +2492,7 @@ export default function PurchaseOrderForm(props) {
                         color: pendingBaseQty > 0 ? "#1e293b" : "#059669",
                       }}
                     >
-                      {factor > 1
+                      {factor > 0
                         ? `${pendingPackages.toString().replace(/\.00$/, "")} env.`
                         : `${pendingBaseQty} und.`}
                     </div>
@@ -2604,7 +2585,7 @@ export default function PurchaseOrderForm(props) {
               {
                 items.filter(
                   (i) =>
-                    parseFloat(i.qty || 0) - parseFloat(i.qty_delivered || 0) >
+                    parseFloat(i.qty || 0) - parseFloat(i.qty_received || 0) >
                     0,
                 ).length
               }{" "}
@@ -2705,9 +2686,9 @@ export default function PurchaseOrderForm(props) {
               const qtyOrderedUnits = parseFloat(item.qty || 0);
               const factor = parseFloat(item._unit_content || 1);
               const orderedPkgs =
-                factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+                factor > 0 ? qtyOrderedUnits / factor : qtyOrderedUnits;
               const invoicedPkgs =
-                factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+                factor > 0 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
               const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
               const currentQty =
                 invoiceQtys[item.id] !== undefined
@@ -2801,7 +2782,7 @@ export default function PurchaseOrderForm(props) {
                     >
                       {orderedPkgs} env.
                     </div>
-                    {factor > 1 && (
+                    {factor > 0 && (
                       <div
                         style={{
                           fontSize: 10,
@@ -2823,7 +2804,7 @@ export default function PurchaseOrderForm(props) {
                     >
                       {invoicedPkgs} env.
                     </div>
-                    {factor > 1 && (
+                    {factor > 0 && (
                       <div
                         style={{
                           fontSize: 10,
@@ -2845,7 +2826,7 @@ export default function PurchaseOrderForm(props) {
                     >
                       {pendingPkgs.toFixed(2)} env.
                     </div>
-                    {factor > 1 && (
+                    {factor > 0 && (
                       <div
                         style={{
                           fontSize: 10,
@@ -2896,7 +2877,7 @@ export default function PurchaseOrderForm(props) {
                             outline: "none",
                           }}
                         />
-                        {factor > 1 && (
+                        {factor > 0 && (
                           <div
                             style={{
                               fontSize: 9,

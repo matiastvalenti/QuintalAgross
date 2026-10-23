@@ -8,7 +8,7 @@ import Drawer from "../../components/ui/Drawer";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { useWindow } from '../../context/WindowContext';
-import { openEditOrdenVenta, openNuevaFactura } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
@@ -76,6 +76,8 @@ function getDisplayPackages(item) {
   return `${formatQty(qty)} ${item._unit_label || 'u'}.`;
 }
 import s from "./SalesOrderForm.module.css";
+import v from "../common/CommercialDocumentWorkspace.module.css";
+import CommercialDocumentNav from "../common/CommercialDocumentNav";
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkInvoiceModal from "./ManualLinkInvoiceModal";
@@ -92,6 +94,7 @@ export default function DeliveryNoteForm(props) {
     isStandalone = false,
   } = props;
   const { closeWindow, openWindow } = useWindow();
+  const { openEditOrdenVenta, openNuevaFactura, openEditFactura } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -568,8 +571,9 @@ export default function DeliveryNoteForm(props) {
       id: Math.random(),
       product_id: product.id,
       description: product.name,
-      qty: 1,
-      unit_price: product.cost_price || 0,
+      qty: Number(product.quantity_per_container) || 1,
+      qty_packages: 1,
+      unit_price: product.base_price || product.cost_price || 0,
       discount_pct: 0,
       vat_rate: product.tax_type?.rate || 0.21,
       _account_code: product.sales_account_code || 'S/C',
@@ -637,7 +641,7 @@ export default function DeliveryNoteForm(props) {
         product_id: item.product_id,
         description: item.product_name || item.description,
         qty: qtyBase,
-        qty_packages: factor > 1 ? qtyBase / factor : undefined,
+        qty_packages: Number(factor) > 0 ? qtyBase / Number(factor) : qtyBase,
         unit_price: finalUnitPrice,
         discount_pct: item.discount_pct || 0,
         vat_rate: item.vat_rate || 0.21,
@@ -683,7 +687,7 @@ export default function DeliveryNoteForm(props) {
         if (field === 'qty') {
             newItem.qty = Number(value);
             const factor = i._unit_content || 1;
-            if (factor > 1) {
+            if (factor > 0) {
                 newItem.qty_packages = Number(value) / factor;
             }
         }
@@ -941,7 +945,7 @@ export default function DeliveryNoteForm(props) {
 
   return (
     <>
-      <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
+      <div data-commercial-document="true" data-has-items={items.length > 0} className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${v.shell} ${v.remito} ${isStandalone ? v.standalone : ''}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
           {isLocked && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(37, 99, 235, 0.05)', color: '#1d4ed8', padding: '8px 24px', fontSize: 10, fontWeight: 900, textAlign: 'center', borderBottom: '1px solid rgba(37, 99, 235, 0.1)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, backdropFilter: 'blur(4px)' }}>
                 <Receipt size={14} /> DOCUMENTO BLOQUEADO POR FACTURACIÓN. NO SE PERMITEN MODIFICACIONES.
@@ -949,7 +953,7 @@ export default function DeliveryNoteForm(props) {
             </div>
           )}
               {/* Header Section */}
-          <div className={s.headerLine} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
+          <div className={`${s.headerLine} ${v.header}`} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
               <div className={s.compactHeaderTitle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <h1 style={{ fontSize: '15px', margin: 0, fontWeight: 900, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1065,15 +1069,17 @@ export default function DeliveryNoteForm(props) {
               </div>
           )}
 
+          <CommercialDocumentNav />
           {/* Body: 2 Column Layout */}
-          <div className={s.bodyTwoColumns} style={{ opacity: isLocked ? 0.8 : 1 }}>
+          <div className={`${s.bodyTwoColumns} ${v.body}`} style={{ opacity: isLocked ? 0.8 : 1 }}>
               {/* Columna Izquierda: Ítems y Productos */}
-              <div className={s.leftCol}>
-                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden', flex: 1, minHeight: 0 }}>
+              <div data-document-section="items" className={`${s.leftCol} ${v.left}`}>
+                  <div className={v.sectionHeading}><span>Productos del remito</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? "línea" : "líneas"}</span></div>
+                  <div className={`${s.bentoContainer} ${v.bento}`} style={{ padding: 0, overflow: 'hidden', flex: 1, minHeight: 0 }}>
                       {items.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
+                                <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
                                     <div className={s.th}>Producto</div>
                                     <div className={s.th} style={{ textAlign: 'left' }}>Cant.</div>
                                     <div className={s.th} style={{ textAlign: 'right' }}>Remitir</div>
@@ -1129,7 +1135,7 @@ export default function DeliveryNoteForm(props) {
                                     
                                   const isExceeding = mode === 'new' && item.qty > (item.qty_pending || 0);
                                   return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border-box' }}>
+                                    <div key={item.id} data-exceeding={isExceeding} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border-box' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
                                             <div style={{ fontSize: 11, fontWeight: 900, color: '#1e293b', lineHeight: 1.1, whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {item.name || item.product?.name || item.description}
@@ -1182,8 +1188,8 @@ export default function DeliveryNoteForm(props) {
                   </div>
 
                   {/* Observaciones (Mismo ancho que productos, altura fija y flex-shrink 0) */}
-                  <div className={s.sideBlock} style={{ height: 80, display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'center', padding: '8px 16px', flexShrink: 0 }}>
-                      <div className={s.sideBlockTitle} style={{ margin: 0, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
+                  <div className={`${s.sideBlock} ${v.panel}`} style={{ height: 80, display: 'flex', flexDirection: 'row', gap: 16, alignItems: 'center', padding: '8px 16px', flexShrink: 0 }}>
+                      <div className={`${s.sideBlockTitle} ${v.panelTitle}`} style={{ margin: 0, whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
                           <ClipboardList size={14} /> OBSERVACIONES
                       </div>
                       <div style={{ flex: 1, height: '100%', display: 'flex', alignItems: 'center' }}>
@@ -1204,10 +1210,10 @@ export default function DeliveryNoteForm(props) {
               </div>
 
               {/* Columna Derecha: Panel Lateral Administrativo */}
-              <div className={s.rightCol}>
+              <div data-document-section="details" className={`${s.rightCol} ${v.right}`}>
                   {/* Bloque Cliente */}
-                  <div className={s.sideBlock}>
-                      <div className={s.sideBlockTitle}><User size={12}/> CLIENTE</div>
+                  <div className={`${s.sideBlock} ${v.panel}`}>
+                      <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><User size={12}/> CLIENTE</div>
                       <div className={s.sideField}>
                           <label>NOMBRE</label>
                           {isReadOnly || sourceId ? (
@@ -1250,8 +1256,8 @@ export default function DeliveryNoteForm(props) {
                   </div>
 
                   {/* Bloque Operativo / Logística */}
-                  <div className={s.sideBlock}>
-                      <div className={s.sideBlockTitle}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
+                  <div className={`${s.sideBlock} ${v.panel}`}>
+                      <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
                       <div className={s.sideField}>
                           <label>TRANSPORTE</label>
                           {isReadOnly ? <div className={s.sideInput}>{transporter || '-'}</div> : (
@@ -1322,7 +1328,7 @@ export default function DeliveryNoteForm(props) {
                 return (
                   <div 
                     className={s.relationCard} 
-                    onClick={() => invoices.length === 1 && openNuevaFactura({ id: invoices[0].id })}
+                    onClick={() => invoices.length === 1 && openEditFactura(invoices[0].id)}
                     style={{ cursor: invoices.length === 1 ? 'pointer' : 'default', border: pendingQty <= 0 ? '1.5px solid #10b981' : '1.5px solid #f97316' }}
                   >
                     <div className={s.nodeTitle} style={{ color: pendingQty <= 0 ? '#10b981' : '#f97316' }}>FACTURA</div>
@@ -1408,7 +1414,7 @@ export default function DeliveryNoteForm(props) {
                         <td style={{ padding: '8px 4px', textAlign: 'right' }}>{inv.currency === 'USD' ? 'u$s' : '$'} {(inv.total_amount || 0).toLocaleString('es-AR', { minimumFractionDigits: 2 })}</td>
                         <td style={{ padding: '8px 4px', textAlign: 'right' }}>
                           <button 
-                            onClick={() => openNuevaFactura({ id: inv.id })}
+                            onClick={() => openEditFactura(inv.id)}
                             style={{ background: 'none', border: 'none', color: '#3b82f6', cursor: 'pointer', fontSize: 12, fontWeight: 500 }}
                           >
                             Ver
@@ -1423,7 +1429,7 @@ export default function DeliveryNoteForm(props) {
           )}
 
           {/* Operational Summary Panel */}
-          <div className={s.summaryPanel}>
+          <div className={`${s.summaryPanel} ${v.statusStrip}`}>
             <div className={s.summaryItem}>
               <div className={s.summaryLabel}>CLIENTE</div>
               <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
@@ -1457,7 +1463,7 @@ export default function DeliveryNoteForm(props) {
           </div>
 
           {/* Footer Compact: Totales */}
-          <div className={s.footerCompact}>
+          <div data-document-section="total" className={`${s.footerCompact} ${v.footer}`}>
             <div className={s.footerCompactItem}>
               <span className={s.footerCompactLabel}>TOTAL UNIDADES</span>
               <span className={s.footerCompactValue}>{items.reduce((acc, l) => acc + (Number(l.qty) || 0), 0).toFixed(2)} u.</span>

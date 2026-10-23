@@ -7,8 +7,9 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
+import { exportToExcel } from '../../utils/ReportExporter';
 import DocumentListPage from '../../components/layout/DocumentListPage';
-import { openNuevaFacturaCompra, openEditFacturaCompra } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
@@ -39,6 +40,7 @@ export default function PurchaseInvoicesPage() {
   const pageSize = 15;
   
   const { showToast } = useToast();
+  const { openNuevaFacturaCompra, openEditFacturaCompra } = useInternalCommercialDocuments();
   
   // Sorting
   const [sortBy, setSortBy] = useState('date');
@@ -248,6 +250,25 @@ export default function PurchaseInvoicesPage() {
     }
   ];
 
+  const exportFilteredInvoices = () => {
+    if (!sorted.length) {
+      showToast("No hay facturas para exportar", "warning");
+      return;
+    }
+    const rows = sorted.map(inv => ({
+      "Comprobante": inv.number || "",
+      "Fecha": inv.date ? new Date(inv.date).toLocaleDateString("es-AR") : "",
+      "Proveedor": inv.entity_name || entityName(inv.entity_id),
+      "Moneda": inv.currency || "ARS",
+      "Importe": Number(inv.total_amount) || 0,
+      "Estado": inv.status || "",
+      "Vencimiento": inv.due_date ? new Date(inv.due_date).toLocaleDateString("es-AR") : "",
+    }));
+    if (!exportToExcel(rows, "facturas_compra", "Facturas")) {
+      showToast("No se pudo exportar el listado", "error");
+    }
+  };
+
   const toolbar = {
     search: (
       <div className={s.searchWrap}>
@@ -274,8 +295,7 @@ export default function PurchaseInvoicesPage() {
     ),
     actions: (
       <>
-        <button className={s.ghostBtn} title="Próximamente">Exportar</button>
-        <button className={s.ghostBtn} title="Próximamente">Columnas</button>
+        <button className={s.ghostBtn} onClick={exportFilteredInvoices} title="Exportar facturas filtradas a Excel">Exportar</button>
         <button className={s.ghostBtn} style={{ color: '#ef4444' }} onClick={clearFilters} title="Limpiar Filtros">Limpiar</button>
         <button className={s.primaryCta} onClick={handleOpenNew}>
             <PlusCircle size={16} />
@@ -322,6 +342,7 @@ export default function PurchaseInvoicesPage() {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
         <th className={s.th} style={{ width: 40, padding: '0 12px' }}>
@@ -352,8 +373,6 @@ export default function PurchaseInvoicesPage() {
               icon={Search} 
               title={hasActiveFilters ? "Sin resultados" : "Sin facturas de compra"}
               description={hasActiveFilters ? "Ajustá los filtros para encontrar lo que buscás." : "Comenzá cargando una factura de proveedor."}
-              actionLabel={!hasActiveFilters ? "Cargar Factura" : null}
-              onAction={!hasActiveFilters ? handleOpenNew : null}
           />
         </td>
       </tr>

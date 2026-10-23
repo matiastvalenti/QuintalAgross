@@ -1,0 +1,649 @@
+/*
+ * Estructura propia de Facturas de Venta y Compra.
+ * Referencia: Nueva Orden de Venta (datos superiores, solapas, productos a todo el ancho).
+ * No depende de la columna lateral ni de las reglas acumuladas del antiguo
+ * CommercialDocumentWorkspace. El único scroll vertical es el del documento;
+ * la grilla maneja su propio scroll horizontal.
+ */
+.root {
+  --invoice-bg: #101729;
+  --invoice-panel: #202c46;
+  --invoice-field: #151f35;
+  --invoice-border: #394861;
+  --invoice-text: #f8fafc;
+  --invoice-muted: #b6c5dc;
+  --text: var(--invoice-text);
+  --text-primary: var(--invoice-text);
+  --text-secondary: var(--invoice-muted);
+  --border-color: var(--invoice-border);
+  --bg-page: var(--invoice-bg);
+  --panel-bg: var(--invoice-panel);
+  --panel-2: var(--invoice-field);
+  --bg-card: var(--invoice-field);
+  --primary: #a390ff;
+  color: var(--invoice-text);
+  background: var(--invoice-bg);
+  box-sizing: border-box;
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  max-width: none;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  overflow: hidden;
+  padding: 12px 16px 10px;
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  container-type: inline-size;
+  scrollbar-color: #526383 transparent;
+}
+.standalone { height: 100%; min-height: 100%; }
+.withExpense { --invoice-has-expense: 1; }
+.root .header {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 43px;
+  height: auto;
+  margin: 0 !important;
+  padding: 0 0 8px !important;
+  gap: 10px 18px;
+  border-bottom: 1px solid var(--invoice-border);
+}
+.root .header :global(h1) {
+  font-size: 15px !important;
+  font-weight: 850;
+  color: var(--invoice-text) !important;
+  margin: 0;
+}
+.root .header :global([class*="headerMeta"]) {
+  font-size: 11px;
+  color: var(--invoice-muted);
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.root .header :global([class*="headerActions"]) {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+}
+.root .header :global([class*="saveBtn"]) {
+  min-height: 36px;
+  background: #806ce7;
+  color: #fff;
+  padding: 7px 16px;
+  border-radius: 9px;
+  font-size: 12px;
+}
+.root .header :global([class*="actionBtn"]) {
+  min-width: 36px;
+  min-height: 36px;
+  border-radius: 8px;
+  color: #dce6fa;
+  border-color: #4a5877;
+  background: #202c46;
+}
+
+/* Transforma de verdad el antiguo lateral en dos paneles superiores.
+   display:contents permite conservar estado, eventos y vínculos de cada campo. */
+.layout {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+  grid-auto-rows: max-content;
+  align-items: start !important;
+  gap: 11px 14px !important;
+  min-height: 0;
+  width: 100%;
+  flex: 1 1 auto;
+  max-height: 100%;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  align-content: start;
+  padding: 0 3px 8px 0;
+  scrollbar-color: #526383 transparent;
+}
+.layout .left,
+.layout .right {
+  display: contents !important;
+}
+.party,
+.commercial,
+.expense,
+.notes {
+  background: var(--invoice-panel) !important;
+  border: 1px solid var(--invoice-border) !important;
+  border-radius: 12px !important;
+  box-sizing: border-box;
+  padding: 13px 16px !important;
+  height: auto !important;
+  min-height: 145px;
+  max-height: none !important;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  overflow: visible !important;
+  gap: 10px;
+}
+.party {grid-column: 1; order: 0;}
+.commercial {grid-column: 2; order: 1;}
+.root .party :global([class*="panelTitle"]),
+.root .commercial :global([class*="panelTitle"]),
+.root .notes :global([class*="panelTitle"]),
+.root .party :global([class*="sideBlockTitle"]),
+.root .commercial :global([class*="sideBlockTitle"]),
+.root .notes :global([class*="sideBlockTitle"]) {
+  color: #cfc4ff !important;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: .035em;
+  margin: 0 0 8px;
+}
+.root .party :global([class*="clientPanelBody"]) {
+  display: grid;
+  gap: 8px;
+  grid-template-rows: none;
+  align-content: start;
+}
+.root .party :global([class*="clientField"]) {
+  grid-template-columns: 95px minmax(0, 1fr);
+  min-width: 0;
+}
+.root .party :global([class*="sideField"]),
+.root .commercial :global([class*="sideField"]) {
+  display: grid;
+  grid-template-columns: 105px minmax(0, 1fr);
+  gap: 7px;
+  min-height: 32px;
+  align-items: center;
+  margin: 0;
+}
+.root :global(input:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
+.root :global(select),
+.root :global(textarea),
+.root :global([class*="readonlyControl"]) {
+  background: var(--invoice-field) !important;
+  color: var(--invoice-text) !important;
+  -webkit-text-fill-color: var(--invoice-text);
+  color-scheme: dark;
+  border: 1px solid #465975 !important;
+  border-radius: 7px;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.root :global(input::placeholder),
+.root :global(textarea::placeholder) {
+  color: #93a5bf !important;
+  -webkit-text-fill-color: #93a5bf;
+}
+.root :global(label) {
+  color: var(--invoice-muted) !important;
+  font-size: 10px;
+  font-weight: 750;
+}
+.root :global(input:focus-visible),
+.root :global(select:focus-visible),
+.root :global(textarea:focus-visible),
+.root .tab:focus-visible {
+  outline: 2px solid #ad9aff;
+  outline-offset: 2px;
+}
+.root :global([class*="clientInput"]),
+.root :global([class*="clientSelect"]),
+.root :global([class*="sideInput"]),
+.root :global([class*="sideSelect"]),
+.root :global([class*="commercialInput"]),
+.root :global([class*="commercialSelect"]) {
+  height: 33px !important;
+  max-height: none !important;
+  min-height: 33px;
+  font-size: 12px;
+}
+.root :global([class*="clientNameControl"]) {min-width: 0;}
+
+/* Los campos de las tarjetas dejan de usar alturas de la antigua barra lateral. */
+.root .commercial :global([class*="tabContent"]),
+.root .notes :global([class*="tabContent"]) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-content: stretch;
+  gap: 8px;
+  grid-template-rows: none !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+.root .commercial :global([class*="commercialField"]) {
+  display: grid;
+  grid-template-columns: 115px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 31px;
+  margin: 0;
+}
+.root .commercial :global([class*="commercialControl"]) {
+  width: 100%;
+  min-width: 0;
+}
+.root .notes :global([class*="arcaGrid"]) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit,minmax(130px,1fr));
+  gap: 9px;
+}
+.root .notes :global([class*="arcaItem"]) {
+  background: #17233d;
+  border: 1px solid #405171;
+  border-radius: 8px;
+  padding: 9px;
+  color: #f8fafc;
+}
+.root .notes :global([class*="arcaValue"]) {color:#f8fafc;}
+.root .notes :global([class*="arcaLabel"]) {color:#b6c5dc;}
+/* Las solapas no son botones de scroll: reemplazan el contenido del panel. */
+.tabs {
+  order: 2;
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 0 2px;
+  min-height: 39px;
+  border-bottom: 1px solid var(--invoice-border);
+}
+.tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: #aebdd7;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.tab:hover {color: #fff; background: #26334f;}
+.tabActive {
+  color: #e0d7ff;
+  border-bottom-color: #9d88ff;
+  background: #273355;
+}
+.tabCount {
+  background: #3b3362;
+  color: #e7ddff;
+  font-size: 10px;
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.heading {
+  order: 3;
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  color: #e9f0fc;
+  font-size: 12px;
+  font-weight: 800;
+  margin: 0;
+  padding: 1px 3px 0;
+}
+.search {
+  order: 4;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 8px 10px !important;
+  border-radius: 10px !important;
+  background: var(--invoice-panel) !important;
+  border: 1px solid var(--invoice-border) !important;
+  box-shadow: none !important;
+}
+.items {
+  order: 5;
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  height: clamp(160px, 26vh, 275px) !important;
+  min-height: 160px !important;
+  max-height: 275px !important;
+  flex: 0 0 auto !important;
+  display: block !important;
+  background: #1b2943 !important;
+  border: 1px solid #435574 !important;
+  border-radius: 11px !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  padding: 0 !important;
+  scrollbar-color: #516582 #1b2943;
+}
+.root .items :global([class*="itemsList"]) {
+  overflow: visible !important;
+  min-height: 125px;
+  max-height: none !important;
+  height: auto !important;
+  padding: 0;
+}
+.root .items :global([class*="tableHeader"]) {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.root .items :global([class*="tableHeader"]),
+.root .items :global([class*="tableRow"]) {
+  display: grid;
+  grid-template-columns:
+    minmax(240px, 2.5fr) 76px 90px 56px 115px 70px 64px 130px 42px !important;
+  gap: 10px !important;
+  min-width: 1020px !important;
+  width: 100%;
+  box-sizing: border-box;
+}
+.root .items :global([class*="tableHeader"]) {
+  background: #283754 !important;
+  border: 0;
+  border-bottom: 1px solid #536582;
+  border-radius: 0;
+  padding: 9px 12px !important;
+  min-height: 38px;
+  height: auto;
+}
+.root .items :global([class*="tableRow"]) {
+  background: #1c2a45 !important;
+  border-bottom: 1px solid #3b4c69;
+  min-height: 52px;
+  padding: 8px 12px !important;
+}
+.root .items :global([class*="th"]) {
+  color: #c9d7ed !important;
+  font-size: 10px;
+  font-weight: 800;
+}
+.root .items :global([class*="tableInput"]) {
+  min-height: 33px;
+  font-size: 12px;
+  padding: 6px 8px;
+}
+.root .items :global([class*="tableRow"]) > * {min-width: 0;}
+.root .items :global([class*="emptyProducts"]) {color: #b8c8e4;}
+.root .items :global([class*="readonlyControl"]) {background:#253653 !important;}
+
+/* La grilla vacía no debe consumir media ventana. La barra de totales queda visible. */
+.root[data-has-items="false"] .items {
+  height: 112px !important;
+  min-height: 112px !important;
+  max-height: 112px !important;
+}
+.root[data-has-items="false"] .items :global([class*="itemsList"]) {
+  min-height: 110px !important;
+}
+
+/* Solapa de Observaciones; en compras muestra también gastos de vehículo. */
+.notes {
+  order: 7;
+  grid-column: 1 / -1;
+  min-height: 160px;
+}
+.expense {
+  order: 6;
+  grid-column: 1;
+}
+.root[data-active-view="notes"] .notes {grid-column: 2;}
+.root[data-active-view="notes"]:not(.withExpense) .notes {grid-column: 1 / -1;}
+.root .notes :global(textarea) {
+  width: 100%;
+  min-height: 100px;
+  resize: vertical;
+}
+.root .notes :global([class*="panelTabs"]) {
+  background: #253552;
+  border-radius: 9px;
+  padding: 4px;
+}
+.root .notes :global([class*="panelTab"]) {
+  color: #bbc9de;
+  background: transparent;
+}
+.root .notes :global([class*="panelTabActive"]) {
+  color: white !important;
+  background: #6c5ad0 !important;
+}
+
+/* Solapa de seguimiento, sin tarjetas encimadas ni altura forzada. */
+.flow {
+  order: 6;
+  grid-column: 1 / -1;
+  display: block;
+  background: var(--invoice-panel);
+  border: 1px solid var(--invoice-border);
+  border-radius: 11px;
+  height: auto !important;
+  min-height: 180px !important;
+  max-height: none !important;
+  overflow-x: auto !important;
+  overflow-y: visible !important;
+  padding: 12px;
+}
+.flowList {
+  display: flex !important;
+  align-items: stretch;
+  flex-wrap: nowrap;
+  min-height: 155px;
+  max-height: none;
+  overflow-x: auto !important;
+  overflow-y: hidden !important;
+  gap: 8px !important;
+}
+.flowList > :global([class*="relationCard"]) {
+  flex: 1 0 150px;
+}
+.root .flow :global([class*="relationsBar"]) {
+  background: transparent;
+  border: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 7px;
+  height: auto !important;
+  min-height: 125px;
+  max-height: none !important;
+  margin: 0;
+  padding: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+.root .flow :global([class*="relationCard"]) {
+  flex: 1 0 145px;
+  min-height: 105px;
+  min-width: 145px;
+  border: 1px solid #465673 !important;
+  border-radius: 9px;
+  padding: 9px 11px;
+  background: #17243d !important;
+  opacity: 1 !important;
+}
+.root .flow :global([class*="nodeTitle"]) {color:#c9baf9 !important;font-size:10px;}
+.root .flow :global([class*="nodeMetric"]) {color:#f8fafc !important;font-size:11px;overflow-wrap:anywhere;}
+.root .flow :global([class*="nodeStatus"]) {font-size:11px;}
+
+/* Visualización excluyente, igual que las solapas de Nueva Orden de Venta. */
+.root[data-active-view="products"] .notes,
+.root[data-active-view="products"] .expense,
+.root[data-active-view="products"] .flow {display: none !important;}
+.root[data-active-view="notes"] .heading,
+.root[data-active-view="notes"] .search,
+.root[data-active-view="notes"] .items,
+.root[data-active-view="notes"] .flow {display: none !important;}
+.root[data-active-view="documents"] .heading,
+.root[data-active-view="documents"] .search,
+.root[data-active-view="documents"] .items,
+.root[data-active-view="documents"] .expense,
+.root[data-active-view="documents"] .notes {display: none !important;}
+
+.bottom {
+  display: contents !important;
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  margin: 0 !important;
+  padding: 12px 14px !important;
+  background: var(--invoice-panel) !important;
+  border: 1px solid var(--invoice-border) !important;
+  border-radius: 11px;
+}
+.root:not([data-active-view="documents"]) .summary {display: none !important;}
+.root .summary :global([class*="summaryLabel"]) {
+  color: var(--invoice-muted);
+  font-size: 10px;
+}
+.root .summary :global([class*="summaryValue"]) {
+  color: #f8fafc !important;
+  font-size: 12px;
+}
+.footer {
+  position: relative !important;
+  inset: auto;
+  min-height: 52px;
+  margin: 0 !important;
+  padding: 8px 14px !important;
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px 30px;
+  background: #263653 !important;
+  border: 1px solid #4f6082 !important;
+  border-radius: 11px;
+  box-shadow: none !important;
+}
+.root .footer :global([class*="footerCompactLabel"]) {
+  font-size: 10px;
+  color: #b6c6df !important;
+}
+.root .footer :global([class*="footerCompactValue"]) {
+  font-size: 15px;
+  color: #f8fafc !important;
+  font-variant-numeric: tabular-nums;
+}
+.root .footer :global([class*="footerCompactTotal"]) {
+  font-size: 18px;
+  color: #c9baff !important;
+  font-variant-numeric: tabular-nums;
+}
+
+@container (max-width: 910px) {
+  .layout {grid-template-columns: minmax(0, 1fr) !important;}
+  .party, .commercial, .notes, .expense {grid-column: 1 / -1 !important;}
+  .root .notes {grid-column:1 / -1 !important;}
+  .root {padding: 12px;}
+  .root .items :global([class*="tableHeader"]),
+  .root .items :global([class*="tableRow"]) {min-width: 980px !important;}
+}
+@container (max-width: 610px) {
+  .tabs {gap: 0;overflow-x:auto;flex-wrap:nowrap;}
+  .tab {white-space:nowrap;font-size:11px;padding:9px;}
+  .footer {justify-content:space-between;}
+  .root :global([class*="clientField"]),
+  .root :global([class*="sideField"]) {grid-template-columns: minmax(80px, .5fr) minmax(0, 1fr) !important;}
+}
+
+
+/* Tarjetas superiores equilibradas: dos columnas internas para los cuatro
+   datos comerciales, igual que la carga compacta de una Orden de Venta. */
+.root .layout .party,
+.root .layout .commercial {
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 165px !important;
+}
+.root .layout .commercial {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  align-content: start;
+  align-items: start;
+  gap: 8px 12px !important;
+  padding: 12px 15px !important;
+}
+.root .commercial > :global([class*="panelTitle"]),
+.root .commercial > :global([class*="sideBlockTitle"]),
+.root .commercial > :global([class*="panelTabs"]),
+.root .commercial > :global([class*="tabContent"]) {
+  grid-column: 1 / -1 !important;
+}
+.root .commercial > :global([class*="tabContent"]) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  gap: 8px 12px !important;
+  align-items: start;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+.root .commercial :global([class*="commercialField"]),
+.root .commercial > :global([class*="sideField"]) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 4px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+.root .commercial :global([class*="commercialField"]) label,
+.root .commercial > :global([class*="sideField"]) label {
+  font-size: 10px;
+  line-height: 1.25;
+  color: #bac9e1 !important;
+}
+.root .commercial :global([class*="commercialControl"]),
+.root .commercial :global([class*="sideInput"]),
+.root .commercial :global([class*="sideSelect"]) {
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100%;
+}
+@container (max-width: 760px) {
+  .root .layout .commercial {grid-template-columns: minmax(0,1fr) !important;}
+  .root .commercial > :global([class*="tabContent"]) {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  .root .layout .party, .root .layout .commercial {min-height:0 !important;}
+}
+
+/* Evitar el borde/cápsula blanca: Autocomplete maneja todo en un único control. */
+.root .search :global([class*="inputWrapper"]),
+.root .party :global([class*="inputWrapper"]) {
+  background: #151f35 !important;
+  border: 1px solid #465875 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+.root .search :global([class*="inputWrapper"] input),
+.root .party :global([class*="inputWrapper"] input) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc;
+}
+.root .search :global([class*="inputWrapper"]):focus-within,
+.root .party :global([class*="inputWrapper"]):focus-within {
+  border-color: #a390ff !important;
+  outline: 2px solid #a390ff;
+  outline-offset: 1px;
+}

@@ -1,0 +1,41 @@
+name: Quintal ERP - Ventas y Compras
+
+on:
+  push:
+    branches:
+      - redesign/quintal-dark-phase2
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Instalar dependencias
+        run: npm ci
+      - name: Compilar formularios y pantallas
+        run: npm run build
+      - name: Pruebas de remitos y facturas parciales
+        run: npm test -- --run src/utils/documentQuantities.test.js src/modules/common/OrderEmailDialog.test.jsx src/modules/common/useInternalCommercialDocuments.test.jsx src/modules/common/InvoiceWorkspaceTabs.test.jsx src/components/workspace/windowGeometry.test.js src/components/workspace/Dock.test.jsx
+
+  pricing:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Dependencias de pruebas
+        run: python -m pip install pytest
+      - name: Verificar sintaxis de backend comercial
+        run: python -m compileall -q backend/app/modules/purchases backend/app/modules/sales backend/app/modules/accounting/document_router.py
+      - name: Pruebas de unidades y envases
+        run: PYTHONPATH=backend python -m pytest --confcutdir=backend/tests/unit backend/tests/unit/test_fractional_packages.py -q

@@ -8,7 +8,7 @@ import Drawer from "../../components/ui/Drawer";
 import Badge from "../../components/ui/Badge";
 import Card from "../../components/ui/Card";
 import { useWindow } from '../../context/WindowContext';
-import { openEditPurchaseOrder } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import { useToast } from '../../context/ToastContext';
 import { useCostCenter } from "../../context/CostCenterContext";
 import { API_URL } from "../../config";
@@ -21,6 +21,7 @@ import {
 } from "../../utils/formatters";
 import {
   Save,
+  Pencil,
   Trash2,
   Plus,
   Truck,
@@ -52,7 +53,9 @@ import {
   AlertCircle,
   ArrowRight
 } from "lucide-react";
-import s from "../sales/SalesOrderForm.module.css"; // Using SalesOrderForm.module.css for consistent styling
+import s from "../sales/SalesOrderForm.module.css";
+import v from "../common/CommercialDocumentWorkspace.module.css";
+import CommercialDocumentNav from "../common/CommercialDocumentNav"; // Using SalesOrderForm.module.css for consistent styling
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
 import ManualLinkInvoiceModal from "../sales/ManualLinkInvoiceModal"; // Needs to be adapted or removed for purchases
@@ -68,7 +71,8 @@ export default function PurchaseDeliveryNoteForm(props) {
     initialData = null,
     isStandalone = false,
   } = props;
-  const { closeWindow, openWindow } = useWindow(); // Keep for now, might be removed if standalone
+  const { closeWindow, openWindow } = useWindow();
+  const { openEditPurchaseOrder } = useInternalCommercialDocuments(); // Keep for now, might be removed if standalone
   const { showToast } = useToast();
   const { costCenter } = useCostCenter();
 
@@ -82,7 +86,7 @@ export default function PurchaseDeliveryNoteForm(props) {
   const [sourceOrderId, setSourceOrderId] = useState(oc_id || ''); // Changed from ov_id
     const [invoices, setInvoices] = useState([]);
   const [relatedDeliveryNotes, setRelatedDeliveryNotes] = useState([]);
-  const [isReadOnly, setIsReadOnly] = useState(false);
+  const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit" || initialMode === "view");
   const [showItemSelector, setShowItemSelector] = useState(false);
   const [selectableItems, setSelectableItems] = useState([]);
   const [selectorLoading, setSelectorLoading] = useState(false);
@@ -124,8 +128,8 @@ export default function PurchaseDeliveryNoteForm(props) {
   const totals = useMemo(() => {
     return items.reduce(
       (acc, i) => {
-        const factor = i._unit_content || 1;
-        const sub = (i.qty || 0) * factor * (i.unit_price || 0);
+        // qty ya está expresada en litros/kg; multiplicar por envase otra vez duplica importes.
+        const sub = (Number(i.qty) || 0) * (Number(i.unit_price) || 0);
         const bonif = sub * ((i.discount_pct || 0) / 100);
         const net = sub - bonif;
         const vat = net * (i.vat_rate || 0.21);
@@ -140,7 +144,7 @@ export default function PurchaseDeliveryNoteForm(props) {
     );
   }, [items]);
 
-  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + ((parseFloat(item.qty) || 0) * (parseFloat(item._unit_content) || 1)), 0), [items]);
+  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + (parseFloat(item.qty) || 0), 0), [items]);
 
     useEffect(() => {
     if (oc_id) {
@@ -219,7 +223,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                     product_name: line.product_name || line.description,
                     description: line.description || line.product_name,
                     qty: qtyToReceive,
-                    qty_packages: qtyToReceive,
+                    qty_packages: Number(line.qty_packages ?? (qtyToReceive / (Number(line._unit_content) || 1))),
                     qty_to_receive: qtyToReceive,
                     qty_pending: qtyPending,
                     qty_received: Number(line.qty_received ?? 0),
@@ -337,8 +341,8 @@ export default function PurchaseDeliveryNoteForm(props) {
              // Changed from sales_order_id
         }
         setBuyer(data.buyer || ''); // Changed from vendedor
-        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
-        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
+        setBuyerId(data.salesperson_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -410,8 +414,8 @@ export default function PurchaseDeliveryNoteForm(props) {
         setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
                 setBuyer(data.buyer || ''); // Changed from vendedor
-        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
-        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
+        setBuyerId(data.salesperson_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -441,8 +445,8 @@ export default function PurchaseDeliveryNoteForm(props) {
         setSourceType('purchase-order'); // Changed from sales-order
         setSourceOrderId(data.id);
                 setBuyer(data.buyer || ''); // Changed from vendedor
-        setBuyerId(data.buyer_id || ''); // Changed from salesperson_id
-        setSelectedConditionId(data.purchase_condition_id || ''); // Changed from sale_condition_id
+        setBuyerId(data.salesperson_id || ''); // Changed from salesperson_id
+        setSelectedConditionId(data.sale_condition_id || ''); // Changed from sale_condition_id
         setDueDate(data.due_date ? data.due_date.split("T")[0] : '');
         setCurrency(data.currency || 'USD');
         setExchangeRate(data.exchange_rate || 1);
@@ -472,7 +476,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                  qty_received: l.qty_fulfilled, // Changed from qty_fulfilled
                  qty_pending: l.qty_pending,
                  qty: l.qty_pending, // User requested total pendiente by default
-                 qty_packages: uc > 1 ? l.qty_pending / uc : l.qty_pending,
+                 qty_packages: Number(uc) > 0 ? l.qty_pending / Number(uc) : 0,
                  unit_price: l.unit_price, // This is COST
                  discount_pct: l.discount_pct,
                  vat_rate: l.vat_rate,
@@ -575,6 +579,9 @@ export default function PurchaseDeliveryNoteForm(props) {
         product_id: item.product_id,
         description: item.product_name || item.description,
         qty: selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0),
+        qty_packages: Number(item.quantity_per_container) > 0
+          ? Number(selectorQuantities[item.id] !== undefined ? selectorQuantities[item.id] : (item.qty_pending || 0)) / Number(item.quantity_per_container)
+          : Number(item.qty_pending || 0),
         unit_price: finalUnitPrice, // This is COST
         discount_pct: item.discount_pct || 0,
         vat_rate: item.vat_rate || 0.21,
@@ -615,6 +622,8 @@ export default function PurchaseDeliveryNoteForm(props) {
         const newItem = { ...i, [field]: value === "" ? "" : Number(value) };
         if (field === 'qty') {
             newItem.qty = value === "" ? "" : Number(value);
+            const factor = Number(i._unit_content) || 1;
+            newItem.qty_packages = value === "" ? "" : Number(value) / factor;
         }
         if (field === 'qty_packages') {
             newItem.qty_packages = value === "" ? "" : Number(value);
@@ -675,14 +684,15 @@ export default function PurchaseDeliveryNoteForm(props) {
     const payload = {
         entity_id: entity.id,
         warehouse_id: warehouseId,
+        sourceId: sourceType === 'purchase-order' ? (sourceOrderId || sourceId) : null,
         number: number,
         date: date,
         due_date: dueDate,
         currency: currency,
         exchange_rate: exchangeRate,
         buyer: buyer,
-        buyer_id: buyerId,
-        purchase_condition_id: selectedConditionId,
+        salesperson_id: buyerId,
+        sale_condition_id: selectedConditionId,
         cost_center: parseInt(ctroCosto),
         notes: observations,
         vehicle_driver: vehicleDriver,
@@ -697,8 +707,8 @@ export default function PurchaseDeliveryNoteForm(props) {
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
             vat_rate: l.vat_rate,
-            source_purchase_line_id: l.source_purchase_line_id || l.id,
-            purchase_order_id: l.purchase_order_id
+            source_purchase_line_id: l.source_purchase_line_id || null,
+            purchase_order_id: l.purchase_order_id || (sourceType === 'purchase-order' ? (sourceOrderId || sourceId) : null)
         }))
     };
 
@@ -708,11 +718,6 @@ export default function PurchaseDeliveryNoteForm(props) {
         let url = `${API_URL}/purchases/delivery-notes/`;
         if (isEdit) {
             url = `${API_URL}/purchases/delivery-notes/${id}`; // Changed sales to purchases
-        } else if (sourceId) {
-            const actualSourceId = sourceOrderId || sourceId;
-            if (sourceType === 'purchase-order') { // Changed sales-order
-                url = `${API_URL}/purchases/delivery-notes/from-oc/${actualSourceId}`; // Changed sales to purchases, from-ov to from-oc
-            }
         }
         
         const finalPayload = { 
@@ -730,9 +735,26 @@ export default function PurchaseDeliveryNoteForm(props) {
             const data = await res.json();
             const savedId = data.id || id;
             showToast("Remito de Entrada guardado exitosamente", "success"); // Changed Remito
-            window.dispatchEvent(new CustomEvent("purchase-delivery-note-changed")); // Changed event name
+            window.dispatchEvent(new CustomEvent("purchase-delivery-note-changed"));
+            // Avisar a la OC de origen aun cuando el remito se abra en otra ventana.
+            const documentEvent = {
+                type: "QUINTAL_DOCUMENT_SAVED",
+                documentType: "purchase-delivery-note",
+                purchaseOrderId: sourceOrderId || null,
+                documentId: savedId
+            };
+            try {
+                window.opener?.dispatchEvent(new CustomEvent("purchase-delivery-note-changed"));
+                window.opener?.postMessage(documentEvent, window.location.origin);
+                const channel = new BroadcastChannel("quintal-documents");
+                channel.postMessage(documentEvent);
+                channel.close();
+            } catch (eventError) {
+                console.warn("No se pudo notificar a la orden de compra", eventError);
+            }
             setMode("edit");
             setId(savedId);
+            setIsReadOnly(true);
         } else {
             const err = await res.json();
             showToast(err.detail || "Error al guardar", "error");
@@ -766,7 +788,7 @@ export default function PurchaseDeliveryNoteForm(props) {
 
   return (
     <>
-      <div className={`${s.formCard}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
+      <div data-commercial-document="true" data-has-items={items.length > 0} className={`${s.formCard} ${v.shell} ${v.remito} ${isStandalone ? v.standalone : ""}`} style={isLocked ? { pointerEvents: 'none' } : {}}>
           {isLocked && (
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, background: 'rgba(37, 99, 235, 0.05)', color: '#1d4ed8', padding: '8px 24px', fontSize: 10, fontWeight: 900, textAlign: 'center', borderBottom: '1px solid rgba(37, 99, 235, 0.1)', zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, backdropFilter: 'blur(4px)' }}>
                 <Receipt size={14} /> DOCUMENTO BLOQUEADO POR FACTURACIÓN. NO SE PERMITEN MODIFICACIONES.
@@ -775,7 +797,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           )}
 
           {/* Header Section */}
-          <div className={s.headerLine} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
+          <div className={`${s.headerLine} ${v.header}`} style={{ paddingBottom: 12, borderBottom: '1px solid var(--border-color)', marginBottom: 12, paddingTop: isLocked ? 40 : 0 }}>
               <div className={s.compactHeaderTitle}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                       <h1 style={{ fontSize: '15px', margin: 0, fontWeight: 900, color: 'var(--text)', display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -791,10 +813,15 @@ export default function PurchaseDeliveryNoteForm(props) {
                   </div>
               </div>
               <div className={s.headerActions}>
-                  <button className={s.saveBtn} onClick={handleSave} disabled={isLocked} style={isLocked ? { opacity: 0.5, cursor: 'not-allowed' } : {}}>
-                      <Save size={16} />
-                      Guardar
-                  </button>
+                  {isReadOnly ? (
+                      <button className={s.saveBtn} onClick={() => setIsReadOnly(false)} disabled={isLocked} title="Editar remito">
+                          <Pencil size={16} /> Editar
+                      </button>
+                  ) : (
+                      <button className={s.saveBtn} onClick={handleSave} disabled={isLocked || loading} title="Guardar remito">
+                          <Save size={16} /> {loading ? "Guardando..." : "Guardar"}
+                      </button>
+                  )}
                   <div className={s.actionGroup}>
                       <button className={s.actionBtn} disabled={!id || isLocked} onClick={async () => {
                           if (!window.confirm("¿Estás seguro de anular este remito? Esta acción no se puede deshacer.")) return;
@@ -823,15 +850,17 @@ export default function PurchaseDeliveryNoteForm(props) {
               </div>
           </div>
 
+          <CommercialDocumentNav />
           {/* Body: 2 Column Layout */}
-          <div className={s.bodyTwoColumns} style={{ opacity: isLocked ? 0.8 : 1 }}>
+          <div className={`${s.bodyTwoColumns} ${v.body}`} style={{ opacity: isLocked ? 0.8 : 1 }}>
               {/* Columna Izquierda: Ítems y Productos */}
-              <div className={s.leftCol}>
-                  <div className={s.bentoContainer} style={{ padding: 0, overflow: 'hidden' }}>
+              <div data-document-section="items" className={`${s.leftCol} ${v.left}`}>
+                  <div className={v.sectionHeading}><span>Productos del remito</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? "línea" : "líneas"}</span></div>
+                  <div className={`${s.bentoContainer} ${v.bento}`} style={{ padding: 0, overflow: 'hidden' }}>
                       {items.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
                             {isReadOnly ? null : (
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
+                                <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
                                     <div className={s.th}>Producto</div>
                                     <div className={s.th} style={{ textAlign: 'left' }}>Cant.</div>
                                     <div className={s.th} style={{ textAlign: 'right' }}>Recibir</div> {/* Changed from Remitir */}
@@ -881,7 +910,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                                     
                                   const isExceeding = mode === 'new' && item.qty > (item.qty_pending || 0);
                                   return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border_box' }}>
+                                    <div key={item.id} data-exceeding={isExceeding} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border_box' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
                                             <div style={{ fontSize: 11, fontWeight: 900, color: '#1e293b', lineHeight: 1.1, whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {item.name || item.product?.name || item.description}
@@ -932,10 +961,10 @@ export default function PurchaseDeliveryNoteForm(props) {
 
               {/* Columna Derecha: Panel Lateral Administrativo */}
               {/* Columna Derecha: Panel Lateral Administrativo */}
-              <div className={s.rightCol}>
+              <div data-document-section="details" className={`${s.rightCol} ${v.right}`}>
                   {/* Bloque Proveedor */}
-                  <div className={s.sideBlock}>
-                      <div className={s.sideBlockTitle}><User size={12}/> PROVEEDOR</div> {/* Changed from CLIENTE */}
+                  <div className={`${s.sideBlock} ${v.panel}`}>
+                      <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><User size={12}/> PROVEEDOR</div> {/* Changed from CLIENTE */}
                       <div className={s.sideField}>
                           <label>NOMBRE</label>
                           {isReadOnly || sourceId ? (
@@ -978,8 +1007,8 @@ export default function PurchaseDeliveryNoteForm(props) {
                   </div>
 
                   {/* Bloque Operativo / Logística */}
-                  <div className={s.sideBlock} style={{ height: '100%' }}>
-                      <div className={s.sideBlockTitle}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
+                  <div className={`${s.sideBlock} ${v.panel}`} style={{ height: '100%' }}>
+                      <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><Truck size={12}/> LOGÍSTICA Y TRANSPORTE</div>
                       <div className={s.sideField}>
                           <label>TRANSPORTE</label>
                           {isReadOnly ? <div className={s.sideInput}>{transporter || '-'}</div> : (
@@ -1087,7 +1116,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           </div>
 
           {/* Operational Summary Panel */}
-          <div className={s.summaryPanel}>
+          <div className={`${s.summaryPanel} ${v.statusStrip}`}>
             <div className={s.summaryItem}>
               <div className={s.summaryLabel}>PROVEEDOR</div> {/* Changed from CLIENTE */}
               <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
@@ -1121,7 +1150,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           </div>
 
           {/* Footer Compact: Totales */}
-          <div className={s.footerCompact}>
+          <div data-document-section="total" className={`${s.footerCompact} ${v.footer}`}>
             <div className={s.footerCompactItem}>
               <span className={s.footerCompactLabel}>TOTAL UNIDADES</span>
               <span className={s.footerCompactValue}>{items.reduce((acc, l) => acc + (Number(l.qty) || 0), 0).toFixed(2)} u.</span>

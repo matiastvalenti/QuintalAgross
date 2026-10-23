@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { navigateToError } from '../../utils/errorNavigation';
-import { openStandaloneWindow } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import ContentHeader from "../../components/layout/ContentHeader";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
@@ -67,6 +67,7 @@ export default function DebitNotesPage() {
   const [showCreationModal, setShowCreationModal] = useState(false);
   
   const { openWindow } = useWindow();
+  const { openEditNotaDebito } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -299,7 +300,7 @@ export default function DebitNotesPage() {
   };
 
   const handleOpenDetail = (id, number) => {
-    openStandaloneWindow(`/standalone/notas-debito/${id}`);
+    openEditNotaDebito(id);
   };
 
   const fmt = (val, cur = 'ARS') => {

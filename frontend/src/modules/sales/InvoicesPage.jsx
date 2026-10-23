@@ -29,7 +29,8 @@ import {
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { navigateToError } from '../../utils/errorNavigation';
-import { openNuevaFactura, openEditFactura, openNuevoReciboDesdeFactura } from '../../utils/openStandaloneWindow';
+import { openNuevoReciboDesdeFactura } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import ContentHeader from "../../components/layout/ContentHeader";
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
@@ -38,6 +39,7 @@ import { useWindow } from "../../context/WindowContext";
 import { useToast } from "../../context/ToastContext";
 import { API_URL } from "../../config";
 import api from '../../services/api';
+import { exportToExcel } from '../../utils/ReportExporter';
 import s from "../../components/layout/DocumentListPage.module.css";
 import DocumentListPage from "../../components/layout/DocumentListPage";
 // eslint-disable-next-line no-unused-vars
@@ -133,6 +135,7 @@ export default function InvoicesPage() {
   };
   
   const { openWindow } = useWindow();
+  const { openEditFactura } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -463,6 +466,25 @@ export default function InvoicesPage() {
     }
   ];
 
+  const exportFilteredInvoices = () => {
+    if (!sorted.length) {
+      showToast("No hay facturas para exportar", "warning");
+      return;
+    }
+    const rows = sorted.map(inv => ({
+      "Comprobante": inv.number || "",
+      "Fecha": inv.date ? new Date(inv.date).toLocaleDateString("es-AR") : "",
+      "Cliente": inv.entity_name || entityName(inv.entity_id),
+      "Moneda": inv.currency || "ARS",
+      "Importe": Number(inv.total_amount) || 0,
+      "Estado": inv.status || "",
+      "Vencimiento": inv.due_date ? new Date(inv.due_date).toLocaleDateString("es-AR") : "",
+    }));
+    if (!exportToExcel(rows, "facturas_venta", "Facturas")) {
+      showToast("No se pudo exportar el listado", "error");
+    }
+  };
+
   const toolbar = {
     searchWrap: (
       <div className={s.searchWrap}>
@@ -499,8 +521,7 @@ export default function InvoicesPage() {
                 {sendingEmail ? "ENVIANDO..." : `ENVIAR ${selectedInvoices.length} POR EMAIL`}
             </button>
         )}
-        <button className={s.ghostBtn} title="Próximamente">Exportar</button>
-        <button className={s.ghostBtn} title="Próximamente">Columnas</button>
+        <button className={s.ghostBtn} onClick={exportFilteredInvoices} title="Exportar facturas filtradas a Excel">Exportar</button>
         <button className={s.ghostBtn} style={{ color: '#ef4444' }} onClick={clearFilters} title="Limpiar Filtros">Limpiar</button>
         <button className={s.primaryCta} onClick={handleOpenNew}>
             <PlusCircle size={16} />
@@ -548,6 +569,7 @@ export default function InvoicesPage() {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
         <th className={s.th} style={{ width: 42, padding: '0 12px', textAlign: 'center' }}>
@@ -575,10 +597,8 @@ export default function InvoicesPage() {
         <td colSpan="7">
           <EmptyState 
               icon={Layers} 
-              title="Sin facturas coincidentes"
-              description="Ajustá los filtros o registrá una nueva factura."
-              actionLabel="Nueva Factura"
-              onAction={handleOpenNew}
+              title={invoices.length ? "No hay facturas que coincidan" : "Todavía no hay facturas"}
+              description={invoices.length ? "Probá con otros filtros o cambiá la búsqueda." : "Usá Nueva Factura para registrar el primer comprobante."}
           />
         </td>
       </tr>

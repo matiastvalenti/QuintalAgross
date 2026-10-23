@@ -539,3 +539,12 @@
   -webkit-text-fill-color: #ffdf9e;
   border-color: #9b7638 !important;
 }
+
+/* Acciones de documento: icono + etiqueta en escritorio, icono accesible en pestañas estrechas. */
+.actionLabel {font-size:12px;font-weight:800;line-height:1;white-space:nowrap;}
+.workspace .actionBtn {display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:8px 11px;white-space:nowrap;}
+.workspace .actionBtn:focus-visible {outline:2px solid #b9abff;outline-offset:2px;}
+@container (max-width: 940px) {
+  .workspace .actionLabel {display:none;}
+  .workspace .actionBtn {padding:9px;}
+}

@@ -7,13 +7,16 @@ import t from '../../components/ui/Table.module.css';
 import s from './PurchaseDeliveryNotesPage.module.css';
 import { useToast } from '../../context/ToastContext';
 import { Eye, Edit, Search, Filter, ChevronUp, ChevronDown, X, Receipt, Clock, TrendingUp, CheckCircle, Activity, ChevronRight, Plus } from 'lucide-react';
-import { openNuevoRemitoEntrada, openEditRemitoEntrada } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
+import { useWindow } from '../../context/WindowContext';
 import Skeleton from '../../components/ui/Skeleton';
 import { API_URL } from '../../config';
 import api from '../../services/api';
 
 export default function PurchaseDeliveryNotesPage() {
   const { showToast } = useToast();
+  const { openNuevoRemitoEntrada, openEditRemitoEntrada } = useInternalCommercialDocuments();
+  const { openWindow } = useWindow();
   
   const [notes, setNotes] = useState([]);
   const [entities, setEntities] = useState([]);

@@ -1,0 +1,751 @@
+/* Shared layout for Remitos and Facturas in the internal ERP tabbed workspace.
+   OV / OC keep their own tabbed order workspace. */
+.shell {
+  --doc-bg: #101729;
+  --doc-panel: #202c46;
+  --doc-control: #151f35;
+  --doc-line: #394861;
+  --doc-text: #f8fafc;
+  --doc-muted: #bdcbe0;
+  --text: var(--doc-text);
+  --text-primary: var(--doc-text);
+  --text-secondary: var(--doc-muted);
+  --border-color: var(--doc-line);
+  --border-light: var(--doc-line);
+  --bg-page: var(--doc-bg);
+  --panel-bg: var(--doc-panel);
+  --primary: #9e8bff;
+  background: var(--doc-bg) !important;
+  color: var(--doc-text);
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 15px 20px 14px !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-color: #51617f transparent;
+  container-type: inline-size;
+}
+.shell:focus-within {scroll-behavior: smooth;}
+.standalone {min-height: 100%;height: 100%;padding: 18px 22px !important;}
+.header {
+  flex: 0 0 auto;
+  min-height: 56px !important;
+  height: auto !important;
+  padding: 0 0 12px !important;
+  margin: 0 !important;
+  border-bottom: 1px solid var(--doc-line) !important;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 20px;
+}
+.header :global(h1) {
+  color: #f8fafc !important;
+  font-size: 16px !important;
+  line-height: 1.4;
+  font-weight: 850;
+  margin: 0;
+}
+.header :global(button) {min-height: 34px;}
+.header :global(button:focus-visible),
+.sectionLink:focus-visible {outline: 2px solid #b7a7ff;outline-offset:2px;}
+.header :global([class*="headerMeta"]) {
+  color: var(--doc-muted);
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+.sections {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 0 0 auto;
+  padding: 0 0 2px;
+}
+.sectionLink {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--doc-line);
+  background: var(--doc-panel);
+  color: #d4def0;
+  border-radius: 8px;
+  min-height: 34px;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.sectionLink:hover {background:#334466;color:#fff;border-color:#8270e2;}
+.body {
+  display: grid !important;
+  grid-template-columns: minmax(0,1fr) minmax(270px,305px) !important;
+  gap: 14px !important;
+  align-items: start;
+  min-height: 0;
+  min-width: 0;
+  width: 100%;
+  height: auto !important;
+  flex: 1 1 auto;
+}
+.left {
+  min-width: 0;
+  min-height: 0;
+  height: auto !important;
+  max-width: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.right {
+  min-width: 0;
+  min-height: 0;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding-right: 0 !important;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.panel {
+  background: var(--doc-panel) !important;
+  color: var(--doc-text);
+  border: 1px solid var(--doc-line) !important;
+  border-radius: 12px !important;
+  min-width: 0;
+}
+.panelTitle {color: #d4dff2 !important;font-size:10px;letter-spacing:.07em;}
+.bento {
+  background: var(--doc-panel) !important;
+  border: 1px solid var(--doc-line) !important;
+  border-radius: 12px !important;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 145px;
+  height: auto;
+  max-height: 440px;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  scrollbar-color: #51617f var(--doc-panel);
+}
+.bento :global([class*="itemsList"]) {
+  min-height: 80px;
+  max-height: none;
+  padding-right: 0;
+  overflow: visible;
+}
+.bento :global([class*="searchRibbon"]) {min-width:0;}
+.tableHeader,
+.tableRow {
+  display: grid !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-width: 0;
+  box-sizing: border-box;
+}
+.invoice .tableHeader,
+.invoice .tableRow {
+  grid-template-columns:
+    minmax(220px,2.2fr) minmax(72px,.7fr) minmax(82px,.85fr)
+    58px minmax(90px,.9fr) 62px 60px minmax(95px,.9fr) 46px !important;
+  min-width: 980px !important;
+}
+.remito .tableHeader,
+.remito .tableRow {
+  grid-template-columns: minmax(260px,2fr) 75px 85px 50px 95px 110px 40px !important;
+  min-width: 780px !important;
+}
+.tableHeader {
+  background: #293753 !important;
+  border: 0;
+  border-bottom: 1px solid #465875;
+  border-radius: 10px 10px 0 0 !important;
+  height: auto !important;
+  min-height: 36px !important;
+  padding: 7px 12px !important;
+}
+.tableHeader :global([class*="th"]) {
+  color: #d1dcf0 !important;
+  font-size: 10px !important;
+  white-space: nowrap;
+}
+.tableRow {
+  background: var(--doc-panel) !important;
+  color: var(--doc-text);
+  min-height: 50px !important;
+  height: auto !important;
+  padding: 7px 12px !important;
+  border-bottom: 1px solid var(--doc-line) !important;
+}
+.tableRow > * {min-width:0;}
+.tableRow[data-exceeding="true"] {
+  background: #482939 !important;
+  border-left: 3px solid #ff888d;
+}
+.shell :global(input:not([type="checkbox"]):not([type="radio"]):not([type="file"])),
+.shell :global(select),
+.shell :global(textarea) {
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc;
+  background-color: var(--doc-control) !important;
+  border: 1px solid #465875 !important;
+  border-radius: 7px;
+  box-sizing: border-box;
+  color-scheme: dark;
+  min-width: 0;
+}
+.shell :global(input::placeholder),
+.shell :global(textarea::placeholder) {color:#93a6c4 !important;-webkit-text-fill-color:#93a6c4;}
+.shell :global(input:read-only),
+.shell :global(input:disabled),
+.shell :global(select:disabled) {
+  background:#28354c !important;
+  color:#c1cde0 !important;
+  -webkit-text-fill-color:#c1cde0;
+}
+.shell :global(input:focus-visible),
+.shell :global(select:focus-visible),
+.shell :global(textarea:focus-visible) {
+  outline: 2px solid #9783f5 !important;
+  outline-offset: 1px;
+}
+.shell :global(label) {color:#c1cde0;}
+.shell :global([class*="summaryItem"]),
+.shell :global([class*="relationCard"]),
+.shell :global([class*="nodeMetric"]) {
+  background:var(--doc-panel);
+  color:var(--doc-text);
+  border-color:var(--doc-line);
+}
+.shell :global([class*="summaryLabel"]),
+.shell :global([class*="footerCompactLabel"]) {color:#bdcbe0;}
+.shell :global([class*="summaryValue"]),
+.shell :global([class*="footerCompactValue"]),
+.shell :global([class*="footerCompactTotal"]) {color:#f8fafc;}
+.footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 5;
+  min-width:0;
+  flex: 0 0 auto;
+  background: #202c46 !important;
+  border: 1px solid var(--doc-line) !important;
+  border-radius: 10px !important;
+  box-shadow: 0 -8px 24px rgba(5,11,24,.35);
+  padding: 10px 14px !important;
+  margin-top: auto !important;
+  gap: 14px;
+}
+@container (max-width: 1050px) {
+  .body {grid-template-columns: minmax(0, 1fr) !important;}
+  .right {display:grid;grid-template-columns: repeat(2,minmax(0,1fr));gap:10px;}
+  .header {align-items:flex-start;}
+}
+@container (max-width: 680px) {
+  .shell {padding: 12px !important;}
+  .right {display:flex;flex-direction:column;}
+  .footer {justify-content:space-between;flex-wrap:wrap;gap:10px;}
+  .header :global(h1) {font-size:14px !important;}
+}
+
+/* La factura de venta utiliza documentMainGrid en lugar de bodyTwoColumns. */
+.documentGrid {
+  display:grid !important;
+  grid-template-columns:minmax(0,1fr) minmax(270px,305px) !important;
+  gap:14px !important;
+  min-width:0;
+  min-height:0;
+  width:100%;
+  flex:1 1 auto;
+  align-items:start;
+}
+.documentLeft {min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;}
+.documentRight {min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px;overflow:visible;}
+@container (max-width:1050px) {
+  .documentGrid {grid-template-columns:minmax(0,1fr) !important;}
+  .documentRight {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@container (max-width:680px) {
+  .documentRight {display:flex;flex-direction:column;}
+}
+
+/* Ajustes de integración con los paneles reales: no dejar islas blancas. */
+.shell :global([class*="relationsBar"]),
+.shell :global([class*="summaryPanel"]),
+.shell :global([class*="clientPanel"]),
+.shell :global([class*="middleRightPanel"]),
+.shell :global([class*="bottomRightPanel"]),
+.shell :global([class*="observationsPanel"]),
+.shell :global([class*="bottomTabs"]),
+.shell :global([class*="panelTabs"]),
+.shell :global([class*="panelTitle"]),
+.shell :global([class*="clientPanelBody"]) {
+  background: var(--doc-panel) !important;
+  color: var(--doc-text) !important;
+  border-color: var(--doc-line) !important;
+}
+.shell :global([class*="relationsBar"]) {
+  display:flex;
+  align-items:stretch;
+  gap:8px;
+  min-height:75px;
+  height:auto;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding:8px !important;
+  margin-top:0;
+}
+.shell :global([class*="relationCard"]) {
+  background:#17233b !important;
+  border:1px solid #435473 !important;
+  color:#e6eeff !important;
+  min-width:125px;
+}
+.shell :global([class*="nodeMetric"]),
+.shell :global([class*="nodeStatus"]),
+.shell :global([class*="summaryValue"]) {color:#f8fafc !important;}
+.shell :global([class*="nodeBadge"]) {background:#33415f;color:#cfcbff;}
+.shell :global([class*="summaryPanel"]) {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(135px,1fr));
+  gap:9px;
+  min-height:47px;
+  padding:9px 12px !important;
+}
+.shell :global([class*="summaryItem"]) {
+  border:0 !important;
+  background:transparent !important;
+  min-width:0;
+}
+.shell :global([class*="panelTabs"]) {border-radius:8px;gap:4px;}
+.shell :global([class*="panelTab"]) {
+  color:#cbd7e8;
+  background:#293754 !important;
+  border:1px solid #465875 !important;
+}
+.shell :global([class*="panelTabActive"]) {
+  background:#6955cf !important;
+  border-color:#8976e5 !important;
+  color:#fff !important;
+}
+.shell :global([class*="clientPanel"]) {
+  height:auto;
+  min-height:143px;
+  max-height:none;
+  border:1px solid var(--doc-line);
+}
+.shell :global([class*="middleRightPanel"]) {
+  height:auto;
+  min-height:190px;
+  max-height:none;
+  border:1px solid var(--doc-line);
+}
+.shell :global([class*="bottomRightPanel"]) {
+  height:auto;
+  min-height:120px;
+  max-height:none;
+  border:1px solid var(--doc-line);
+  border-radius:12px;
+}
+.shell :global([class*="observationsPanel"]),
+.shell :global([class*="tabContent"]) {
+  color:#f8fafc;
+  min-height:0;
+  overflow:visible;
+}
+.shell :global([class*="itemsPanel"]) {
+  height:clamp(230px,44vh,420px) !important;
+  min-height:230px !important;
+  max-height:420px !important;
+}
+.shell :global([class*="itemsTableScroll"]) {
+  overflow-y:auto;
+  min-height:0;
+}
+.shell :global([class*="commercialControl"]),
+.shell :global([class*="readonlyControl"]) {
+  background:#151f35 !important;
+  color:#f8fafc !important;
+  border-color:#465875 !important;
+}
+.shell :global([class*="sideBlock"]),
+.shell :global([class*="sideBlockTitle"]) {
+  background:var(--doc-panel);
+  color:var(--doc-text);
+  border-color:var(--doc-line);
+}
+.shell :global([class*="footerCompactItem"]) {min-width:0;}
+.shell :global([class*="footerCompactValue"]),
+.shell :global([class*="footerCompactTotal"]) {font-variant-numeric:tabular-nums;}
+@container (max-width:1050px) {
+  .shell :global([class*="relationsBar"]) {flex-wrap:wrap;}
+  .shell :global([class*="relationCard"]) {min-width:120px;}
+}
+
+/* Layout real dentro de WindowFrame: el contenido NO debe estirarse entre
+   el cuadro de productos y los totales del documento. */
+.shell {
+  align-content: start;
+  gap: 9px;
+  padding: 14px 16px 12px !important;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+.shell .header {min-height: 53px !important;padding-bottom: 9px !important;}
+.shell .sections {gap: 5px;padding-bottom: 0;}
+.shell .sectionLink {
+  min-height: 30px;
+  padding: 6px 11px;
+  font-size: 11px;
+  background: #283751;
+  border-color: #425471;
+  border-radius: 7px;
+}
+.shell .sectionLink:hover {background:#3c4c71;}
+.shell .documentGrid,
+.shell .body {
+  flex: 0 0 auto !important;
+  height: auto !important;
+  min-height: 0;
+  align-items: start !important;
+  grid-template-columns: minmax(0, 1fr) minmax(275px, 298px) !important;
+  gap: 12px !important;
+}
+.shell .documentLeft,
+.shell .left {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 9px !important;
+  min-height: 0;
+  height: auto !important;
+  justify-content: flex-start !important;
+}
+.shell .documentRight,
+.shell .right {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  height: auto !important;
+  max-height: none !important;
+  min-height: 0;
+  overflow: visible !important;
+}
+.sectionHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: #edf3ff;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 1px 2px 0;
+  line-height: 20px;
+}
+.sectionCount {
+  display: inline-flex;
+  min-width: 60px;
+  justify-content: center;
+  border: 1px solid #46577a;
+  background: #293855;
+  color: #cfdcf4;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 800;
+}
+.shell :global([class*="searchRibbon"]) {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  padding: 7px 9px !important;
+  background: #202c46 !important;
+  border: 1px solid #3e4f6c !important;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+  z-index: 3;
+}
+.shell.invoice .bento,
+.shell.remito .bento {
+  background:#1c2842 !important;
+  min-height:175px !important;
+  height:auto !important;
+  max-height:310px !important;
+  flex:0 0 auto !important;
+  display:flex;
+  border:1px solid #455673 !important;
+  border-radius:11px !important;
+  box-shadow: none !important;
+  overflow-x:auto !important;
+  overflow-y:auto !important;
+}
+.shell.invoice :global([class*="itemsPanel"]) {
+  height:auto !important;
+  min-height:195px !important;
+  max-height:310px !important;
+}
+.shell.invoice .tableHeader,
+.shell.invoice .tableRow {
+  grid-template-columns:
+    minmax(190px,2.25fr) 70px 78px 49px minmax(74px,.9fr)
+    55px 48px minmax(92px,1.15fr) 34px !important;
+  min-width:790px !important;
+  gap:7px !important;
+}
+.shell.remito .tableHeader,
+.shell.remito .tableRow {
+  min-width:690px !important;
+  gap:7px !important;
+}
+.shell .tableRow {
+  min-height:50px !important;
+  background:#1c2842 !important;
+}
+.shell :global([class*="tableInput"]) {
+  font-variant-numeric: tabular-nums;
+  font-size:12px;
+}
+.shell :global([class*="itemsList"]) {
+  background:#1c2842 !important;
+  min-height:90px;
+  max-height: none !important;
+  width: 100%;
+  overflow-y:auto !important;
+}
+.shell :global([class*="th"]) {
+  color:#d4e0f3 !important;
+  font-size:9px !important;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.flowPanel {
+  height:auto !important;
+  min-height:0 !important;
+  max-height:none !important;
+  overflow:visible !important;
+  margin:0 !important;
+}
+.flowStrip,
+.shell .flowStrip {
+  display:flex !important;
+  gap:7px !important;
+  min-height:72px !important;
+  max-height:none !important;
+  height:auto !important;
+  overflow-x:auto !important;
+  padding:7px 9px !important;
+  margin:0 !important;
+  background:#202c46 !important;
+  border:1px solid #42516d !important;
+  border-radius:10px !important;
+  align-items:stretch !important;
+}
+.shell .flowStrip :global([class*="relationCard"]) {
+  background:#17243d !important;
+  border:1px solid #4a5c7c !important;
+  border-radius:8px !important;
+  flex:1 0 125px;
+  min-width:125px;
+  padding:7px 9px;
+  opacity:1 !important;
+}
+.shell .flowStrip :global([class*="relationCard"]):nth-last-child(1) {
+  flex:0 1 115px;
+  min-width:100px;
+}
+.shell .flowStrip :global([class*="nodeTitle"]) {font-size:9px;letter-spacing:.05em;}
+.shell .flowStrip :global([class*="nodeStatus"]) {font-size:10px;}
+.shell .flowStrip :global([class*="nodeMetric"]) {
+  font-size:11px !important;
+  font-variant-numeric:tabular-nums;
+  color:#f7faff !important;
+  overflow-wrap:anywhere;
+}
+.bottomRegion {
+  display:flex;
+  flex:0 0 auto;
+  flex-direction:column;
+  gap:8px;
+  margin-top:0 !important;
+  min-width:0;
+}
+.statusStrip,
+.shell .statusStrip {
+  display:flex !important;
+  align-items:center;
+  flex-wrap:wrap;
+  column-gap:18px;
+  row-gap:6px;
+  border-radius:10px;
+  margin:0 !important;
+  padding:8px 12px !important;
+  min-height:42px;
+  background:#202c46 !important;
+  border:1px solid #42516d !important;
+  color:#f8fafc !important;
+}
+.statusStrip :global([class*="summaryItem"]) {
+  min-width:65px;
+  flex:1 1 115px;
+  gap:3px;
+}
+.statusStrip :global([class*="summaryLabel"]) {
+  font-size:9px;
+  color:#9eafc9 !important;
+  letter-spacing:.04em;
+}
+.statusStrip :global([class*="summaryValue"]) {
+  font-size:11px;
+  font-weight:750;
+  color:#f1f5fd !important;
+}
+.shell .footer {
+  display:flex !important;
+  justify-content:flex-end;
+  align-items:center;
+  flex-wrap:wrap;
+  position:relative !important;
+  inset:auto !important;
+  margin:0 !important;
+  padding:10px 14px !important;
+  min-height:54px;
+  gap:12px 24px;
+  border-radius:10px;
+  background:#273753 !important;
+  border:1px solid #5a6993 !important;
+  box-shadow:none !important;
+}
+.shell .footer :global([class*="footerCompactTotal"]) {
+  font-size:19px !important;
+  color:#c8b9ff !important;
+  font-weight:900;
+}
+.shell .footer :global([class*="footerCompactValue"]) {font-size:14px !important;}
+.shell .footer :global([class*="footerCompactLabel"]) {
+  color:#acbbd4 !important;
+  font-size:9px;
+}
+.shell :global([class*="clientPanel"]),
+.shell :global([class*="middleRightPanel"]),
+.shell :global([class*="bottomRightPanel"]) {
+  width:100%;
+  margin:0 !important;
+  padding:11px 13px !important;
+  min-width:0;
+  box-sizing:border-box;
+  background:#202c46 !important;
+  border:1px solid #42516d !important;
+  border-radius:11px;
+}
+.shell :global([class*="clientPanel"]) {min-height:142px;}
+.shell :global([class*="middleRightPanel"]) {min-height:190px;}
+.shell :global([class*="bottomRightPanel"]) {min-height:108px;}
+.shell :global([class*="panelTitle"]),
+.shell :global([class*="sideBlockTitle"]) {
+  font-size:10px;
+  font-weight:850;
+  color:#e7eeff !important;
+  background:transparent !important;
+}
+.shell :global([class*="clientField"]) label,
+.shell :global([class*="commercialField"]) label,
+.shell :global([class*="sideField"]) label {
+  color:#aec0db !important;
+  font-size:10px;
+  font-weight:800;
+}
+.shell :global([class*="clientInput"]),
+.shell :global([class*="commercialInput"]),
+.shell :global([class*="sideInput"]) {
+  min-height:29px;
+  padding:5px 8px !important;
+}
+.shell :global([class*="observationsTextarea"]),
+.shell :global([class*="sideTextarea"]) {
+  min-height:60px;
+  background:#152037 !important;
+  color:#f8fafc !important;
+}
+@container (max-width:1000px) {
+  .shell .documentGrid,
+  .shell .body {grid-template-columns:minmax(0,1fr) !important;}
+  .shell .documentRight,
+  .shell .right {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));}
+  .shell .documentRight > :last-child,
+  .shell .right > :last-child {grid-column:1 / -1;}
+  .shell.invoice .bento {max-height:270px !important;}
+}
+@container (max-width:600px) {
+  .shell .documentRight,
+  .shell .right {display:flex !important;flex-direction:column;}
+  .shell .footer {justify-content:space-between;}
+  .shell .statusStrip {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+
+/* QUINTAL_REMITOS_FIT_WINDOW: igual que Facturas, la zona desplazable es el
+   cuerpo y el pie no queda escondido debajo del dock del ERP. */
+.shell.remito {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  gap: 9px !important;
+  padding: 12px 15px 10px !important;
+}
+.shell.remito .header,
+.shell.remito .sections {
+  flex: 0 0 auto !important;
+}
+.shell.remito .body {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  align-content: start !important;
+  padding: 0 3px 8px 0;
+}
+.shell.remito .statusStrip {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  padding: 7px 12px !important;
+  min-height: 42px;
+}
+.shell.remito .footer {
+  flex: 0 0 auto !important;
+  min-height: 50px !important;
+  padding: 8px 12px !important;
+  margin: 0 !important;
+  position: relative !important;
+  box-shadow: 0 -7px 16px rgba(8,14,28,.25) !important;
+}
+.shell.remito .bento {
+  min-height: 120px !important;
+  max-height: 250px !important;
+  height: auto !important;
+}
+.shell.remito[data-has-items="false"] .bento {
+  height: 110px !important;
+  min-height: 110px !important;
+  max-height: 110px !important;
+}

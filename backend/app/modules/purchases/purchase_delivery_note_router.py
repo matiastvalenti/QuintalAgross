@@ -126,6 +126,8 @@ def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), 
         id=generate_uuid(),
         entity_id=entity_id,
         warehouse_id=warehouse_id,
+        salesperson_id=payload.get("salesperson_id") or None,
+        sale_condition_id=payload.get("sale_condition_id") or None,
         number=number,
         date=date_val,
         status=DeliveryNoteStatus.DISPATCHED, # Los remitos de compra entran confirmados por defecto o en borrador si se desea, usamos CONFIRMED por simplicidad
@@ -142,6 +144,7 @@ def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), 
     # Process lines
     lines_data = payload.get("lines", [])
     updated_purchase_orders = set()
+    requested_by_order_line = defaultdict(float)
     
     for ldata in lines_data:
         qty = float(ldata.get("qty", 0.0))
@@ -195,7 +198,8 @@ def create_purchase_delivery_note(payload: dict, db: Session = Depends(get_db), 
                 dn.purchase_order_id = order.id
 
                 qty_pending = float(oc_line.qty) - float(oc_line.qty_received or 0)
-                if qty > qty_pending + 0.01: # Small tolerance
+                requested_by_order_line[oc_line.id] += qty
+                if requested_by_order_line[oc_line.id] > qty_pending + 0.000001: # Small tolerance
                     raise HTTPException(400, f"No se puede recibir más cantidad ({qty}) que la pendiente ({qty_pending}) para el producto {oc_line.description or oc_line.product_id}")
                 
                 updated_purchase_orders.add(oc_line.order_id)
@@ -282,6 +286,8 @@ def update_purchase_delivery_note(id: str, payload: dict, db: Session = Depends(
     
     # Update header
     if "number" in payload: dn.number = payload["number"]
+    if "salesperson_id" in payload: dn.salesperson_id = payload["salesperson_id"] or None
+    if "sale_condition_id" in payload: dn.sale_condition_id = payload["sale_condition_id"] or None
     if "date" in payload and payload["date"]:
         try:
             dn.date = datetime.fromisoformat(payload["date"].replace("Z", "+00:00"))
@@ -294,6 +300,7 @@ def update_purchase_delivery_note(id: str, payload: dict, db: Session = Depends(
     
     # Apply new lines
     lines_data = payload.get("lines", [])
+    requested_by_order_line = defaultdict(float)
     for ldata in lines_data:
         qty = float(ldata.get("qty", 0.0))
         if qty <= 0: continue
@@ -344,7 +351,8 @@ def update_purchase_delivery_note(id: str, payload: dict, db: Session = Depends(
                 dn.purchase_order_id = order.id
 
                 qty_pending = float(oc_line.qty) - float(oc_line.qty_received or 0)
-                if qty > qty_pending + 0.01:
+                requested_by_order_line[oc_line.id] += qty
+                if requested_by_order_line[oc_line.id] > qty_pending + 0.000001:
                     raise HTTPException(400, f"No se puede recibir más cantidad ({qty}) que la pendiente ({qty_pending})")
                 
                 updated_purchase_orders.add(oc_line.order_id)

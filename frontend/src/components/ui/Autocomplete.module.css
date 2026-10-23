@@ -180,3 +180,53 @@
     box-shadow: none;
     background: #e2e8f0;
 }
+/* Autocomplete de documentos comerciales: evitar la cápsula blanca en buscadores dark. */
+.inputWrapper.invoice {
+  min-width: 0;
+  min-height: 36px;
+  height: 38px;
+  display: flex;
+  gap: 7px;
+  padding: 0 8px;
+  border: 1px solid #465875;
+  border-radius: 8px;
+  background: #151f35;
+  box-sizing: border-box;
+}
+.inputWrapper.invoice:hover {background:#1b2a45;border-color:#64799e;}
+.input.invoice,
+.input.invoice:focus {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  padding: 0 26px 0 3px;
+  border: 0;
+  outline: 0;
+  box-shadow: none;
+  background: transparent;
+  color: #f8fafc;
+  -webkit-text-fill-color: #f8fafc;
+  font-size: 12px;
+  font-weight: 700;
+}
+.input.invoice::placeholder {color:#9eb2d0;-webkit-text-fill-color:#9eb2d0;}
+.inputWrapper.invoice .iconArea {
+  padding:0 4px 0 2px;
+  color:#b6a6ff;
+}
+.inputWrapper.invoice .indicator {
+  right: 6px;
+  color:#c4d0e4;
+}
+.inputWrapper.invoice .indicator:hover {background:#2f3f60;color:#fff;}
+.dropdown.invoiceDropdown {
+  background:#202c46;
+  color:#f8fafc;
+  border:1px solid #536686;
+  box-shadow:0 14px 34px #050a16a6;
+  border-radius:9px;
+  padding:5px;
+}
+.invoiceDropdown .item {color:#e9f0ff;border-radius:7px;}
+.invoiceDropdown .item:hover,.invoiceDropdown .item.highlighted {background:#344569;color:#fff;}
+.invoiceDropdown .empty {color:#acbfdc;}

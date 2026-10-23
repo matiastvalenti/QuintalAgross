@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useId } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -14,6 +14,9 @@ import {
   Building, User, Link2, Plus, Pencil, CheckCircle, Clock, Activity, FileText, ArrowRight, Search
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
+import v from "../common/CommercialDocumentWorkspace.module.css";
+import w from "../common/InvoiceWorkbench.module.css";
+import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
 import { padPV, padNumber, joinFullNumber, splitFullNumber, formatNumberAR } from "../../utils/formatters";
 import { openInvoiceCollectionFromInvoice } from "../../utils/openStandaloneWindow";
 import Modal from "../../components/ui/Modal";
@@ -130,6 +133,7 @@ export default function InvoiceForm(props) {
     initialSourceId = null,
     initialEntityId = null,
     preselectedLines = null,
+    initialDnIds = null,
     draftId = null,
     isStandalone = false,
     initialDocType = "INVOICE"
@@ -147,6 +151,8 @@ export default function InvoiceForm(props) {
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
   const [activeContextTab, setActiveContextTab] = useState('comercial');
   const [activeBottomTab, setActiveBottomTab] = useState('observaciones');
+  const [invoiceTab, setInvoiceTab] = useState('products');
+  const invoiceTabId = useId();
   const [showAnnulModal, setShowAnnulModal] = useState(false);
 
   
@@ -217,6 +223,9 @@ export default function InvoiceForm(props) {
     fetchInitialData();
     fetchProductsCatalog();
     if (mode === "edit" && id) fetchInvoice();
+    else if (mode === "new" && Array.isArray(initialDnIds) && initialDnIds.length > 0) {
+        fetchFromMultipleRemitos(initialDnIds);
+    }
     else if (mode === "new" && (initialSourceType === "sales-order" || initialSourceType === "delivery-note") && initialSourceId) {
         fetchFromSource();
     }
@@ -300,6 +309,51 @@ export default function InvoiceForm(props) {
       setItems(newItems);
     }
   }, [products, items]);
+
+  const fetchFromMultipleRemitos = async (ids) => {
+    setLoading(true);
+    try {
+        const headers = { Authorization: `Bearer ${localStorage.getItem("token")}` };
+        const responses = await Promise.all(ids.map(id =>
+            fetch(`${API_URL}/sales/delivery-notes/${id}`, { headers })
+        ));
+        if (responses.some(response => !response.ok)) throw new Error("No se pudieron recuperar todos los remitos.");
+        const notes = await Promise.all(responses.map(response => response.json()));
+        const customerId = notes[0]?.entity_id;
+        if (!customerId || notes.some(note => String(note.entity_id) !== String(customerId))) {
+            throw new Error("Los remitos deben pertenecer al mismo cliente.");
+        }
+        setEntity({ id: customerId, name: notes[0].entity_name || "Cliente" });
+        setSourceNumber(notes.map(note => note.number).filter(Boolean).join(", "));
+        setCurrency(notes[0].currency || "ARS");
+        setExchangeRate(Number(notes[0].exchange_rate) || 1);
+        const lines = notes.flatMap(note => (note.lines || []).map(line => {
+            const factor = Number(line.package_size || line.product?.quantity_per_container || 1) || 1;
+            const qty = Math.max(0, Number(line.qty || 0) - Number(line.qty_invoiced || 0));
+            return {
+                id: `${note.id}-${line.id}`,
+                product_id: line.product_id,
+                description: line.description || line.product_name || "",
+                qty,
+                qty_packages: qty / factor,
+                _unit_content: factor,
+                _unit_label: line.package_unit || line.product?.container?.unit?.short_name || "u",
+                unit_price: Number(line.unit_price || 0),
+                vat_rate: line.vat_rate ?? 0.21,
+                discount_pct: Number(line.discount_pct || 0),
+                source_sales_line_id: line.source_sales_line_id || null,
+                source_dn_line_id: line.id,
+                accounting_account_id: line.accounting_account_id || null,
+            };
+        })).filter(line => line.qty > 0);
+        if (!lines.length) throw new Error("Los remitos seleccionados no tienen cantidades pendientes de facturar.");
+        setItems(lines);
+    } catch (error) {
+        showToast(error.message || "Error al cargar remitos de venta", "error");
+    } finally {
+        setLoading(false);
+    }
+  };
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("token");
@@ -405,7 +459,7 @@ export default function InvoiceForm(props) {
         // Para cada línea con producto, recuperar el contenido por envase
         // Funciona incluso para facturas viejas sin package_size guardado
         const enrichedLines = await Promise.all(data.lines.map(async (l) => {
-            let unitContent = l.package_size && parseFloat(l.package_size) > 1 
+            let unitContent = l.package_size && parseFloat(l.package_size) > 0 
                 ? parseFloat(l.package_size) 
                 : undefined;
             
@@ -417,7 +471,7 @@ export default function InvoiceForm(props) {
                     });
                     if (pRes.ok) {
                         const prod = await pRes.json();
-                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 1) {
+                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 0) {
                             unitContent = parseFloat(prod.quantity_per_container);
                         }
                     }
@@ -559,7 +613,7 @@ export default function InvoiceForm(props) {
                   const factor = parseFloat(l._unit_content || l.package_size || l.quantity_per_container || 1);
                   const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                   let qtyPackages = l.qty_packages;
-                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                  if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                       qtyPackages = qty / factor;
                   }
                   const resolvedAccount = resolveProductSalesAccount(l, products);
@@ -569,7 +623,7 @@ export default function InvoiceForm(props) {
                       description: getInvoiceLineName(l),
                       qty: qty,
                       qty_packages: qtyPackages,
-                      _unit_content: factor > 1 ? factor : undefined,
+                      _unit_content: factor > 0 ? factor : 1,
                       _unit_label: l._unit_label || l.package_unit || l.unit_short_name || 'u',
                       _container_name: l._container_name || l.container_name || 'Unidad',
                       unit_price: parseFloat(l.unit_price || 0),
@@ -615,7 +669,7 @@ export default function InvoiceForm(props) {
                       const factor = parseFloat(l._unit_content || l.package_size || 1);
                       const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       const resolvedAccount = resolveProductSalesAccount(l, products);
@@ -626,7 +680,7 @@ export default function InvoiceForm(props) {
                           qty: qty,
                           _max_qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l._unit_label || l.package_unit || 'u',
                           _container_name: l._container_name || 'Unidad',
                           unit_price: parseFloat(l.unit_price || 0),
@@ -648,7 +702,7 @@ export default function InvoiceForm(props) {
                       const factor = l.product?.quantity_per_container ? parseFloat(l.product.quantity_per_container) : (l.package_size ? parseFloat(l.package_size) : 1);
                       const qty = l.qty - (l.qty_invoiced || 0);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       const resolvedAccount = resolveProductSalesAccount(l, products);
@@ -659,7 +713,7 @@ export default function InvoiceForm(props) {
                           qty: qty,
                           _max_qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l.product?.container?.unit?.short_name || l.package_unit || 'u',
                           _container_name: l.product?.container?.name || 'Unidad',
                           unit_price: l.unit_price,
@@ -943,8 +997,12 @@ export default function InvoiceForm(props) {
         let updated = { ...i, [field]: numericVal };
         
         // Al cambiar envases, recalcular la cantidad total equivalente
+        if (field === 'qty') {
+            const factor = Number(updated._unit_content || updated.package_size || 1);
+            updated.qty_packages = factor > 0 ? numericVal / factor : numericVal;
+        }
         if (field === 'qty_packages') {
-            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
+            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 0 ? parseFloat(updated.package_size) : null);
             if (unitContent) {
                 updated.qty = numericVal * unitContent;
             }
@@ -956,7 +1014,7 @@ export default function InvoiceForm(props) {
     }));
   };
 
-  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(val || 0);
+  const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency === 'USD' ? 'USD' : 'ARS' }).format(val || 0);
   const fmtValue = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency }).format(val || 0);
 
   if (loading) return <LoadingScreen message="Cargando Factura..." />;
@@ -1001,10 +1059,10 @@ export default function InvoiceForm(props) {
   const isAdminLocked = isReadOnly;
 
   return (
-    <div className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} className={`${s.formCard} ${w.root} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
-        <div className={s.headerLine}>
+        <div className={`${s.headerLine} ${w.header}`}>
             <div className={s.titleGroup}>
                 <div className={s.compactHeaderTitle}>
                     <h1>
@@ -1018,7 +1076,7 @@ export default function InvoiceForm(props) {
                                 <span>&middot;</span>
                             </>
                         )}
-                        <span className={s.metaDate}>{new Date(date).toLocaleDateString('es-AR')}</span>
+
                         {initialSourceType === 'sales-order' && sourceNumber && (
                             <>
                                 <span style={{ color: '#24389c', fontWeight: 800 }}>OV {sourceNumber} &middot; {entity?.name || 'Cliente'}</span>
@@ -1031,7 +1089,6 @@ export default function InvoiceForm(props) {
                         <span>&middot;</span>
                         <span>TC {exchangeRate}</span>
                         <TraceabilityStatusBadge status={status} />
-                        {fiscalInfo.is_draft && <strong>BORRADOR</strong>}
                         {hasApplications && (
                             <span className={s.appliedWarningWrap}>
                                 <span className={s.appliedWarningIcon}>
@@ -1093,30 +1150,37 @@ export default function InvoiceForm(props) {
         )}
 
         {/* Body: 2 Column Layout */}
-        <div className={s.documentMainGrid}>
+        <div className={`${s.documentMainGrid} ${w.layout}`}>
+            <InvoiceWorkspaceTabs value={invoiceTab} onChange={setInvoiceTab} itemCount={items.length} hasNotes={Boolean(observations.trim())} idPrefix={invoiceTabId} />
             
             {/* Columna Izquierda: Ítems y Productos */}
-            <div className={s.leftDocumentArea}>
+            <div id={`${invoiceTabId}-products`} role="tabpanel" aria-label="Productos y conceptos" data-document-section="items" className={`${s.leftDocumentArea} ${w.left}`}>
+                <div className={w.heading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
                 {!isMonetaryLocked ? (
-                    <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
+                    <div className={`${s.searchRibbon} ${w.search}`} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <Autocomplete 
                                 onSearch={searchProducts} 
                                 onSelect={(p) => {
-                                    const qtyPerContainer = p.quantity_per_container && p.quantity_per_container > 1 
-                                        ? p.quantity_per_container 
-                                        : null;
-                                    const hasContainer = qtyPerContainer !== null;
+                                    if (['INVOICE', 'FCE_MIPYME', 'TIQUET_FACTURA'].includes(docType) &&
+                                        !initialSourceId && !p.is_service) {
+                                        showToast("Para vender productos con stock, comenzá desde una Orden de Venta. La factura directa admite servicios.", "warning");
+                                        return;
+                                    }
+                                    const qtyPerContainer = Number(p.quantity_per_container) > 0
+                                        ? Number(p.quantity_per_container)
+                                        : 1;
+                                    const hasContainer = !!p.container || Number(p.quantity_per_container) > 0;
                                     setItems([...items, { 
                                         id: Math.random(), 
                                         product_id: p.id, 
                                         description: p.name, 
                                         // Si el producto tiene envases, qty_packages=1 (bidón), qty=litros equivalentes
-                                        qty_packages: hasContainer ? 1 : undefined,
-                                        qty: hasContainer ? qtyPerContainer : 1, 
+                                        qty_packages: 1,
+                                        qty: qtyPerContainer, 
                                         _unit_content: qtyPerContainer,
                                         _unit_label: p.unit_of_measure || 'u',
-                                        unit_price: p.cost_price || 0, 
+                                        unit_price: p.base_price ?? p.cost_price ?? 0, 
                                         vat_rate: p.tax_type?.rate ?? 0.21, 
                                         discount_pct: 0,
                                         // Cuenta contable de venta del producto (puede ser null si no está configurada)
@@ -1125,7 +1189,7 @@ export default function InvoiceForm(props) {
                                     }]);
                                 }}
                                 placeholder="Escriba para buscar productos para añadir..."
-                                variant="glass"
+                                variant="invoice"
                                 icon={<Search size={16} style={{ color: 'var(--primary)' }}/>}
                                 minChars={0}
                                 clearOnSelect={true}
@@ -1142,7 +1206,7 @@ export default function InvoiceForm(props) {
                         </Button>
                     </div>
                 ) : (
-                    <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
+                    <div className={`${s.searchRibbon} ${w.search}`} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <div className={s.readonlyControl} style={{ height: '36px', justifyContent: 'flex-start', color: '#94a3b8' }}>
                                 <Search size={16} style={{ marginRight: 8 }} />
@@ -1160,10 +1224,10 @@ export default function InvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={`${s.bentoContainer} ${s.itemsPanel}`} style={{ padding: 0, overflow: 'hidden' }}>
+                <div className={`${s.bentoContainer} ${s.itemsPanel} ${w.items}`} style={{ padding: 0, overflow: 'hidden' }}>
                     {items.length > 0 ? (
                         <>
-                                <div className={s.tableHeader} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px' }}>
+                                <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px' }}>
                                     <div className={s.th}>PRODUCTO / CONCEPTO</div>
                                     <div className={s.th}>ENVASES</div>
                                     <div className={s.th}>CANTIDAD</div>
@@ -1179,7 +1243,7 @@ export default function InvoiceForm(props) {
                                     const isLocked = isMonetaryLocked || isSourceLockedLine(item);
                                     
                                     return (
-                                    <div key={item.id} className={s.tableRow} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px', background: isLocked ? '#f8fafc' : 'transparent', cursor: isLocked ? 'not-allowed' : 'default' }}>
+                                    <div key={item.id} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px', background: isLocked ? '#f8fafc' : 'transparent', cursor: isLocked ? 'not-allowed' : 'default' }}>
                                         <div style={{ padding: '4px 0', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 2 }}>
                                             <input 
                                                 type="text" 
@@ -1194,7 +1258,7 @@ export default function InvoiceForm(props) {
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap' }}>
                                                 {item._unit_content && (
                                                     <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>
-                                                        {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toFixed(0)} {item._unit_label || 'u'}
+                                                        {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
                                                     </span>
                                                 )}
                                                 {isLocked && (
@@ -1297,8 +1361,8 @@ export default function InvoiceForm(props) {
                     }
 
                     return (
-                        <div className={s.flowPanel}>
-                          <div className={s.relationsBar} style={{ minHeight: '100%', height: '100%', display: 'flex', gap: '8px', alignItems: 'stretch' }}>
+                        <div id={`${invoiceTabId}-documents`} role="tabpanel" aria-label="Documentos asociados" className={`${s.flowPanel} ${w.flow}`}>
+                          <div className={`${s.relationsBar} ${v.flowStrip}`}>
                               <div className={s.relationCard} style={{ opacity: (originStatus !== "Directo") ? 1 : 0.5 }}>
                                   <div className={s.nodeTitle} style={{ color: originColor }}>ORIGEN</div>
                                   <div className={s.nodeStatus} style={{ color: originColor }}>{originStatus}</div>
@@ -1394,9 +1458,9 @@ export default function InvoiceForm(props) {
             </div>
 
             {/* Columna Derecha: Panel Lateral Administrativo */}
-            <div className={s.rightDocumentArea}>
+            <div data-document-section="details" className={`${s.rightDocumentArea} ${w.right}`}>
                 {/* Bloque Cliente */}
-                <div className={s.clientPanel}>
+                <div className={`${s.clientPanel} ${w.party}`}>
                     <div className={s.panelTitle}><User size={12}/> CLIENTE</div>
                     <div className={s.clientPanelBody}>
                         {isMonetaryLocked ? (
@@ -1405,7 +1469,7 @@ export default function InvoiceForm(props) {
                             <div className={s.clientField}>
                                 <label>NOMBRE</label>
                                 <div className={s.clientNameControl}>
-                                    <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="glass" />
+                                    <Autocomplete onSearch={searchEntities} onSelect={setEntity} initialValue={entity} placeholder="Buscar..." minChars={0} variant="invoice" />
                                 </div>
                             </div>
                         )}
@@ -1438,7 +1502,7 @@ export default function InvoiceForm(props) {
                 </div>
 
                 {/* Bloque Medio: Comercial / Ajuste-Origen */}
-                <div className={`${s.sideBlock} ${s.middleRightPanel}`}>
+                <div className={`${s.sideBlock} ${s.middleRightPanel} ${w.commercial}`}>
                     {docType !== 'INVOICE' ? (
                         <div className={s.panelTabs}>
                             <button className={`${s.panelTab} ${activeContextTab === 'comercial' ? s.panelTabActive : ''}`} onClick={() => setActiveContextTab('comercial')}>Comercial</button>
@@ -1594,7 +1658,7 @@ export default function InvoiceForm(props) {
                 </div>
 
                 {/* Bloque Observaciones / ARCA */}
-                <div className={`${s.sideBlock} ${s.bottomRightPanel}`} style={{ paddingBottom: 0 }}>
+                <div id={`${invoiceTabId}-notes`} role="tabpanel" aria-label="Observaciones y ARCA" className={`${s.sideBlock} ${s.bottomRightPanel} ${w.notes}`} style={{ paddingBottom: 0 }}>
                     <div className={s.panelTabs}>
                         <button className={`${s.panelTab} ${activeBottomTab === 'observaciones' ? s.panelTabActive : ''}`} onClick={() => setActiveBottomTab('observaciones')}>Observaciones</button>
                         <button className={`${s.panelTab} ${activeBottomTab === 'arca' ? s.panelTabActive : ''}`} onClick={() => setActiveBottomTab('arca')}>ARCA</button>
@@ -1651,8 +1715,8 @@ export default function InvoiceForm(props) {
 
 
         {/* Operational Summary */}
-        <div className={s.balancePanel}>
-            <div className={s.summaryPanel}>
+        <div className={`${s.balancePanel} ${w.bottom}`}>
+            <div className={`${s.summaryPanel} ${w.summary}`}>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>CLIENTE</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
@@ -1684,7 +1748,7 @@ export default function InvoiceForm(props) {
         </div>
 
         {/* Footer with Totals */}
-        <div className={s.footerCompact}>
+        <div data-document-section="total" className={`${s.footerCompact} ${w.footer}`}>
             <div className={s.footerCompactItem}>
                 <span className={s.footerCompactLabel}>NETO GRAVADO</span>
                 <span className={s.footerCompactValue}>{fmt(totals.net)}</span>

@@ -26,7 +26,7 @@ import {
   ArrowUpRight
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
-import { openNuevaNotaCreditoCompra, openEditNotaCreditoCompra } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import Button from "../../components/ui/Button";
 import Badge from "../../components/ui/Badge";
 import StatusBadge from "../../components/ui/StatusBadge";
@@ -61,6 +61,7 @@ export default function PurchaseCreditNotesPage() {
   const [selectedInvoices, setSelectedInvoices] = useState([]);
   
   const { showToast } = useToast();
+  const { openNuevaNotaCreditoCompra, openEditNotaCreditoCompra } = useInternalCommercialDocuments();
   const navigate = useNavigate();
 
   useEffect(() => {

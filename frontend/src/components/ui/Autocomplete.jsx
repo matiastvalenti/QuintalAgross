@@ -186,7 +186,7 @@ export default function Autocomplete({
             </div>
 
             {isOpen && createPortal(
-                <div ref={dropdownRef} className={`${s.dropdown} ${s.open}`} style={dropdownStyle}>
+                <div ref={dropdownRef} className={`${s.dropdown} ${s.open} ${variant === "invoice" ? s.invoiceDropdown : ""}`} style={dropdownStyle}>
                     {results.length > 0 ? (
                         results.map((item, index) => (
                             <div
