@@ -761,8 +761,9 @@ export default function SalesOrderForm(props) {
         }
         if (field === 'qty') {
             newItem.qty = Number(value);
-            const factor = i._unit_content || 1;
-            if (factor > 1) {
+            const factor = Number(i._unit_content) || 1;
+            // Sincronizar también presentaciones fraccionarias, como frascos de 0,35 kg.
+            if (factor > 0) {
                 newItem.qty_packages = Number(value) / factor;
             }
         }
