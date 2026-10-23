@@ -355,21 +355,19 @@ export default function PurchaseOrdersPage() {
         <th className={s.th} style={{ textAlign: 'right' }}>ACCIONES</th>
       </>
     ),
+    emptyContent: (
+      <EmptyState 
+              icon={Layers} 
+              title={orders.length ? "No hay órdenes que coincidan" : "Todavía no hay órdenes de compra"}
+              description={orders.length ? "Probá quitando filtros o cambiando la búsqueda." : "Empezá creando una orden para registrar la compra."}
+              style={{ width: "100%", maxWidth: 440, padding: "22px 16px", boxSizing: "border-box", background: "transparent", border: "none", gap: 10 }}
+          />
+    ),
     body: loading ? (
         <TableRowSkeleton rows={10} cols={8} />
     ) : error ? (
         <tr><td colSpan="8"><ErrorState message={error} onRetry={fetchAll} /></td></tr>
-    ) : sorted.length === 0 ? (
-      <tr>
-        <td colSpan="8">
-          <EmptyState 
-              icon={Layers} 
-              title={orders.length ? "No hay órdenes que coincidan" : "Todavía no hay órdenes de compra"}
-              description={orders.length ? "Probá quitando filtros o cambiando la búsqueda." : "Empezá creando una orden para registrar la compra."}
-          />
-        </td>
-      </tr>
-    ) : (
+    ) : sorted.length === 0 ? null : (
       paginatedData.map((o) => (
         <tr key={o.id} className={s.row} onClick={() => handleOpenDetail(o.id, o.number)}>
           <td className={`${s.td} ${s.numberCell}`}>{o.number}</td>
