@@ -4,16 +4,7 @@ import {
     CheckCircle2, Clock, AlertCircle, X, Receipt, Wallet, ChevronDown, ChevronUp
 } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
-import { 
-  openEditFactura, 
-  openEditRecibo, 
-  openEditPago, 
-  openEditRemito,
-  openEditNotaDebito,
-  openEditNotaCredito,
-  openEditFacturaCompra,
-  openStandaloneWindow
-} from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import { useCostCenter } from '../../context/CostCenterContext';
 import { API_URL } from '../../config';
 import api from '../../services/api';
@@ -70,55 +61,12 @@ const hasFxOriginData = (m) => {
   );
 };
 
-const getDocumentStandalonePath = (movement) => {
-    const id = movement.document_id || movement.doc_id || movement.id;
-    const type = movement.doc_type || movement.type;
-  
-    if (!id || !type) return null;
-  
-    const normalizedType = String(type).toUpperCase();
-  
-    switch (normalizedType) {
-      case "INVOICE":
-      case "FCE_MIPYME":
-        return `/standalone/facturas/${id}`;
-      case "RECEIPT":
-        return `/standalone/recibos/${id}?mode=view`;
-      case "DEBIT_NOTE":
-        return `/standalone/notas-debito/${id}`;
-      case "CREDIT_NOTE":
-        return `/standalone/notas-credito/${id}`;
-      case "DELIVERY_NOTE":
-      case "REMIT":
-      case "REMITO":
-        return `/standalone/remitos/${id}`;
-      case "PURCHASE_INVOICE":
-        return `/standalone/facturas-compra/${id}`;
-      case "PURCHASE_DEBIT_NOTE":
-        return `/standalone/notas-debito-compra/${id}`;
-      case "PURCHASE_CREDIT_NOTE":
-        return `/standalone/notas-credito-compra/${id}`;
-      case "PAYMENT":
-        return `/standalone/pagos/${id}?mode=view&isPayment=true`;
-      default:
-        return null;
-    }
-};
-
-const openDocumentFromMovement = (movement, e) => {
-    if (e) e.stopPropagation();
-    const path = getDocumentStandalonePath(movement);
-  
-    if (!path) {
-      console.warn("No se pudo abrir el comprobante: falta referencia al documento.");
-      return;
-    }
-  
-    openStandaloneWindow(path, `_blank`, { width: 1280, height: 820 });
-};
-
 export default function StatementPage({ entityId: propsEntityId, defaultFilters = {} }) {
     const { openWindow } = useWindow();
+    const {
+      openEditFactura, openEditFacturaCompra, openEditRemito, openEditRemitoEntrada,
+      openEditNotaDebito, openEditNotaCredito, openEditNotaDebitoCompra, openEditNotaCreditoCompra
+    } = useInternalCommercialDocuments();
     const { costCenter } = useCostCenter();
     
     // States
@@ -451,36 +399,53 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
     };
 
     const handleRowClick = (m) => {
-        if (m.is_initial_load) return;
+        const id = m.document_id || m.doc_id || m.id;
+        const type = String(m.doc_type || m.type || '').toUpperCase();
+        if (m.is_initial_load || !id) return;
 
-        let title = `${m.doc_type} ${m.number || ''}`;
-        switch (m.doc_type) {
+        const title = `${type} ${m.number || ''}`;
+        const windowOptions = {
+            title, width: 1270, height: 680, minWidth: 720, minHeight: 470,
+            singletonKey: `${type.toLowerCase()}-${id}`
+        };
+        switch (type) {
             case 'INVOICE':
-                return openEditFactura(m.id, { title });
+            case 'FCE_MIPYME':
+                return openEditFactura(id, { title });
             case 'CREDIT_NOTE':
-                return openEditNotaCredito(m.id, { title });
+                return openEditNotaCredito(id, { title });
             case 'DEBIT_NOTE':
-                return openEditNotaDebito(m.id, { title });
+                return openEditNotaDebito(id, { title });
             case 'PURCHASE_INVOICE':
-                return openEditFacturaCompra(m.id, { title });
+                return openEditFacturaCompra(id, { title });
+            case 'PURCHASE_CREDIT_NOTE':
+                return openEditNotaCreditoCompra(id, { title });
+            case 'PURCHASE_DEBIT_NOTE':
+                return openEditNotaDebitoCompra(id, { title });
             case 'RECEIPT':
-                return openEditRecibo(m.id, { title });
+                return openWindow('receipt-collection-form', { mode: 'view', id }, windowOptions);
             case 'PAYMENT':
-                return openEditPago(m.id, { title });
+                return openWindow('receipt-form', { mode: 'view', id, isPayment: true }, windowOptions);
             case 'DELIVERY_NOTE':
-                return openEditRemito(m.id, { title });
+            case 'REMIT':
+            case 'REMITO':
+                return openEditRemito(id, { title });
+            case 'PURCHASE_DELIVERY_NOTE':
+                return openEditRemitoEntrada(id, { title });
             case 'LPG_PRIMARY':
             case 'LPG_SECONDARY':
-                openWindow('grain-settlement', { id: m.id, mode: "edit" }, {
-                    title: `${m.doc_type === 'LPG_PRIMARY' ? 'Liq. Primaria' : 'Liq. Secundaria'} ${m.number || ''}`,
-                    width: 1200,
-                    height: 750,
-                    singletonKey: `lpg-${m.id}`
+                return openWindow('grain-settlement', { id, mode: 'edit' }, {
+                    title: `${type === 'LPG_PRIMARY' ? 'Liq. Primaria' : 'Liq. Secundaria'} ${m.number || ''}`,
+                    width: 1200, height: 750, singletonKey: `lpg-${id}`
                 });
-                break;
             default:
                 return;
         }
+    };
+
+    const openDocumentFromMovement = (movement, event) => {
+        if (event) event.stopPropagation();
+        handleRowClick(movement);
     };
 
     const handleSetView = (v) => {
@@ -547,7 +512,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                 <div className={s.cardIconBox} style={{ background: '#eff6ff', color: '#1d4ed8' }}><Receipt size={16}/></div>
                                 <div className={s.cardContentBox}>
                                     <div className={s.cardTitle}>Saldo ARS</div>
-                                    <div className={s.balanceValue} style={{ color: totals.b_ars < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                    <div className={s.balanceValue} style={{ color: totals.b_ars < -0.1 ? '#dc2626' : '#f8fafc' }}>
                                         {fmt(totals.b_ars, 'ARS')}
                                     </div>
                                     <div className={s.cardSubLabel}>Saldo real en pesos</div>
@@ -558,7 +523,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                 <div className={s.cardIconBox} style={{ background: '#f5f3ff', color: '#7c3aed' }}><Wallet size={16}/></div>
                                 <div className={s.cardContentBox}>
                                     <div className={s.cardTitle}>Saldo USD</div>
-                                    <div className={s.balanceValue} style={{ color: totals.b_usd < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                    <div className={s.balanceValue} style={{ color: totals.b_usd < -0.1 ? '#dc2626' : '#f8fafc' }}>
                                         {fmt(totals.b_usd, 'USD')}
                                     </div>
                                     <div className={s.cardSubLabel}>Saldo real en dólares</div>
@@ -569,7 +534,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                 <div className={s.cardIconBox} style={{ background: '#f0fdfa', color: '#0f766e' }}><Activity size={16}/></div>
                                 <div className={s.cardContentBox}>
                                     <div className={s.cardTitle}>Total convertido a ARS</div>
-                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance || 0) < -0.1 ? '#dc2626' : '#1e293b' }}>
+                                    <div className={s.balanceValue} style={{ color: (dashboard?.total_balance || 0) < -0.1 ? '#dc2626' : '#f8fafc' }}>
                                         {fmt(dashboard?.total_balance || 0, 'ARS')}
                                     </div>
                                     <div className={s.cardSubLabel}>Total informativo convertido</div>
@@ -700,7 +665,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                                         <span className={s.filterLabel}>Remitos:</span>
                                         <div className={s.toggleButtons} style={{height: 26}}>
                                             <button className={`${s.tglBtn} ${!showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(false)}>OCULTOS</button>
-                                            <button className={`${s.tglBtn} ${showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(true)} style={{ color: showUnbilled ? '#1e293b' : 'inherit' }}>MOSTRAR</button>
+                                            <button className={`${s.tglBtn} ${showUnbilled ? s.active : ''}`} onClick={() => setShowUnbilled(true)} style={{ color: showUnbilled ? '#f8fafc' : 'inherit' }}>MOSTRAR</button>
                                         </div>
                                     </div>
                                 </div>
@@ -1008,7 +973,7 @@ export default function StatementPage({ entityId: propsEntityId, defaultFilters 
                         <div className={s.emptyIcon}>
                             <Activity size={48} />
                         </div>
-                        <h2 style={{ fontSize: 24, fontWeight: 900, color: '#1e293b' }}>Resumen de Cuenta Corriente</h2>
+                        <h2 style={{ fontSize: 24, fontWeight: 900, color: '#f8fafc' }}>Resumen de Cuenta Corriente</h2>
                         <p style={{ maxWidth: 500, color: '#64748b', lineHeight: 1.6, marginTop: 4 }}>
                             Seleccione un cliente o proveedor para visualizar su historial financiero, saldos en vivo y gestión de documentos pendientes.
                         </p>
