@@ -1,7 +1,23 @@
 .container {
+  --bg-body: #101729;
+  --bg-page: #202c46;
+  --receipt-panel: #202c46;
+  --text: #f8fafc;
+  --text-color: #f8fafc;
+  --text-secondary: #bbc9dc;
+  --text-muted: #99aac0;
+  --border-color: #394861;
+  --primary: #a390ff;
+  --primary-light: #382f61;
   display: flex;
   flex-direction: column;
-  min-height: 100vh;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow-y: auto;
+  container-type: inline-size;
+  color: var(--text);
   background-color: var(--bg-body);
 }
 
@@ -989,3 +1005,43 @@
 .secondaryActionBtn:hover { background: #f8fafc; border-color: #cbd5e1; color: #07122f; }
 .dangerActionBtn { background: #fff; border-color: #fecaca; color: #dc2626; }
 .dangerActionBtn:hover { background: #fef2f2; border-color: #fca5a5; color: #b91c1c; }
+
+/* Recibos dentro del escritorio: mismo lenguaje visual oscuro que OV/OC. */
+.container :is(.summaryPanel, .paymentsCard, .sectionBox, .paymentTable, .paymentLineCard, .checkCard, .subModal, .modalCard, .appliedDocumentRow, .appliedDocRow) {
+  background: var(--receipt-panel);
+  color: var(--text);
+  border-color: var(--border-color);
+}
+.container :is(.field select, input, textarea) {
+  background: #151f35;
+  color: var(--text);
+  border-color: #465875;
+  color-scheme: dark;
+}
+.container :is(input, textarea)::placeholder { color: #99aac0; }
+.container :is(.secondaryActionBtn, .secondaryButton, .dangerActionBtn, .actionBtn, .btnSecondary) {
+  background: #273551;
+  color: var(--text);
+  border-color: #465875;
+}
+.container :is(.secondaryActionBtn, .secondaryButton, .dangerActionBtn, .actionBtn, .btnSecondary):hover {
+  background: #324260;
+  color: #fff;
+}
+.container :is(.primaryActionBtn, .primaryButton, .btnPrimary) {
+  background: #6955cf;
+  color: #fff;
+  border-color: #8e7ae8;
+}
+.container :is(.appliedDocMain strong, .appliedDocCellMain strong, .appliedDocCell strong, .appliedDocCellAmount strong, .appliedDocAmount strong, .modalHeader h3) {
+  color: var(--text);
+}
+.container :is(.sectionHeader, .paymentTableHeader, .modalFooter, .subModalFooter) {
+  background: #273551;
+  border-color: var(--border-color);
+}
+@container (max-width: 980px) {
+  .collectionBody { grid-template-columns: minmax(0,1fr); padding: 14px; gap: 14px; }
+  .header { flex-wrap: wrap; gap: 12px; }
+  .headerRight { flex-wrap: wrap; gap: 16px; }
+}
