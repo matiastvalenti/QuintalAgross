@@ -128,7 +128,7 @@ export default function PurchaseInvoiceForm(props) {
         // Para cada línea con producto, recuperar el contenido por envase
         // Funciona incluso para facturas viejas sin package_size guardado
         const enrichedLines = await Promise.all(data.lines.map(async (l) => {
-            let unitContent = l.package_size && parseFloat(l.package_size) > 1 
+            let unitContent = l.package_size && parseFloat(l.package_size) > 0 
                 ? parseFloat(l.package_size) 
                 : undefined;
             
@@ -140,7 +140,7 @@ export default function PurchaseInvoiceForm(props) {
                     });
                     if (pRes.ok) {
                         const prod = await pRes.json();
-                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 1) {
+                        if (prod.quantity_per_container && parseFloat(prod.quantity_per_container) > 0) {
                             unitContent = parseFloat(prod.quantity_per_container);
                         }
                     }
@@ -241,9 +241,10 @@ export default function PurchaseInvoiceForm(props) {
                       _unit_label: l._unit_label || l.package_unit || 'u',
                       _container_name: l._container_name || 'Unidad',
                       unit_price: l.unit_price,
-                      discount_pct: 0,
-                      vat_rate: l.vat_rate || 0.21,
-                      source_purchase_line_id: l.source_purchase_line_id, // Changed source_sales_line_id
+                      discount_pct: Number(l.discount_pct ?? 0),
+                      vat_rate: l.vat_rate ?? 0.21,
+                      source_purchase_line_id: l.source_purchase_line_id || null,
+                      source_dn_line_id: l.source_dn_line_id || null, // Recibo vinculado cuando corresponde
                       _account_code: l._account_code || null,
                   };
               }));
@@ -259,7 +260,7 @@ export default function PurchaseInvoiceForm(props) {
                       const factor = parseFloat(l._unit_content || l.package_size || 1);
                       const qty = parseFloat(l.qty_to_invoice || l.qty || 1);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       return {
@@ -268,13 +269,14 @@ export default function PurchaseInvoiceForm(props) {
                           description: l.product?.name || l.name || l.description || '',
                           qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l._unit_label || l.package_unit || 'u',
                           _container_name: l._container_name || 'Unidad',
                           unit_price: parseFloat(l.unit_price || 0),
                           discount_pct: parseFloat(l.discount_pct || 0),
                           vat_rate: parseFloat(l.vat_rate || 0.21),
-                          source_purchase_line_id: l.source_purchase_line_id || l.id, // Changed source_sales_line_id
+                          source_purchase_line_id: initialSourceType === 'delivery-note' ? (l.source_purchase_line_id || null) : (l.source_purchase_line_id || l.id),
+                          source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: l.accounting_account_id || null,
                           _account_code: l._account_code || null,
                       };
@@ -288,7 +290,7 @@ export default function PurchaseInvoiceForm(props) {
                       const factor = l.product?.quantity_per_container ? parseFloat(l.product.quantity_per_container) : (l.package_size ? parseFloat(l.package_size) : 1);
                       const qty = l.qty - (l.qty_invoiced || 0);
                       let qtyPackages = l.qty_packages;
-                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 1) {
+                      if ((qtyPackages === null || qtyPackages === undefined) && factor > 0) {
                           qtyPackages = qty / factor;
                       }
                       return {
@@ -297,13 +299,14 @@ export default function PurchaseInvoiceForm(props) {
                           description: l.description,
                           qty: qty,
                           qty_packages: qtyPackages,
-                          _unit_content: factor > 1 ? factor : undefined,
+                          _unit_content: factor > 0 ? factor : 1,
                           _unit_label: l.product?.container?.unit?.short_name || l.package_unit || 'u',
                           _container_name: l.product?.container?.name || 'Unidad',
                           unit_price: l.unit_price,
                           discount_pct: l.discount_pct || 0,
                           vat_rate: l.vat_rate || 0.21,
-                          source_purchase_line_id: l.id, // Changed source_sales_line_id
+                          source_purchase_line_id: initialSourceType === 'delivery-note' ? (l.source_purchase_line_id || null) : l.id,
+                          source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: null,
                           _account_code: l.product?.purchase_account_code || null, // Changed sales_account_code
                       };
@@ -377,8 +380,10 @@ export default function PurchaseInvoiceForm(props) {
             discount_pct: l.discount_pct,
             vat_rate: l.vat_rate,
             accounting_account_id: l.accounting_account_id,
-            source_purchase_line_id: l.source_purchase_line_id, // Changed source_sales_line_id
-            source_dn_line_id: l.source_dn_line_id // Still source_dn_line_id for now, might need change
+            source_purchase_line_id: l.source_purchase_line_id || null,
+                      source_dn_line_id: l.source_dn_line_id || null, // Recibo vinculado cuando corresponde
+            source_dn_line_id: l.source_dn_line_id || null,
+            package_size: Number(l._unit_content) > 0 ? Number(l._unit_content) : null
         }))
     };
     
@@ -434,14 +439,14 @@ export default function PurchaseInvoiceForm(props) {
         
         // Al cambiar envases, recalcular la cantidad total equivalente
         if (field === 'qty_packages') {
-            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
+            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 0 ? parseFloat(updated.package_size) : null);
             if (unitContent) {
                 updated.qty = numericVal * unitContent;
             } else { // If no unit content, qty_packages is same as qty
                 updated.qty = numericVal;
             }
         } else if (field === 'qty') { // If qty is changed directly and there's unit content, update qty_packages
-            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 1 ? parseFloat(updated.package_size) : null);
+            const unitContent = updated._unit_content || (updated.package_size && parseFloat(updated.package_size) > 0 ? parseFloat(updated.package_size) : null);
             if (unitContent && unitContent > 0) {
                 updated.qty_packages = numericVal / unitContent;
             } else { // If no unit content, qty is same as qty_packages
@@ -623,7 +628,7 @@ export default function PurchaseInvoiceForm(props) {
                                             />
                                             {item._unit_content && (
                                                 <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginTop: 2 }}>
-                                                    {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toFixed(0)} {item._unit_label || 'u'}
+                                                    {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
                                                 </div>
                                             )}
                                             <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
