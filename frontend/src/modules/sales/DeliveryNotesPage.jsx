@@ -716,6 +716,16 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
   };
 
   const table = {
+    emptyContent: (
+      <EmptyState
+        icon={Layers}
+        title="Sin remitos coincidentes"
+        description="Ajustá los filtros o registrá un nuevo remito."
+        actionLabel="Nuevo Remito"
+        onAction={() => setShowCreateType(true)}
+        style={{ width: "100%", maxWidth: 440, padding: "22px 16px", boxSizing: "border-box", background: "transparent", border: "none", gap: 10 }}
+      />
+    ),
     empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
@@ -741,19 +751,7 @@ export default function DeliveryNotesPage({ ov_id: prop_ov_id }) {
         <TableRowSkeleton rows={10} cols={9} />
     ) : error ? (
         <tr><td colSpan="9"><ErrorState message={error} onRetry={fetchAll} /></td></tr>
-    ) : filtered.length === 0 ? (
-      <tr>
-        <td colSpan="9">
-          <EmptyState 
-              icon={Layers} 
-              title="Sin remitos coincidentes"
-              description="Ajustá los filtros o registrá un nuevo remito."
-              actionLabel="Nuevo Remito"
-              onAction={() => setShowCreateType(true)}
-          />
-        </td>
-      </tr>
-    ) : (
+    ) : filtered.length === 0 ? null : (
        paginatedData.map((n) => (
         <Fragment key={n.id}>
         <tr 
