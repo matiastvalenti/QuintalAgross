@@ -17,6 +17,7 @@ import s from "./SalesOrderForm.module.css";
 import v from "../common/CommercialDocumentWorkspace.module.css";
 import w from "../common/InvoiceWorkbench.module.css";
 import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
+import BnaDivisasRateField from "../common/BnaDivisasRateField";
 import { padPV, padNumber, joinFullNumber, splitFullNumber, formatNumberAR } from "../../utils/formatters";
 import { openInvoiceCollectionFromInvoice } from "../../utils/openStandaloneWindow";
 import Modal from "../../components/ui/Modal";
@@ -1556,12 +1557,13 @@ export default function InvoiceForm(props) {
                                 {isMonetaryLocked ? (
                                     <ReadonlyField label="T. CAMBIO" value={exchangeRate} />
                                 ) : (
-                                    <div className={s.commercialField}>
-                                        <label>T. CAMBIO</label>
-                                        <div className={s.commercialControl}>
-                                            <input type="number" className={s.commercialInput} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
-                                        </div>
-                                    </div>
+                                    <BnaDivisasRateField
+                                        value={exchangeRate}
+                                        onChange={setExchangeRate}
+                                        date={date}
+                                        currency={currency}
+                                        isNew={mode === "new"}
+                                    />
                                 )}
                             </>
                         )}
