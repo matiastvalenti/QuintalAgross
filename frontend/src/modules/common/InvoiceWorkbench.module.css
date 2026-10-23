@@ -559,3 +559,66 @@
   .root :global([class*="sideField"]) {grid-template-columns: minmax(80px, .5fr) minmax(0, 1fr) !important;}
 }
 
+
+/* Tarjetas superiores equilibradas: dos columnas internas para los cuatro
+   datos comerciales, igual que la carga compacta de una Orden de Venta. */
+.root .layout .party,
+.root .layout .commercial {
+  align-self: stretch !important;
+  height: auto !important;
+  min-height: 165px !important;
+}
+.root .layout .commercial {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  align-content: start;
+  align-items: start;
+  gap: 8px 12px !important;
+  padding: 12px 15px !important;
+}
+.root .commercial > :global([class*="panelTitle"]),
+.root .commercial > :global([class*="sideBlockTitle"]),
+.root .commercial > :global([class*="panelTabs"]),
+.root .commercial > :global([class*="tabContent"]) {
+  grid-column: 1 / -1 !important;
+}
+.root .commercial > :global([class*="tabContent"]) {
+  display: grid !important;
+  grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+  gap: 8px 12px !important;
+  align-items: start;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+  padding: 0 !important;
+}
+.root .commercial :global([class*="commercialField"]),
+.root .commercial > :global([class*="sideField"]) {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 4px !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+}
+.root .commercial :global([class*="commercialField"]) label,
+.root .commercial > :global([class*="sideField"]) label {
+  font-size: 10px;
+  line-height: 1.25;
+  color: #bac9e1 !important;
+}
+.root .commercial :global([class*="commercialControl"]),
+.root .commercial :global([class*="sideInput"]),
+.root .commercial :global([class*="sideSelect"]) {
+  width: 100% !important;
+  min-width: 0;
+  max-width: 100%;
+}
+@container (max-width: 760px) {
+  .root .layout .commercial {grid-template-columns: minmax(0,1fr) !important;}
+  .root .commercial > :global([class*="tabContent"]) {
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  .root .layout .party, .root .layout .commercial {min-height:0 !important;}
+}
