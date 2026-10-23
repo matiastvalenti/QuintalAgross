@@ -17,6 +17,7 @@ import s from "../sales/SalesOrderForm.module.css";
 import v from "../common/CommercialDocumentWorkspace.module.css";
 import w from "../common/InvoiceWorkbench.module.css";
 import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
+import BnaDivisasRateField from "../common/BnaDivisasRateField";
 import { padPV, padNumber, joinFullNumber, splitFullNumber } from "../../utils/formatters";
 
 export default function PurchaseInvoiceForm(props) {
@@ -869,12 +870,20 @@ export default function PurchaseInvoiceForm(props) {
                         )}
                     </div>
 
-                    <div className={s.sideField}>
-                        <label>T. CAMBIO</label>
-                        {isReadOnly ? <div className={s.sideInput}>{exchangeRate}</div> : (
-                            <input type="number" className={s.sideInput} value={exchangeRate} onChange={e => setExchangeRate(e.target.value)} />
-                        )}
-                    </div>
+                    {isReadOnly ? (
+                        <div className={s.sideField}>
+                            <label>T. CAMBIO</label>
+                            <div className={s.sideInput}>{exchangeRate}</div>
+                        </div>
+                    ) : (
+                        <BnaDivisasRateField
+                            value={exchangeRate}
+                            onChange={setExchangeRate}
+                            date={date}
+                            currency={currency}
+                            isNew={mode === "new"}
+                        />
+                    )}
                 </div>
 
                 <div className={`${s.sideBlock} ${w.expense}`}>
