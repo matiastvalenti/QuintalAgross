@@ -8,7 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 import DocumentListPage from '../../components/layout/DocumentListPage';
-import { openNuevaFacturaCompra, openEditFacturaCompra } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import StatusBadge from '../../components/ui/StatusBadge';
 import Button from '../../components/ui/Button';
 import EmptyState from '../../components/ui/EmptyState';
@@ -39,6 +39,7 @@ export default function PurchaseInvoicesPage() {
   const pageSize = 15;
   
   const { showToast } = useToast();
+  const { openNuevaFacturaCompra, openEditFacturaCompra } = useInternalCommercialDocuments();
   
   // Sorting
   const [sortBy, setSortBy] = useState('date');
