@@ -26,6 +26,7 @@ export default function PurchaseInvoiceForm(props) {
     initialSourceType = null,
     initialSourceId = null, // Can be oc_id or remito_entrada_id
     preselectedLines = null,
+    initialDnIds = null,
     draftId = null,
     isStandalone = false,
     initialDocType = "PURCHASE_INVOICE" // Changed to PURCHASE_INVOICE
@@ -77,10 +78,59 @@ export default function PurchaseInvoiceForm(props) {
       .then(res => { if (!res.ok) throw new Error(); return res.json(); })
       .then(setVehicles).catch(() => setVehicleLoadError(true));
     if (mode === "edit" && id) fetchInvoice();
-    else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note") && initialSourceId) { // Changed sales-order
+    else if (mode === "new" && Array.isArray(initialDnIds) && initialDnIds.length > 0) {
+        fetchFromMultipleRemitos(initialDnIds);
+    }
+    else if (mode === "new" && (initialSourceType === "purchase-order" || initialSourceType === "delivery-note") && initialSourceId) {
         fetchFromSource();
     }
   }, []);
+
+  const fetchFromMultipleRemitos = async (ids) => {
+    setLoading(true);
+    try {
+        const token = localStorage.getItem("token");
+        const headers = { Authorization: `Bearer ${token}` };
+        const responses = await Promise.all(ids.map(id =>
+            fetch(`${API_URL}/purchases/delivery-notes/${id}`, { headers })
+        ));
+        if (responses.some(response => !response.ok)) throw new Error("No se pudieron recuperar todos los remitos.");
+        const notes = await Promise.all(responses.map(response => response.json()));
+        const supplierId = notes[0]?.entity_id;
+        if (!supplierId || notes.some(note => String(note.entity_id) !== String(supplierId))) {
+            throw new Error("Todos los remitos deben pertenecer al mismo proveedor.");
+        }
+        setEntity({ id: supplierId, name: notes[0].entity_name || "Proveedor" });
+        setSourceNumber(notes.map(note => note.number).filter(Boolean).join(", "));
+        setCurrency(notes[0].currency || "ARS");
+        setExchangeRate(Number(notes[0].exchange_rate) || 1);
+        const lines = notes.flatMap(note => (note.lines || []).map(line => {
+            const factor = Number(line.package_size || line.product?.quantity_per_container || 1) || 1;
+            const qty = Math.max(0, Number(line.qty || 0) - Number(line.qty_invoiced || 0));
+            return {
+                id: `${note.id}-${line.id}`,
+                product_id: line.product_id,
+                description: line.description || line.product_name || "",
+                qty,
+                qty_packages: qty / factor,
+                _unit_content: factor,
+                _unit_label: line.package_unit || line.product?.container?.unit?.short_name || "u",
+                unit_price: Number(line.unit_price || 0),
+                vat_rate: line.vat_rate ?? 0.21,
+                discount_pct: Number(line.discount_pct || 0),
+                source_purchase_line_id: line.source_purchase_line_id || null,
+                source_dn_line_id: line.id,
+                accounting_account_id: line.accounting_account_id || null,
+            };
+        })).filter(line => line.qty > 0);
+        if (!lines.length) throw new Error("Los remitos seleccionados no tienen cantidades pendientes de facturar.");
+        setItems(lines);
+    } catch (error) {
+        showToast(error.message || "Error cargando remitos de compra", "error");
+    } finally {
+        setLoading(false);
+    }
+  };
 
   const fetchInitialData = async () => {
     const token = localStorage.getItem("token");
