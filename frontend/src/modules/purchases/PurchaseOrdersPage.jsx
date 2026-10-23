@@ -329,15 +329,15 @@ export default function PurchaseOrdersPage() {
       paginatedData.map((o) => (
         <tr key={o.id} className={s.row} onClick={() => handleOpenDetail(o.id, o.number)}>
           <td className={`${s.td} ${s.numberCell}`}>{o.number}</td>
-          <td className={s.td} style={{ color: '#64748b', fontSize: 13, fontWeight: 600 }}>
+          <td className={s.td} style={{ color: '#aebdd7', fontSize: 13, fontWeight: 600 }}>
             {new Date(o.date).toLocaleDateString('es-AR', { day: '2-digit', month: 'short' })}
           </td>
-          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#1e293b' }}>{o.entity_name || entityName(o.entity_id)}</td>
+          <td className={s.td} style={{ fontSize: 14, fontWeight: 700, color: '#f8fafc' }}>{o.entity_name || entityName(o.entity_id)}</td>
           <td className={`${s.td} ${s.totalCell}`}>
             <span className={s.currencyLabel}>{o.currency}</span>
             {Number(o.total_amount)?.toLocaleString('es-AR', { minimumFractionDigits: 2 })}
           </td>
-          <td className={s.td} style={{ fontSize: 13, color: '#64748b' }}>{warehouseName(o.warehouse_id)}</td>
+          <td className={s.td} style={{ fontSize: 13, color: '#aebdd7' }}>{warehouseName(o.warehouse_id)}</td>
           <td className={s.td} style={{ textAlign: 'center', width: 220 }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
               <StatusBadge status={o.status} />
