@@ -921,7 +921,7 @@ export default function PurchaseOrderForm(props) {
 
     setShowInvoiceModal(false);
 
-    const draftId = `ov_${id}_${Date.now()}`;
+    const draftId = `oc_${id}_${Date.now()}`;
     const draftData = {
       sourceType: "sales-order",
       salesOrderId: id,
