@@ -88,10 +88,15 @@ export default function DocumentListPage({
                 </tr>
               </thead>
               <tbody>
-                {table.body}
+                {table.empty && table.emptyContent ? null : table.body}
               </tbody>
             </table>
           </div>
+          {table.empty && table.emptyContent && (
+            <div className={s.tableEmptyContent} role="status">
+              {table.emptyContent}
+            </div>
+          )}
         </div>
       )}
 
