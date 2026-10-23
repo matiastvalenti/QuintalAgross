@@ -202,6 +202,8 @@ export default function PurchaseOrderForm(props) {
       if (mode === "edit" && id) fetchPurchaseOrder(id);
     };
     window.addEventListener("delivery-note-changed", refreshOC);
+    window.addEventListener("purchase-delivery-note-changed", refreshOC);
+    window.addEventListener("purchase-invoice-changed", refreshOC);
 
     // Escuchar eventos de la red de documentos
     const handleDocumentMessage = (e) => {
@@ -210,8 +212,8 @@ export default function PurchaseOrderForm(props) {
 
       // Si el documento salvado está relacionado con esta OC, refrescar
       if (
-        payload.salesOrderId === id ||
-        payload.documentType === "sales-order"
+        (payload.purchaseOrderId && String(payload.purchaseOrderId) === String(id)) ||
+        (payload.documentType === "purchase-order" && String(payload.documentId) === String(id))
       ) {
         refreshOC();
       }
@@ -228,6 +230,8 @@ export default function PurchaseOrderForm(props) {
 
     return () => {
       window.removeEventListener("delivery-note-changed", refreshOC);
+      window.removeEventListener("purchase-delivery-note-changed", refreshOC);
+      window.removeEventListener("purchase-invoice-changed", refreshOC);
       window.removeEventListener("message", handleDocumentMessage);
       if (bc) bc.close();
     };
