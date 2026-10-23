@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   packageFactor, unitsToPackages, packagesToUnits,
-  selectedRemitoUnits, formatRemitoQuantity,
+  selectedRemitoUnits, formatRemitoQuantity, normalizeRemitoVatRate,
 } from "./remitoPackages";
 
 describe("Remitos de Venta y Entrada: envases y unidades base", () => {
@@ -31,6 +31,14 @@ describe("Remitos de Venta y Entrada: envases y unidades base", () => {
     const x = { _unit_content: 5, qty: 15, qty_packages: 3, qty_to_receive: 10 };
     expect(selectedRemitoUnits(x)).toBe(10);
     expect(unitsToPackages(selectedRemitoUnits(x), x)).toBe(2);
+  });
+
+  it("normaliza IVA 21% y conserva IVA 0% de productos exentos", () => {
+    expect(normalizeRemitoVatRate(21)).toBe(0.21);
+    expect(normalizeRemitoVatRate(10.5)).toBe(0.105);
+    expect(normalizeRemitoVatRate(0.21)).toBe(0.21);
+    expect(normalizeRemitoVatRate(0)).toBe(0);
+    expect(normalizeRemitoVatRate(null)).toBe(0.21);
   });
 
   it("evita valores no numéricos y limita la representación a seis decimales", () => {
