@@ -18,6 +18,8 @@
   --border-color: var(--invoice-border);
   --bg-page: var(--invoice-bg);
   --panel-bg: var(--invoice-panel);
+  --panel-2: var(--invoice-field);
+  --bg-card: var(--invoice-field);
   --primary: #a390ff;
   color: var(--invoice-text);
   background: var(--invoice-bg);
@@ -621,4 +623,27 @@
     grid-template-columns: minmax(0,1fr) !important;
   }
   .root .layout .party, .root .layout .commercial {min-height:0 !important;}
+}
+
+/* Evitar el borde/cápsula blanca: Autocomplete maneja todo en un único control. */
+.root .search :global([class*="inputWrapper"]),
+.root .party :global([class*="inputWrapper"]) {
+  background: #151f35 !important;
+  border: 1px solid #465875 !important;
+  border-radius: 8px !important;
+  box-shadow: none !important;
+}
+.root .search :global([class*="inputWrapper"] input),
+.root .party :global([class*="inputWrapper"] input) {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  color: #f8fafc !important;
+  -webkit-text-fill-color: #f8fafc;
+}
+.root .search :global([class*="inputWrapper"]):focus-within,
+.root .party :global([class*="inputWrapper"]):focus-within {
+  border-color: #a390ff !important;
+  outline: 2px solid #a390ff;
+  outline-offset: 1px;
 }
