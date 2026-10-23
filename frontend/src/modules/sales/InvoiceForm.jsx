@@ -1111,6 +1111,11 @@ export default function InvoiceForm(props) {
                             <Autocomplete 
                                 onSearch={searchProducts} 
                                 onSelect={(p) => {
+                                    if (['INVOICE', 'FCE_MIPYME', 'TIQUET_FACTURA'].includes(docType) &&
+                                        !initialSourceId && !p.is_service) {
+                                        showToast("Para vender productos con stock, comenzá desde una Orden de Venta. La factura directa admite servicios.", "warning");
+                                        return;
+                                    }
                                     const qtyPerContainer = Number(p.quantity_per_container) > 0
                                         ? Number(p.quantity_per_container)
                                         : 1;
