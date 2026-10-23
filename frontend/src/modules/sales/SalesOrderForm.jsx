@@ -842,7 +842,7 @@ export default function SalesOrderForm(props) {
                         title={!id ? "Guarde la orden para remitir" : (pendingCount === 0 ? "No hay ítems pendientes de remitir" : `Remitir Pedido — ${pendingCount} ítem(s) pendiente(s)`)}
                         style={pendingCount > 0 && id ? { background: '#eff6ff', color: '#1d4ed8', border: '1.5px solid #bfdbfe' } : {}}
                       >
-                          <Truck size={18} />
+                          <Truck size={18} /><span className={w.actionLabel}>Remito</span>
                       </button>
                       <button
                         className={`${s.actionBtn} ${w.actionBtn}`}
@@ -851,13 +851,13 @@ export default function SalesOrderForm(props) {
                         title={!id ? "Guarde la orden para facturar" : (pendingInvoicedCount === 0 ? "No hay ítems pendientes de facturar" : `Facturar Pedido — ${pendingInvoicedCount} ítem(s) pendiente(s)`)}
                         style={pendingInvoicedCount > 0 && id ? { background: '#f5f3ff', color: '#7c3aed', border: '1.5px solid #ddd6fe' } : {}}
                       >
-                          <Receipt size={18} />
+                          <Receipt size={18} /><span className={w.actionLabel}>Factura</span>
                       </button>
                       <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => window.open(`${API_URL}/sales/sales-orders/${id}/pdf`, '_blank')} title={!id ? "Guarde para imprimir" : "Imprimir Orden de Venta"}>
-                          <Printer size={18} />
+                          <Printer size={18} /><span className={w.actionLabel}>PDF</span>
                       </button>
                       <button className={`${s.actionBtn} ${w.actionBtn}`} disabled={!id} onClick={() => showToast("Funcionalidad de envío por correo en desarrollo", "info")} title="Enviar por Email">
-                          <Mail size={18} />
+                          <Mail size={18} /><span className={w.actionLabel}>Correo</span>
                       </button>
                   </div>
               </div>
@@ -990,9 +990,12 @@ export default function SalesOrderForm(props) {
                                                     placeholder="Ingrese concepto..."
                                                     style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: 'transparent' }}
                                                 />
-                                                <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>{item.brand || item.product?.brand?.name}</div>
+                                                <div style={{ fontSize: 10, fontWeight: 700, color: '#b9c9e2' }}>
+                                                    {item.brand || item.product?.brand?.name || 'Producto'}
+                                                    {Number(item._unit_content) > 0 && ` · Envase: ${item._unit_content} ${item._unit_label || 'u'}`}
+                                                </div>
                                             </div>
-                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item._unit_content > 1 ? (item.qty_packages ?? 0) : ''} onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)} readOnly={hasProgress || isReadOnly || !(item._unit_content > 1)} placeholder={item._unit_content > 1 ? '0' : '—'} title={item._unit_content > 1 ? `Contenido: ${item._unit_content} unidades por envase` : 'Presentación no configurada: cargar unidades directamente'}  />
+                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={Number(item._unit_content) > 0 ? (item.qty_packages ?? 0) : ''} onChange={(e) => handleUpdateItem(item.id, 'qty_packages', e.target.value)} readOnly={hasProgress || isReadOnly || !(Number(item._unit_content) > 0)} placeholder={Number(item._unit_content) > 0 ? '0' : '—'} title={Number(item._unit_content) > 0 ? `Contenido: ${item._unit_content} unidades por envase` : 'Presentación no configurada: cargar unidades directamente'}  />
                                             <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                                                 <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item.qty || 0} onChange={(e) => handleUpdateItem(item.id, 'qty', e.target.value)} />
                                                 <span style={{ fontSize: 9, fontWeight: 800 }}>{item._unit_label}</span>
@@ -1398,17 +1401,17 @@ export default function SalesOrderForm(props) {
                     </div>
                     {/* PEDIDO */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>{factor > 1 ? `${orderedPackages.toString().replace(/\.00$/, '')} env.` : `${orderedBaseQty} und.`}</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#475569' }}>{factor > 0 ? `${orderedPackages.toString().replace(/\.00$/, '')} env.` : `${orderedBaseQty} und.`}</div>
                       <div style={{ fontSize: 10, color: '#94a3b8' }}>{orderedBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* YA REMIT. */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{factor > 1 ? `${deliveredPackages.toString().replace(/\.00$/, '')} env.` : `${deliveredBaseQty} und.`}</div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: '#94a3b8' }}>{factor > 0 ? `${deliveredPackages.toString().replace(/\.00$/, '')} env.` : `${deliveredBaseQty} und.`}</div>
                       <div style={{ fontSize: 10, color: '#94a3b8' }}>{deliveredBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     {/* PENDIENTE */}
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 12, fontWeight: 800, color: pendingBaseQty > 0 ? '#1e293b' : '#059669' }}>{factor > 1 ? `${pendingPackages.toString().replace(/\.00$/, '')} env.` : `${pendingBaseQty} und.`}</div>
+                      <div style={{ fontSize: 12, fontWeight: 800, color: pendingBaseQty > 0 ? '#1e293b' : '#059669' }}>{factor > 0 ? `${pendingPackages.toString().replace(/\.00$/, '')} env.` : `${pendingBaseQty} und.`}</div>
                       <div style={{ fontSize: 10, color: pendingBaseQty > 0 ? '#64748b' : '#059669' }}>{pendingBaseQty.toFixed(1).replace(/\.0$/, '')} {unitLabel}</div>
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
@@ -1477,8 +1480,8 @@ export default function SalesOrderForm(props) {
                 const qtyInvoicedUnits = parseFloat(item.qty_invoiced || 0);
                 const qtyOrderedUnits = parseFloat(item.qty || 0);
                 const factor = parseFloat(item._unit_content || 1);
-                const orderedPkgs = factor > 1 ? qtyOrderedUnits / factor : qtyOrderedUnits;
-                const invoicedPkgs = factor > 1 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
+                const orderedPkgs = factor > 0 ? qtyOrderedUnits / factor : qtyOrderedUnits;
+                const invoicedPkgs = factor > 0 ? qtyInvoicedUnits / factor : qtyInvoicedUnits;
                 const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
                 const currentQty = invoiceQtys[item.id] !== undefined ? invoiceQtys[item.id] : pendingPkgs;
                 const isSelected = currentQty > 0;
@@ -1510,15 +1513,15 @@ export default function SalesOrderForm(props) {
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#475569' }}>{orderedPkgs} env.</div>
-                      {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyOrderedUnits} {unitLabel}</div>}
+                      {factor > 0 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyOrderedUnits} {unitLabel}</div>}
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 13, fontWeight: 700, color: '#94a3b8' }}>{invoicedPkgs} env.</div>
-                      {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyInvoicedUnits} {unitLabel}</div>}
+                      {factor > 0 && <div style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8' }}>{qtyInvoicedUnits} {unitLabel}</div>}
                     </div>
                     <div style={{ textAlign: 'center' }}>
                       <div style={{ fontSize: 13, fontWeight: 900, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{pendingPkgs.toFixed(2)} env.</div>
-                      {factor > 1 && <div style={{ fontSize: 10, fontWeight: 600, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{(pendingPkgs * factor).toFixed(1)} {unitLabel}</div>}
+                      {factor > 0 && <div style={{ fontSize: 10, fontWeight: 600, color: pendingPkgs > 0 ? '#7c3aed' : '#059669' }}>{(pendingPkgs * factor).toFixed(1)} {unitLabel}</div>}
                     </div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, alignItems: 'center' }}>
                       {pendingPkgs > 0 ? (
@@ -1535,7 +1538,7 @@ export default function SalesOrderForm(props) {
                             }}
                             style={{ width: 90, padding: '6px 10px', borderRadius: 10, border: `2px solid ${isSelected ? '#7c3aed' : '#e2e8f0'}`, textAlign: 'center', fontWeight: 800, fontSize: 14, color: '#1e293b', background: '#fff', outline: 'none' }}
                           />
-                          {factor > 1 && <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {unitLabel}</div>}
+                          {factor > 0 && <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>= {(currentQty * factor).toFixed(2)} {unitLabel}</div>}
                         </>
                       ) : (
                         <span style={{ fontSize: 11, color: '#94a3b8', fontWeight: 600 }}>—</span>
