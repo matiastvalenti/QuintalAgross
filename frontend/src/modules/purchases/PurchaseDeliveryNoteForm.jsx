@@ -871,22 +871,22 @@ export default function PurchaseDeliveryNoteForm(props) {
                                         const qtyReceived = parseFloat(item.qty_received) || 0; // Changed from qtyDelivered
                                         const qtyPending = parseFloat(item.qty_pending) || 0;
                                         
-                                        const qtyPackages = item.qty_packages;
+                                        const qtyPackages = item.qty_packages ?? unitsToPackages(item.qty, item);
                                         const qty = item.qty || 0;
                                         const hasPackages = qtyPackages !== undefined && qtyPackages !== null;
                                         const subtotal = qty * (item.unit_price || 0);
                                         
                                         return (
-                                            <div key={item.id} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
+                                            <div key={item.id} className={v.readonlyRemitoLine} style={{ display: 'flex', flexDirection: 'column', padding: '12px 16px', borderBottom: '1px solid var(--border-color)', gap: 8 }}>
                                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                                                    <div style={{ fontSize: 13, fontWeight: 900, color: '#1e293b' }}>Producto: {item.name || item.product?.name || item.description}</div>
-                                                    <div style={{ display: 'flex', gap: 12, fontSize: 11, background: '#f8fafc', padding: '4px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
-                                                        <div style={{ color: '#64748b' }}><span style={{ fontWeight: 800 }}>Ped:</span> {qtyOrdered.toFixed(2)}</div>
+                                                    <div style={{ fontSize: 13, fontWeight: 900, color: '#f0f5ff' }}>Producto: {item.name || item.product?.name || item.description}</div>
+                                                    <div style={{ display: 'flex', gap: 12, fontSize: 11, background: '#17243d', padding: '4px 12px', borderRadius: 6, border: '1px solid #e2e8f0' }}>
+                                                        <div style={{ color: '#adbed9' }}><span style={{ fontWeight: 800 }}>Ped:</span> {qtyOrdered.toFixed(2)}</div>
                                                         <div style={{ color: 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Rec:</span> {qtyReceived.toFixed(2)}</div> {/* Changed from Rem */}
                                                         <div style={{ color: qtyPending > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {qtyPending.toFixed(2)}</div>
                                                     </div>
                                                 </div>
-                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#475569' }}>
+                                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px 24px', fontSize: 12, color: '#c5d3e9' }}>
                                                     {hasPackages ? (
                                                         <>
                                                             <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qtyPackages} envases</div>
@@ -896,7 +896,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                                                         <div><span style={{ fontWeight: 800 }}>Cantidad:</span> {qty.toFixed(2)} {item._unit_label || 'u'}</div>
                                                     )}
                                                     <div><span style={{ fontWeight: 800 }}>Costo:</span> {Number(item.unit_price || 0).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })} / {item._unit_label || 'u'}</div> {/* Changed from Precio */}
-                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#1e293b' }}>Subtotal:</span> {Number(subtotal).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })}</div>
+                                                    <div style={{ color: 'var(--primary)', fontWeight: 900 }}><span style={{ fontWeight: 800, color: '#f0f5ff' }}>Subtotal:</span> {Number(subtotal).toLocaleString('es-AR', { style: 'currency', currency: item.currency || currency || 'ARS' })}</div>
                                                 </div>
                                             </div>
                                         );
