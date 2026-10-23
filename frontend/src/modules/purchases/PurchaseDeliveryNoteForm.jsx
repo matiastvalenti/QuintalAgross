@@ -58,6 +58,7 @@ import v from "../common/CommercialDocumentWorkspace.module.css";
 import CommercialDocumentNav from "../common/CommercialDocumentNav"; // Using SalesOrderForm.module.css for consistent styling
 import t from "../../components/ui/Table.module.css";
 import LoadingScreen from "../../components/ui/LoadingScreen";
+import { selectedRemitoUnits, unitsToPackages, packagesToUnits, formatRemitoQuantity, packageFactor } from "../../utils/remitoPackages";
 import ManualLinkInvoiceModal from "../sales/ManualLinkInvoiceModal"; // Needs to be adapted or removed for purchases
 
 export default function PurchaseDeliveryNoteForm(props) {
@@ -201,13 +202,7 @@ export default function PurchaseDeliveryNoteForm(props) {
         if (preselectedLines && preselectedLines.length > 0) {
             fetchHeaderFromPurchaseOrder(true); // Changed from SalesOrder
             const normalizedItems = preselectedLines.map((line) => {
-                const qtyToReceive = Number(
-                  line.qty_to_receive ??
-                  line.qty_to_remit ??
-                  line.qty_packages ??
-                  line.qty ??
-                  0
-                );
+                const qtyToReceive = selectedRemitoUnits(line);
                 const qtyPending = Number(
                   line.qty_pending ??
                   line.pending_qty ??
@@ -223,7 +218,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                     product_name: line.product_name || line.description,
                     description: line.description || line.product_name,
                     qty: qtyToReceive,
-                    qty_packages: Number(line.qty_packages ?? (qtyToReceive / (Number(line._unit_content) || 1))),
+                    qty_packages: unitsToPackages(qtyToReceive, line),
                     qty_to_receive: qtyToReceive,
                     qty_pending: qtyPending,
                     qty_received: Number(line.qty_received ?? 0),
@@ -622,12 +617,11 @@ export default function PurchaseDeliveryNoteForm(props) {
         const newItem = { ...i, [field]: value === "" ? "" : Number(value) };
         if (field === 'qty') {
             newItem.qty = value === "" ? "" : Number(value);
-            const factor = Number(i._unit_content) || 1;
-            newItem.qty_packages = value === "" ? "" : Number(value) / factor;
+            newItem.qty_packages = value === "" ? "" : unitsToPackages(value, i);
         }
         if (field === 'qty_packages') {
             newItem.qty_packages = value === "" ? "" : Number(value);
-            newItem.qty = (value === "" ? 0 : Number(value)) * (i._unit_content || 1);
+            newItem.qty = packagesToUnits(value, i);
         }
         if (field === 'equiv') {
             const factor = i._unit_content || 1;
@@ -863,7 +857,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                                 <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', width: '100%', boxSizing: 'border-box' }}>
                                     <div className={s.th}>Producto</div>
                                     <div className={s.th} style={{ textAlign: 'left' }}>Cant.</div>
-                                    <div className={s.th} style={{ textAlign: 'right' }}>Recibir</div> {/* Changed from Remitir */}
+                                    <div className={s.th} style={{ textAlign: 'right' }}>Envases</div> {/* Changed from Remitir */}
                                     <div className={s.th} style={{ textAlign: 'center' }}>Un.</div>
                                     <div className={s.th} style={{ textAlign: 'right' }}>Costo U.</div> {/* Changed from P.Unit */}
                                     <div className={s.th} style={{ textAlign: 'right' }}>Subtotal</div>
@@ -910,7 +904,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                                     
                                   const isExceeding = mode === 'new' && item.qty > (item.qty_pending || 0);
                                   return (
-                                    <div key={item.id} data-exceeding={isExceeding} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border_box' }}>
+                                    <div key={item.id} data-exceeding={isExceeding} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border-box' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
                                             <div style={{ fontSize: 11, fontWeight: 900, color: '#1e293b', lineHeight: 1.1, whiteSpace: 'normal', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                                 {item.name || item.product?.name || item.description}
@@ -922,12 +916,11 @@ export default function PurchaseDeliveryNoteForm(props) {
                                             <div style={{ color: (item.qty_pending || 0) > 0 ? 'var(--warning)' : 'var(--ok)' }}><span style={{ fontWeight: 800 }}>Pte:</span> {(item.qty_pending || 0).toFixed(2)}</div>
                                         </div>
                                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
-                                            <input type="number" step="0.01" min="0" max={item.qty_pending ?? undefined} className={s.tableInput} value={item.qty ?? ""} onChange={(e) => updateItem(item.id, 'qty', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
-                                            {item._unit_content > 1 && (
-                                                <div style={{ fontSize: 9, fontWeight: 700, color: '#64748b' }}>
-                                                    = {(Number(item.qty || 0) / (item._unit_content || 1)).toFixed(2)} {item._container_name || 'Envases'}
-                                                </div>
-                                            )}
+                                            <input type="number" step="0.001" min="0" max={item.qty_pending !== undefined ? unitsToPackages(item.qty_pending, item) : undefined} className={s.tableInput} value={item.qty_packages ?? unitsToPackages(item.qty, item)} onChange={(e) => updateItem(item.id, 'qty_packages', e.target.value)} readOnly={isReadOnly || mode === 'edit'} style={{ background: (isReadOnly || mode === 'edit') ? 'transparent' : '#fff', textAlign: 'right', fontWeight: 800, color: isExceeding ? '#ef4444' : 'var(--primary)', width: 78, border: isExceeding ? '1px solid #ef4444' : '1px solid var(--border-color)', paddingRight: 8, borderRadius: 6, height: 30 }} />
+                                            <div style={{ fontSize: 9, fontWeight: 700, color: '#a8bbd6' }}>
+                                                = {formatRemitoQuantity(item.qty)} {item._unit_label || 'u'}
+                                                {packageFactor(item) !== 1 ? ` · ${formatRemitoQuantity(packageFactor(item))} ${item._unit_label || 'u'}/env.` : ""}
+                                            </div>
                                         </div>
                                         <div style={{ fontWeight: 600, color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', whiteSpace: 'nowrap', fontSize: 10 }}>
                                             {item._unit_label || item.unit_short_name || 'u'}
