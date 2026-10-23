@@ -673,7 +673,7 @@ export default function SalesOrderForm(props) {
     items.forEach(item => {
       const factor = parseFloat(item._unit_content || 1);
       const pendingUnits = parseFloat(item.qty || 0) - parseFloat(item.qty_invoiced || 0);
-      const pendingPkgs = factor > 1 ? pendingUnits / factor : pendingUnits;
+      const pendingPkgs = factor > 0 ? pendingUnits / factor : 0;
       if (pendingPkgs > 0) initial[item.id] = pendingPkgs;
     });
 
@@ -686,12 +686,22 @@ export default function SalesOrderForm(props) {
   };
 
   const handleConfirmInvoice = () => {
+    for (const item of items) {
+      const packages = Number(invoiceQtys[item.id] || 0);
+      if (!Number.isFinite(packages) || packages < 0) return showToast("Cantidad a facturar inválida", "warning");
+      if (packages === 0) continue;
+      const factor = Number(item._unit_content || item.quantity_per_container || 1);
+      const pending = Math.max(0, Number(item.qty || 0) - Number(item.qty_invoiced || 0));
+      if (!Number.isFinite(factor) || factor <= 0 || packages * factor > pending + 0.000001) {
+        return showToast("La cantidad a facturar supera el pendiente", "warning");
+      }
+    }
     const selectedLines = items
       .filter(item => (parseFloat(invoiceQtys[item.id] || 0)) > 0)
       .map(item => {
         const qtyPkgs = parseFloat(invoiceQtys[item.id] || 0);
         const factor = parseFloat(item._unit_content || item.quantity_per_container || 1);
-        const qtyUnits = factor > 1 ? qtyPkgs * factor : qtyPkgs;
+        const qtyUnits = qtyPkgs * factor;
         const lineName = item.product_name || item.product?.name || item.description || item.name || item.concept || item.item_name || '';
 
         return {
