@@ -611,6 +611,19 @@ export default function SalesOrderForm(props) {
 
   // Confirm and open the DeliveryNote with the selected lines
   const handleConfirmRemito = () => {
+    // Validate in base units before creating a delivery-note draft.
+    for (const line of items) {
+      const packages = Number(remitoQtys[line.id] || 0);
+      if (!Number.isFinite(packages) || packages < 0) {
+        return showToast("La cantidad de envases debe ser válida", "warning");
+      }
+      if (packages === 0) continue;
+      const factor = Number(line.product?.quantity_per_container || line.quantity_per_container || line._unit_content || 1);
+      const pending = Math.max(0, Number(line.qty || 0) - Number(line.qty_delivered || 0));
+      if (!Number.isFinite(factor) || factor <= 0 || packages * factor > pending + 0.000001) {
+        return showToast(`La cantidad a remitir supera el pendiente de ${line.description || line.name || "un producto"}`, "warning");
+      }
+    }
     const selectedLines = items
       .filter(item => {
         const qty = parseFloat(remitoQtys[item.id] || 0);
