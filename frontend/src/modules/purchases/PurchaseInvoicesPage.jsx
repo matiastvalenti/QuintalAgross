@@ -342,6 +342,7 @@ export default function PurchaseInvoicesPage() {
   };
 
   const table = {
+    empty: !loading && !error && sorted.length === 0,
     columns: (
       <>
         <th className={s.th} style={{ width: 40, padding: '0 12px' }}>
