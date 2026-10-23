@@ -383,7 +383,6 @@ export default function PurchaseInvoiceForm(props) {
             vat_rate: l.vat_rate,
             accounting_account_id: l.accounting_account_id,
             source_purchase_line_id: l.source_purchase_line_id || null,
-                      source_dn_line_id: l.source_dn_line_id || null, // Recibo vinculado cuando corresponde
             source_dn_line_id: l.source_dn_line_id || null,
             package_size: Number(l._unit_content) > 0 ? Number(l._unit_content) : null
         }))
