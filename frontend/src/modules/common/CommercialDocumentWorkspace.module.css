@@ -697,3 +697,55 @@
   .shell .footer {justify-content:space-between;}
   .shell .statusStrip {display:grid !important;grid-template-columns:repeat(2,minmax(0,1fr));}
 }
+
+/* QUINTAL_REMITOS_FIT_WINDOW: igual que Facturas, la zona desplazable es el
+   cuerpo y el pie no queda escondido debajo del dock del ERP. */
+.shell.remito {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  gap: 9px !important;
+  padding: 12px 15px 10px !important;
+}
+.shell.remito .header,
+.shell.remito .sections {
+  flex: 0 0 auto !important;
+}
+.shell.remito .body {
+  flex: 1 1 0 !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  height: auto !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  overscroll-behavior: contain;
+  align-content: start !important;
+  padding: 0 3px 8px 0;
+}
+.shell.remito .statusStrip {
+  flex: 0 0 auto !important;
+  margin: 0 !important;
+  padding: 7px 12px !important;
+  min-height: 42px;
+}
+.shell.remito .footer {
+  flex: 0 0 auto !important;
+  min-height: 50px !important;
+  padding: 8px 12px !important;
+  margin: 0 !important;
+  position: relative !important;
+  box-shadow: 0 -7px 16px rgba(8,14,28,.25) !important;
+}
+.shell.remito .bento {
+  min-height: 120px !important;
+  max-height: 250px !important;
+  height: auto !important;
+}
+.shell.remito[data-has-items="false"] .bento {
+  height: 110px !important;
+  min-height: 110px !important;
+  max-height: 110px !important;
+}
