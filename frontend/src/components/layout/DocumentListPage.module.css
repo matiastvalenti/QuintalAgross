@@ -714,3 +714,36 @@
   .quintalTheme .actionGroup { margin-left: 0; flex-wrap: wrap; }
   .quintalTheme .paginationBar { gap: 12px; flex-wrap: wrap; }
 }
+
+
+/* Corrige colores claros que algunos listados heredaban mediante estilos inline */
+.quintalTheme td[style*="color: rgb(30, 41, 59)"],
+.quintalTheme td[style*="color: #1e293b"],
+.quintalTheme td[style*="color: rgb(100, 116, 139)"],
+.quintalTheme td[style*="color: #64748b"] {
+  color: #c2cee2 !important;
+}
+.quintalTheme tr.animate-slide-down > td > div {
+  background: #172239 !important;
+  border-color: #354361 !important;
+  box-shadow: inset 0 2px 4px rgba(0,0,0,.12) !important;
+}
+.quintalTheme .cardTable table {
+  color: #e2e8f0;
+}
+.quintalTheme .cardTable td,
+.quintalTheme .cardTable th {
+  border-color: #354361;
+}
+.quintalTheme .cardTable tbody tr td {
+  background-color: transparent;
+}
+.quintalTheme .cardTable tbody tr:hover td {
+  background-color: #293956;
+}
+.quintalTheme .cardTable a {
+  color: #b8aaff;
+}
+.quintalTheme .cardTable button:not(.primaryCta) {
+  transition: color .15s ease, background .15s ease, border-color .15s ease;
+}
