@@ -18,6 +18,7 @@ import v from "../common/CommercialDocumentWorkspace.module.css";
 import w from "../common/InvoiceWorkbench.module.css";
 import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
 import BnaDivisasRateField, { argentinaToday } from "../common/BnaDivisasRateField";
+import { normalizeRemitoVatRate } from "../../utils/remitoPackages";
 import { padPV, padNumber, joinFullNumber, splitFullNumber, formatNumberAR } from "../../utils/formatters";
 import { openInvoiceCollectionFromInvoice } from "../../utils/openStandaloneWindow";
 import Modal from "../../components/ui/Modal";
@@ -227,7 +228,7 @@ export default function InvoiceForm(props) {
     else if (mode === "new" && Array.isArray(initialDnIds) && initialDnIds.length > 0) {
         fetchFromMultipleRemitos(initialDnIds);
     }
-    else if (mode === "new" && (initialSourceType === "sales-order" || initialSourceType === "delivery-note") && initialSourceId) {
+    else if (mode === "new" && (initialSourceType === "sales-order" || initialSourceType === "delivery-note" || initialSourceType === "invoice") && initialSourceId) {
         fetchFromSource();
     }
   }, []);
@@ -340,7 +341,7 @@ export default function InvoiceForm(props) {
                 _unit_content: factor,
                 _unit_label: line.package_unit || line.product?.container?.unit?.short_name || "u",
                 unit_price: Number(line.unit_price || 0),
-                vat_rate: line.vat_rate ?? 0.21,
+                vat_rate: normalizeRemitoVatRate(line.vat_rate),
                 discount_pct: Number(line.discount_pct || 0),
                 source_sales_line_id: line.source_sales_line_id || null,
                 source_dn_line_id: line.id,
@@ -492,7 +493,8 @@ export default function InvoiceForm(props) {
                 ...l, 
                 id: l.id || Math.random(),
                 _unit_content: unitContent,
-                qty_packages: qtyPackages
+                qty_packages: qtyPackages,
+                vat_rate: normalizeRemitoVatRate(l.vat_rate)
             };
         }));
         setItems(enrichedLines);
@@ -629,7 +631,7 @@ export default function InvoiceForm(props) {
                       _container_name: l._container_name || l.container_name || 'Unidad',
                       unit_price: parseFloat(l.unit_price || 0),
                       discount_pct: parseFloat(l.discount_pct || 0),
-                      vat_rate: parseFloat(l.vat_rate || 0.21),
+                      vat_rate: normalizeRemitoVatRate(l.vat_rate),
                       source_sales_line_id: l.source_sales_line_id || (initialSourceType === 'sales-order' ? l.id : null),
                       source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                       accounting_account_id: resolvedAccount,
@@ -686,7 +688,7 @@ export default function InvoiceForm(props) {
                           _container_name: l._container_name || 'Unidad',
                           unit_price: parseFloat(l.unit_price || 0),
                           discount_pct: parseFloat(l.discount_pct || 0),
-                          vat_rate: parseFloat(l.vat_rate || 0.21),
+                          vat_rate: normalizeRemitoVatRate(l.vat_rate),
                           source_sales_line_id: l.source_sales_line_id || (initialSourceType === 'sales-order' ? l.id : null),
                           source_dn_line_id: l.source_dn_line_id || (initialSourceType === 'delivery-note' ? l.id : null),
                           accounting_account_id: resolvedAccount,
@@ -719,7 +721,7 @@ export default function InvoiceForm(props) {
                           _container_name: l.product?.container?.name || 'Unidad',
                           unit_price: l.unit_price,
                           discount_pct: l.discount_pct || 0,
-                          vat_rate: l.vat_rate || 0.21,
+                          vat_rate: normalizeRemitoVatRate(l.vat_rate),
                           source_sales_line_id: initialSourceType === 'sales-order' ? l.id : (l.source_sales_line_id || null),
                           source_dn_line_id: initialSourceType === 'delivery-note' ? l.id : null,
                           accounting_account_id: resolvedAccount,
@@ -740,7 +742,7 @@ export default function InvoiceForm(props) {
         const sub = qty * (i.unit_price || 0);
         const bonif = sub * ((i.discount_pct || 0) / 100);
         const net = sub - bonif;
-        const vat = net * (i.vat_rate || 0.21);
+        const vat = net * normalizeRemitoVatRate(i.vat_rate);
         acc.subtotal += sub;
         acc.net += net;
         acc.vat += vat;
@@ -818,7 +820,7 @@ export default function InvoiceForm(props) {
             qty: l.qty,
             unit_price: l.unit_price,
             discount_pct: l.discount_pct,
-            vat_rate: l.vat_rate,
+            vat_rate: normalizeRemitoVatRate(l.vat_rate),
             accounting_account_id: l.accounting_account_id,
             source_sales_line_id: l.source_sales_line_id,
             source_dn_line_id: l.source_dn_line_id
@@ -836,7 +838,7 @@ export default function InvoiceForm(props) {
         });
         if (res.ok) {
             const docData = await res.json();
-            showToast("Factura guardada correctamente", "success");
+            showToast(`${documentLabel} guardada correctamente`, "success");
             const evtName = docType === 'PURCHASE_INVOICE' ? 'purchase-invoice-changed' : 'invoice-changed';
             window.dispatchEvent(new Event(evtName));
             if (window.opener) window.opener.dispatchEvent(new Event(evtName));
@@ -898,7 +900,7 @@ export default function InvoiceForm(props) {
         } else {
             const err = await res.json();
             console.error("ERROR FROM BACKEND:", err);
-            showToast(err.detail || err.message || "Error al guardar la factura", "error");
+            showToast(err.detail || err.message || `Error al guardar ${documentLabel.toLowerCase()}`, "error");
         }
     } catch (e) {
         console.error("NETWORK ERROR:", e);
@@ -1017,14 +1019,15 @@ export default function InvoiceForm(props) {
 
   const fmt = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency === 'USD' ? 'USD' : 'ARS' }).format(val || 0);
   const fmtValue = (val) => new Intl.NumberFormat('es-AR', { style: 'currency', currency: currency }).format(val || 0);
+  const documentLabel = docType === 'CREDIT_NOTE' ? 'Nota de Crédito' : docType === 'DEBIT_NOTE' ? 'Nota de Débito' : 'Factura';
 
-  if (loading) return <LoadingScreen message="Cargando Factura..." />;
+  if (loading) return <LoadingScreen message={`Cargando ${documentLabel.toLowerCase()}...`} />;
 
   const formatDocumentType = (type) => {
     const map = {
       INVOICE: "Factura",
-      DEBIT_NOTE: "ND-FX",
-      CREDIT_NOTE: "NC-FX",
+      DEBIT_NOTE: "Nota de Débito",
+      CREDIT_NOTE: "Nota de Crédito",
       RECEIPT: "Recibo",
     };
     return map[type] || type || "-";
@@ -1130,12 +1133,12 @@ export default function InvoiceForm(props) {
                                 }
                                 return null;
                             })()}
-                            <button className={s.actionBtn} onClick={() => setShowAnnulModal(true)} title="Anular Factura" style={{ color: '#ef4444' }} disabled={saving}>
+                            <button className={s.actionBtn} onClick={() => setShowAnnulModal(true)} title={`Anular ${documentLabel.toLowerCase()}`} style={{ color: '#ef4444' }} disabled={saving}>
                                 <Trash2 size={18} />
                             </button>
                         </>
                     )}
-                    <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title="Imprimir Factura">
+                    <button className={s.actionBtn} disabled={!id} onClick={() => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} title={`Imprimir ${documentLabel.toLowerCase()}`}>
                         <Printer size={18} />
                     </button>
                 </div>
@@ -1182,7 +1185,7 @@ export default function InvoiceForm(props) {
                                         _unit_content: qtyPerContainer,
                                         _unit_label: p.unit_of_measure || 'u',
                                         unit_price: p.base_price ?? p.cost_price ?? 0, 
-                                        vat_rate: p.tax_type?.rate ?? 0.21, 
+                                        vat_rate: normalizeRemitoVatRate(p.tax_type?.rate), 
                                         discount_pct: 0,
                                         // Cuenta contable de venta del producto (puede ser null si no está configurada)
                                         accounting_account_id: p.sales_account_id || null,
@@ -1307,9 +1310,9 @@ export default function InvoiceForm(props) {
                                         <div style={{ fontSize: 11, fontWeight: 700, textAlign: 'center', color: '#64748b' }}>{item._unit_label || 'u'}</div>
                                         <input type="number" className={s.tableInput} value={item.unit_price ?? 0} onChange={(e) => handleUpdateItem(item.id, 'unit_price', e.target.value)} />
                                         <input type="number" className={s.tableInput} value={item.discount_pct ?? 0} onChange={(e) => handleUpdateItem(item.id, 'discount_pct', e.target.value)} />
-                                        <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center' }}>{((item.vat_rate || 0.21) * 100).toFixed(0)}%</div>
+                                        <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center' }}>{(normalizeRemitoVatRate(item.vat_rate) * 100).toFixed(0)}%</div>
                                         <div style={{ fontSize: 12, fontWeight: 900, color: 'var(--primary)', textAlign: 'right' }}>
-                                            {fmtValue((item.qty * item.unit_price * (1 - (item.discount_pct||0)/100)) * (1 + (item.vat_rate||0.21)))}
+                                            {fmtValue((item.qty * item.unit_price * (1 - (item.discount_pct||0)/100)) * (1 + normalizeRemitoVatRate(item.vat_rate)))}
                                         </div>
                                         {isLocked ? (
                                             <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }} title="Esta línea viene de un origen y no puede eliminarse.">
@@ -1328,8 +1331,8 @@ export default function InvoiceForm(props) {
                     ) : (
                         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '16px 0', minHeight: 80 }}>
                             <Search size={24} style={{ marginBottom: 8, opacity: 0.3, color: 'var(--text-secondary)' }} />
-                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>Sin ítems a facturar</div>
-                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Buscá un producto para agregarlo a la factura</div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', marginBottom: 2 }}>Sin ítems cargados</div>
+                            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-secondary)' }}>Agregá un producto o concepto para continuar</div>
                         </div>
                     )}
                 </div>
@@ -1598,7 +1601,7 @@ export default function InvoiceForm(props) {
                                 )}
 
                                 {reasonType === 'RETURN' && docType === 'CREDIT_NOTE' && (
-                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 8px 0', fontSize: '12px', color: '#1e293b', fontWeight: 500 }}>
+                                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '4px 0 8px 0', fontSize: '12px', color: 'var(--text-primary)', fontWeight: 500 }}>
                                         <input type="checkbox" checked={returnStock} onChange={(e) => setReturnStock(e.target.checked)} style={{ width: '14px', height: '14px', accentColor: '#10b981' }} disabled={isReadOnly} />
                                         Reingresa stock
                                     </label>
@@ -1760,19 +1763,19 @@ export default function InvoiceForm(props) {
                 <span className={s.footerCompactValue}>{fmt(totals.vat)}</span>
             </div>
             <div className={s.footerCompactItem}>
-                <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>TOTAL FACTURA</span>
+                <span className={s.footerCompactLabel} style={{ color: 'var(--primary)' }}>{`TOTAL ${documentLabel.toUpperCase()}`}</span>
                 <span className={s.footerCompactTotal}>{fmt(totals.total)}</span>
             </div>
         </div>
         </div>
         
-        <Modal open={showAnnulModal} onClose={() => setShowAnnulModal(false)} title="Anular Factura">
+        <Modal open={showAnnulModal} onClose={() => setShowAnnulModal(false)} title={`Anular ${documentLabel}`}>
           <div style={{ padding: '0 24px 24px', color: '#1e293b' }}>
             <p style={{ fontSize: 14, fontWeight: 500, lineHeight: 1.5, marginBottom: 16 }}>
-              ¿Anular esta factura?
+              ¿Anular esta {documentLabel.toLowerCase()}?
             </p>
             <p style={{ fontSize: 13, color: '#475569', lineHeight: 1.5, marginBottom: 24 }}>
-              Esta acción revertirá la factura y, si fue generada desde un remito, devolverá el remito a pendiente/parcial según corresponda.
+              {docType === 'INVOICE' ? 'Esta acción revertirá la factura y, si fue generada desde un remito, devolverá el remito a pendiente/parcial según corresponda.' : 'El comprobante quedará anulado y se conservará en el historial.'}
               <br/><br/>
               <strong>No se eliminará el comprobante.</strong>
             </p>
@@ -1788,7 +1791,7 @@ export default function InvoiceForm(props) {
                 disabled={saving}
                 style={{ padding: '10px 20px', borderRadius: 8, border: 'none', background: '#ef4444', color: 'white', fontWeight: 800, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 8 }}
               >
-                {saving ? 'Anulando...' : 'Anular factura'}
+                {saving ? 'Anulando...' : `Anular ${documentLabel.toLowerCase()}`}
               </button>
             </div>
           </div>
