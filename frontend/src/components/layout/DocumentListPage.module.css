@@ -809,3 +809,60 @@
   font-size: 12px;
   border-radius: 8px;
 }
+
+/* Estado vacío centrado debajo del encabezado de tabla.
+   Evita que una celda colSpan se comprima al ancho de la primera columna. */
+.quintalTheme .tableEmptyContent {
+  display: flex;
+  width: 100%;
+  min-height: 230px;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 22px 24px;
+  text-align: center;
+  background: #202c46;
+  border-top: 1px solid #354361;
+}
+.quintalTheme .tableEmptyContent > div {
+  flex: 0 1 440px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 16px !important;
+  gap: 10px;
+  background: transparent !important;
+  border: 0 !important;
+}
+.quintalTheme .tableEmptyContent > div > div:first-child {
+  width: 58px;
+  height: 58px;
+  box-sizing: border-box;
+  display: grid;
+  place-items: center;
+  padding: 12px !important;
+  border-radius: 50%;
+  background: #302b58 !important;
+  border: 1px solid #554a90 !important;
+  color: #c7b8ff !important;
+}
+.quintalTheme .tableEmptyContent > div > div:first-child svg {
+  width: 32px;
+  height: 32px;
+  stroke: currentColor;
+}
+.quintalTheme .tableEmptyContent h3 {
+  margin: 0 0 5px !important;
+  color: #f8fafc !important;
+  font-size: 16px !important;
+  line-height: 1.35;
+}
+.quintalTheme .tableEmptyContent p {
+  margin: 0 !important;
+  color: #c2cee2 !important;
+  line-height: 1.5;
+  font-size: 13px;
+}
+.quintalTheme .tableEmptyContent button {margin-top: 4px !important;}
