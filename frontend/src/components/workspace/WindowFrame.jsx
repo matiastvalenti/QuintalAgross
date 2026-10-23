@@ -4,6 +4,7 @@ import { useWindow } from "../../context/WindowContext";
 import ErrorBoundary from "../common/ErrorBoundary";
 import Badge from "../ui/Badge";
 import s from "./WindowFrame.module.css";
+import { clampWindowBounds, DOCK_HEIGHT, WINDOW_MARGIN } from "./windowGeometry";
 
 export default function WindowFrame({ window: win, component: Component }) {
   const {
@@ -17,6 +18,16 @@ export default function WindowFrame({ window: win, component: Component }) {
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
   const dragOffset = useRef({ x: 0, y: 0 });
+  const [viewport, setViewport] = useState(() => ({ width: window.innerWidth, height: window.innerHeight }));
+
+  useEffect(() => {
+    const handleResize = () => setViewport({ width: window.innerWidth, height: window.innerHeight });
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  // Se calcula también al restaurar ventanas antiguas guardadas fuera de pantalla.
+  const bounds = clampWindowBounds(win, viewport.width, viewport.height);
 
   // Handle Drag
   const handleMouseDownHeader = (e) => {
@@ -32,8 +43,8 @@ export default function WindowFrame({ window: win, component: Component }) {
     focusWindow(win.id);
     setIsDragging(true);
     dragOffset.current = {
-      x: e.clientX - win.x,
-      y: e.clientY - win.y,
+      x: e.clientX - bounds.x,
+      y: e.clientY - bounds.y,
     };
   };
 
@@ -45,8 +56,8 @@ export default function WindowFrame({ window: win, component: Component }) {
     focusWindow(win.id);
     setIsResizing(true);
     dragOffset.current = {
-      x: e.clientX - win.width,
-      y: e.clientY - win.height,
+      x: e.clientX - bounds.width,
+      y: e.clientY - bounds.height,
     };
   };
 
@@ -59,22 +70,18 @@ export default function WindowFrame({ window: win, component: Component }) {
         let newX = e.clientX - dragOffset.current.x;
         let newY = e.clientY - dragOffset.current.y;
         
-        // Constrain to viewport
-        newX = Math.max(0, Math.min(newX, window.innerWidth - 100));
-        newY = Math.max(0, Math.min(newY, window.innerHeight - 80));
+        // Mantener visible el documento completo y el dock, no solo su título.
+        const limit = clampWindowBounds({ ...win, x: newX, y: newY, width: bounds.width, height: bounds.height }, window.innerWidth, window.innerHeight);
+        newX = limit.x;
+        newY = limit.y;
         
         updateWindow(win.id, { x: newX, y: newY });
       }
       if (isResizing) {
-        const minW = win.minWidth || 300;
-        const minH = win.minHeight || 200;
-        
-        let newW = Math.max(minW, e.clientX - dragOffset.current.x);
-        let newH = Math.max(minH, e.clientY - dragOffset.current.y);
-        
-        // Constrain W/H to viewport
-        newW = Math.min(newW, window.innerWidth - (win.x || 0));
-        newH = Math.min(newH, window.innerHeight - (win.y || 0) - 40); // 40 for Dock
+        const minW = Math.min(win.minWidth || 300, window.innerWidth - WINDOW_MARGIN * 2);
+        const minH = Math.min(win.minHeight || 200, window.innerHeight - DOCK_HEIGHT - WINDOW_MARGIN * 2);
+        const newW = Math.max(minW, Math.min(e.clientX - dragOffset.current.x, window.innerWidth - bounds.x - WINDOW_MARGIN));
+        const newH = Math.max(minH, Math.min(e.clientY - dragOffset.current.y, window.innerHeight - bounds.y - DOCK_HEIGHT - WINDOW_MARGIN));
         
         updateWindow(win.id, { width: newW, height: newH });
       }
@@ -91,15 +98,15 @@ export default function WindowFrame({ window: win, component: Component }) {
       document.removeEventListener("mousemove", handleMouseMove);
       document.removeEventListener("mouseup", handleMouseUp);
     };
-  }, [isDragging, isResizing, win.id, updateWindow]); // dependencies
+  }, [isDragging, isResizing, win.id, win.minWidth, win.minHeight, updateWindow, bounds.width, bounds.height, bounds.x, bounds.y]);
 
   // quintal-hybrid-phase1: mantener montado el formulario al minimizar.
 
   const style = {
-    left: win.isMaximized ? 0 : win.x,
-    top: win.isMaximized ? 0 : win.y,
-    width: win.isMaximized ? "100%" : win.width,
-    height: win.isMaximized ? "calc(100% - 40px)" : win.height,
+    left: win.isMaximized ? 0 : bounds.x,
+    top: win.isMaximized ? 0 : bounds.y,
+    width: win.isMaximized ? "100%" : bounds.width,
+    height: win.isMaximized ? `calc(100% - ${DOCK_HEIGHT}px)` : bounds.height,
     zIndex: win.zIndex,
   };
 
