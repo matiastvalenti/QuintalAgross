@@ -588,21 +588,19 @@ export default function InvoicesPage() {
         <th className={s.th} style={{ textAlign: 'right', width: 100 }}>ACCIONES</th>
       </>
     ),
+    emptyContent: (
+      <EmptyState 
+              icon={Layers} 
+              title={invoices.length ? "No hay facturas que coincidan" : "Todavía no hay facturas"}
+              description={invoices.length ? "Probá con otros filtros o cambiá la búsqueda." : "Usá Nueva Factura para registrar el primer comprobante."}
+              style={{ width: "100%", maxWidth: 440, padding: "22px 16px", boxSizing: "border-box", background: "transparent", border: "none", gap: 10 }}
+          />
+    ),
     body: loading ? (
         <TableRowSkeleton rows={10} cols={10} />
     ) : error ? (
         <tr><td colSpan="7"><ErrorState message={error} onRetry={fetchInvoices} /></td></tr>
-    ) : sorted.length === 0 ? (
-      <tr>
-        <td colSpan="7">
-          <EmptyState 
-              icon={Layers} 
-              title={invoices.length ? "No hay facturas que coincidan" : "Todavía no hay facturas"}
-              description={invoices.length ? "Probá con otros filtros o cambiá la búsqueda." : "Usá Nueva Factura para registrar el primer comprobante."}
-          />
-        </td>
-      </tr>
-    ) : (
+    ) : sorted.length === 0 ? null : (
       paginatedData.map((inv) => {
           const isCancelledDn = (status) => {
             const raw = String(status || '').toUpperCase();
