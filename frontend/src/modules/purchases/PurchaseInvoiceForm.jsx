@@ -915,7 +915,7 @@ export default function PurchaseInvoiceForm(props) {
                 </div>
             </div>
             {/* Flujo Inferior */}
-          <div id={`${invoiceTabId}-documents`} role="tabpanel" aria-label="Documentos asociados" className={`${s.relationsBar} ${w.flow}`}>
+          <div id={`${invoiceTabId}-documents`} role="tabpanel" aria-label="Documentos asociados" className={`${s.relationsBar} ${w.flow} ${w.flowList}`}>
               <div className={s.relationCard} style={{ opacity: initialSourceType ? 1 : 0.5 }}>
                   <div className={s.nodeTitle} style={{ color: initialSourceType ? '#10b981' : '#0b132b' }}>ORIGEN</div>
                   <div className={s.nodeStatus} style={{ color: initialSourceType ? '#10b981' : '#eab308' }}>
