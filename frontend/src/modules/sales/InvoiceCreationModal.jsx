@@ -3,9 +3,10 @@ import Modal from '../../components/ui/Modal';
 import Button from '../../components/ui/Button';
 import { ShoppingBag, Search, FileText, Package, AlertCircle } from 'lucide-react';
 import api from '../../services/api';
-import { openNuevaFactura } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 
 export default function InvoiceCreationModal({ open, onClose }) {
+  const { openNuevaFactura } = useInternalCommercialDocuments();
   const [step, setStep] = useState(1); // 1: Select Type, 2: Select OV (Master-Detail)
   
   const [orders, setOrders] = useState([]);
@@ -65,8 +66,8 @@ export default function InvoiceCreationModal({ open, onClose }) {
           const factor = l.qty_packages && l.qty_packages > 0 && l.qty > 0
             ? l.qty / l.qty_packages
             : (l.product?.quantity_per_container ? parseFloat(l.product.quantity_per_container) : (l.package_size ? parseFloat(l.package_size) : 1));
-          const orderedPkgs = factor > 1 ? l.qty / factor : l.qty;
-          const invoicedPkgs = factor > 1 ? (l.qty_invoiced || 0) / factor : (l.qty_invoiced || 0);
+          const orderedPkgs = factor > 0 ? l.qty / factor : l.qty;
+          const invoicedPkgs = factor > 0 ? (l.qty_invoiced || 0) / factor : (l.qty_invoiced || 0);
           const pendingPkgs = Math.max(0, orderedPkgs - invoicedPkgs);
           if (pendingPkgs > 0) {
               newLineStates[l.id] = {
