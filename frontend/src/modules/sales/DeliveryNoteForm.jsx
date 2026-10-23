@@ -568,8 +568,9 @@ export default function DeliveryNoteForm(props) {
       id: Math.random(),
       product_id: product.id,
       description: product.name,
-      qty: 1,
-      unit_price: product.cost_price || 0,
+      qty: Number(product.quantity_per_container) || 1,
+      qty_packages: 1,
+      unit_price: product.base_price || product.cost_price || 0,
       discount_pct: 0,
       vat_rate: product.tax_type?.rate || 0.21,
       _account_code: product.sales_account_code || 'S/C',
@@ -637,7 +638,7 @@ export default function DeliveryNoteForm(props) {
         product_id: item.product_id,
         description: item.product_name || item.description,
         qty: qtyBase,
-        qty_packages: factor > 1 ? qtyBase / factor : undefined,
+        qty_packages: Number(factor) > 0 ? qtyBase / Number(factor) : qtyBase,
         unit_price: finalUnitPrice,
         discount_pct: item.discount_pct || 0,
         vat_rate: item.vat_rate || 0.21,
@@ -683,7 +684,7 @@ export default function DeliveryNoteForm(props) {
         if (field === 'qty') {
             newItem.qty = Number(value);
             const factor = i._unit_content || 1;
-            if (factor > 1) {
+            if (factor > 0) {
                 newItem.qty_packages = Number(value) / factor;
             }
         }
