@@ -10,7 +10,6 @@ import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
-import { openNuevoRecibo, openEditRecibo } from '../../utils/openStandaloneWindow';
 import api from '../../services/api';
 import t from '../../components/ui/Table.module.css';
 import TableSkeleton from "../../components/ui/TableSkeleton";
@@ -122,15 +121,18 @@ export default function ReceiptsPage() {
   const totalPages = Math.ceil(activeReceipts.length / pageSize);
 
   const handleHandleNew = () => {
-    openNuevoRecibo({ 
-      title: 'Nuevo Recibo'
+    openWindow('receipt-collection-form', { mode: 'new' }, {
+      title: 'Nuevo Recibo de Cobro',
+      width: 1270, height: 680, minWidth: 720, minHeight: 470,
+      singletonKey: 'receipt-new',
     });
   };
 
   const handleOpen = (id) => {
-    openEditRecibo(id, { 
-      mode: 'view',
-      title: `Recibo ${receipts.find(r => r.id === id)?.number || ''}`
+    openWindow('receipt-collection-form', { mode: 'view', id }, {
+      title: `Recibo ${receipts.find(r => r.id === id)?.number || ''}`,
+      width: 1270, height: 680, minWidth: 720, minHeight: 470,
+      singletonKey: `receipt-${id}`,
     });
   };
 
