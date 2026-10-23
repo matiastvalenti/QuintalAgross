@@ -27,7 +27,7 @@ describe("listados comerciales sin registros", () => {
     expect(within(table).queryByText("Sin órdenes coincidentes")).toBeNull();
     const status = screen.getByRole("status");
     expect(status).toHaveTextContent("Sin órdenes coincidentes");
-    expect(container.querySelector("table + div")).toBe(status);
+    expect(table.parentElement.nextElementSibling).toBe(status);
   });
 
   it("mantiene las filas normales cuando hay datos", () => {
