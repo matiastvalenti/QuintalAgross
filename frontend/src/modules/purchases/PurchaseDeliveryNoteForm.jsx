@@ -855,6 +855,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           <div className={`${s.bodyTwoColumns} ${v.body}`} style={{ opacity: isLocked ? 0.8 : 1 }}>
               {/* Columna Izquierda: Ítems y Productos */}
               <div data-document-section="items" className={`${s.leftCol} ${v.left}`}>
+                  <div className={v.sectionHeading}><span>Productos del remito</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? "línea" : "líneas"}</span></div>
                   <div className={`${s.bentoContainer} ${v.bento}`} style={{ padding: 0, overflow: 'hidden' }}>
                       {items.length > 0 ? (
                         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1115,7 +1116,7 @@ export default function PurchaseDeliveryNoteForm(props) {
           </div>
 
           {/* Operational Summary Panel */}
-          <div className={s.summaryPanel}>
+          <div className={`${s.summaryPanel} ${v.statusStrip}`}>
             <div className={s.summaryItem}>
               <div className={s.summaryLabel}>PROVEEDOR</div> {/* Changed from CLIENTE */}
               <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
