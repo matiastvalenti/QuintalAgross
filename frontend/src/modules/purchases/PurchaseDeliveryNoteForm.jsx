@@ -902,7 +902,7 @@ export default function PurchaseDeliveryNoteForm(props) {
                                         );
                                     }
                                     
-                                  const isExceeding = mode === 'new' && item.qty > (item.qty_pending || 0);
+                                  const isExceeding = mode === 'new' && item.qty_pending != null && Number(item.qty) > Number(item.qty_pending) + 0.000001;
                                   return (
                                     <div key={item.id} data-exceeding={isExceeding} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: isReadOnly ? 'minmax(360px, 1fr) 80px 90px 45px 90px 100px' : 'minmax(360px, 1fr) 80px 90px 45px 90px 100px 30px', background: isExceeding ? '#fef2f2' : 'transparent', width: '100%', boxSizing: 'border-box' }}>
                                         <div style={{ padding: '4px 0', overflow: 'hidden', display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
