@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useId } from "react";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -15,7 +15,8 @@ import {
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
 import v from "../common/CommercialDocumentWorkspace.module.css";
-import CommercialDocumentNav from "../common/CommercialDocumentNav";
+import w from "../common/InvoiceWorkbench.module.css";
+import InvoiceWorkspaceTabs from "../common/InvoiceWorkspaceTabs";
 import { padPV, padNumber, joinFullNumber, splitFullNumber, formatNumberAR } from "../../utils/formatters";
 import { openInvoiceCollectionFromInvoice } from "../../utils/openStandaloneWindow";
 import Modal from "../../components/ui/Modal";
@@ -150,6 +151,8 @@ export default function InvoiceForm(props) {
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
   const [activeContextTab, setActiveContextTab] = useState('comercial');
   const [activeBottomTab, setActiveBottomTab] = useState('observaciones');
+  const [invoiceTab, setInvoiceTab] = useState('products');
+  const invoiceTabId = useId();
   const [showAnnulModal, setShowAnnulModal] = useState(false);
 
   
@@ -1056,10 +1059,10 @@ export default function InvoiceForm(props) {
   const isAdminLocked = isReadOnly;
 
   return (
-    <div data-commercial-document="true" className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ''} ${v.shell} ${v.invoice} ${isStandalone ? v.standalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} className={`${s.formCard} ${w.root} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
-        <div className={`${s.headerLine} ${v.header}`}>
+        <div className={`${s.headerLine} ${w.header}`}>
             <div className={s.titleGroup}>
                 <div className={s.compactHeaderTitle}>
                     <h1>
@@ -1146,16 +1149,15 @@ export default function InvoiceForm(props) {
             </div>
         )}
 
-        <CommercialDocumentNav invoice />
-
         {/* Body: 2 Column Layout */}
-        <div className={`${s.documentMainGrid} ${v.documentGrid}`}>
+        <div className={`${s.documentMainGrid} ${w.layout}`}>
+            <InvoiceWorkspaceTabs value={invoiceTab} onChange={setInvoiceTab} itemCount={items.length} hasNotes={Boolean(observations.trim())} idPrefix={invoiceTabId} />
             
             {/* Columna Izquierda: Ítems y Productos */}
-            <div data-document-section="items" className={`${s.leftDocumentArea} ${v.documentLeft}`}>
-                <div className={v.sectionHeading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
+            <div id={`${invoiceTabId}-products`} role="tabpanel" aria-label="Productos y conceptos" data-document-section="items" className={`${s.leftDocumentArea} ${w.left}`}>
+                <div className={w.heading}><span>Productos y conceptos</span><span className={v.sectionCount}>{items.length} {items.length === 1 ? 'línea' : 'líneas'}</span></div>
                 {!isMonetaryLocked ? (
-                    <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
+                    <div className={`${s.searchRibbon} ${w.search}`} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <Autocomplete 
                                 onSearch={searchProducts} 
@@ -1204,7 +1206,7 @@ export default function InvoiceForm(props) {
                         </Button>
                     </div>
                 ) : (
-                    <div className={s.searchRibbon} style={{ display: 'flex', gap: 12 }}>
+                    <div className={`${s.searchRibbon} ${w.search}`} style={{ display: 'flex', gap: 12 }}>
                         <div style={{ flex: 1 }}>
                             <div className={s.readonlyControl} style={{ height: '36px', justifyContent: 'flex-start', color: '#94a3b8' }}>
                                 <Search size={16} style={{ marginRight: 8 }} />
@@ -1222,7 +1224,7 @@ export default function InvoiceForm(props) {
                     </div>
                 )}
 
-                <div className={`${s.bentoContainer} ${s.itemsPanel} ${v.bento}`} style={{ padding: 0, overflow: 'hidden' }}>
+                <div className={`${s.bentoContainer} ${s.itemsPanel} ${w.items}`} style={{ padding: 0, overflow: 'hidden' }}>
                     {items.length > 0 ? (
                         <>
                                 <div className={`${s.tableHeader} ${v.tableHeader}`} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px' }}>
@@ -1359,7 +1361,7 @@ export default function InvoiceForm(props) {
                     }
 
                     return (
-                        <div className={`${s.flowPanel} ${v.flowPanel}`}>
+                        <div id={`${invoiceTabId}-documents`} role="tabpanel" aria-label="Documentos asociados" className={`${s.flowPanel} ${w.flow}`}>
                           <div className={`${s.relationsBar} ${v.flowStrip}`}>
                               <div className={s.relationCard} style={{ opacity: (originStatus !== "Directo") ? 1 : 0.5 }}>
                                   <div className={s.nodeTitle} style={{ color: originColor }}>ORIGEN</div>
@@ -1456,9 +1458,9 @@ export default function InvoiceForm(props) {
             </div>
 
             {/* Columna Derecha: Panel Lateral Administrativo */}
-            <div data-document-section="details" className={`${s.rightDocumentArea} ${v.documentRight}`}>
+            <div data-document-section="details" className={`${s.rightDocumentArea} ${w.right}`}>
                 {/* Bloque Cliente */}
-                <div className={`${s.clientPanel} ${v.panel}`}>
+                <div className={`${s.clientPanel} ${w.party}`}>
                     <div className={s.panelTitle}><User size={12}/> CLIENTE</div>
                     <div className={s.clientPanelBody}>
                         {isMonetaryLocked ? (
@@ -1500,7 +1502,7 @@ export default function InvoiceForm(props) {
                 </div>
 
                 {/* Bloque Medio: Comercial / Ajuste-Origen */}
-                <div className={`${s.sideBlock} ${s.middleRightPanel} ${v.panel}`}>
+                <div className={`${s.sideBlock} ${s.middleRightPanel} ${w.commercial}`}>
                     {docType !== 'INVOICE' ? (
                         <div className={s.panelTabs}>
                             <button className={`${s.panelTab} ${activeContextTab === 'comercial' ? s.panelTabActive : ''}`} onClick={() => setActiveContextTab('comercial')}>Comercial</button>
@@ -1656,7 +1658,7 @@ export default function InvoiceForm(props) {
                 </div>
 
                 {/* Bloque Observaciones / ARCA */}
-                <div className={`${s.sideBlock} ${s.bottomRightPanel}`} style={{ paddingBottom: 0 }}>
+                <div id={`${invoiceTabId}-notes`} role="tabpanel" aria-label="Observaciones y ARCA" className={`${s.sideBlock} ${s.bottomRightPanel} ${w.notes}`} style={{ paddingBottom: 0 }}>
                     <div className={s.panelTabs}>
                         <button className={`${s.panelTab} ${activeBottomTab === 'observaciones' ? s.panelTabActive : ''}`} onClick={() => setActiveBottomTab('observaciones')}>Observaciones</button>
                         <button className={`${s.panelTab} ${activeBottomTab === 'arca' ? s.panelTabActive : ''}`} onClick={() => setActiveBottomTab('arca')}>ARCA</button>
@@ -1713,8 +1715,8 @@ export default function InvoiceForm(props) {
 
 
         {/* Operational Summary */}
-        <div className={`${s.balancePanel} ${v.bottomRegion}`}>
-            <div className={`${s.summaryPanel} ${v.statusStrip}`}>
+        <div className={`${s.balancePanel} ${w.bottom}`}>
+            <div className={`${s.summaryPanel} ${w.summary}`}>
             <div className={s.summaryItem}>
                 <div className={s.summaryLabel}>CLIENTE</div>
                 <div className={s.summaryValue} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '150px' }}>{entity?.name || '-'}</div>
@@ -1746,7 +1748,7 @@ export default function InvoiceForm(props) {
         </div>
 
         {/* Footer with Totals */}
-        <div data-document-section="total" className={`${s.footerCompact} ${v.footer}`}>
+        <div data-document-section="total" className={`${s.footerCompact} ${w.footer}`}>
             <div className={s.footerCompactItem}>
                 <span className={s.footerCompactLabel}>NETO GRAVADO</span>
                 <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
