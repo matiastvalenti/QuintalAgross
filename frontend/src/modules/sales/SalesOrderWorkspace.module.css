@@ -548,3 +548,43 @@
   .workspace .actionLabel {display:none;}
   .workspace .actionBtn {padding:9px;}
 }
+
+/* Cotización bancaria: caja informativa de altura real en OV y OC.
+   No recortar la fecha ni superponer etiquetas en las filas comerciales. */
+.fxOrderField {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 84px;
+  height: auto;
+  max-height: none;
+  overflow: visible;
+  align-self: start;
+}
+.workspace .rightCol .fxOrderField > div {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.workspace .rightCol .fxOrderField input {
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  text-align: left;
+}
+.workspace .rightCol .fxOrderField button {
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px !important;
+  padding: 0 !important;
+  text-align: center;
+}
+.workspace .currencyRow {align-items: start;min-height: 84px;}
+@container (max-width: 650px) {
+  .workspace .currencyRow {
+    display: grid;
+    grid-template-columns: minmax(0,1fr);
+    row-gap: 8px;
+  }
+}
