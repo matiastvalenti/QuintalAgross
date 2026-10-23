@@ -54,6 +54,7 @@ import {
   ArrowRight,
 } from "lucide-react";
 import s from "./PurchaseOrderForm.module.css";
+import w from "../sales/SalesOrderWorkspace.module.css";
 import {
   TraceabilityStatusBadge,
   TraceabilityProgress,
@@ -100,6 +101,7 @@ export default function PurchaseOrderForm(props) {
   const [id, setId] = useState(initialId || null);
   const [loading, setLoading] = useState(initialMode === "edit");
   const [secondaryTab, setSecondaryTab] = useState("billing");
+  const [purchaseTab, setPurchaseTab] = useState("products");
   const [saving, setSaving] = useState(false);
   // --- Header Data ---
   const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
@@ -1026,18 +1028,18 @@ export default function PurchaseOrderForm(props) {
         <LoadingScreen message="Cargando Gestor de Vínculos..." />
       )}
       <div
-        className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ""}`}
+        className={`${s.formCard} ${isStandalone ? s.formCardStandalone : ""} ${w.workspace} ${isStandalone ? w.workspaceStandalone : ""}`}
       >
         {/* Header Section */}
         <div
-          className={s.headerLine}
+          className={`${s.headerLine} ${w.headerLine}`}
           style={{
             paddingBottom: 12,
             borderBottom: "1px solid var(--border-color)",
             marginBottom: 12,
           }}
         >
-          <div className={s.compactHeaderTitle}>
+          <div className={`${s.compactHeaderTitle} ${w.compactHeaderTitle}`}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
               <h1
                 style={{
@@ -1055,7 +1057,7 @@ export default function PurchaseOrderForm(props) {
                   <span className={s.readOnlyBadge}>MODO VISTA</span>
                 )}
               </h1>
-              <div className={s.headerMeta}>
+              <div className={`${s.headerMeta} ${w.headerMeta}`}>
                 <span>
                   {mode === "new"
                     ? "Nueva Orden"
@@ -1083,39 +1085,7 @@ export default function PurchaseOrderForm(props) {
               </div>
             </div>
           </div>
-          <div className={s.headerActions}>
-            {isReadOnly ? (
-              <button
-                className={s.saveBtn}
-                style={{ background: "#64748b", cursor: "pointer" }}
-                onClick={() => {
-                  if (hasProgress) {
-                    showToast(
-                      "Atención: esta orden tiene remitos o facturas vinculadas. Edite con cuidado.",
-                      "warning",
-                    );
-                  }
-                  setIsReadOnly(false);
-                }}
-                title="Activar modo edición"
-              >
-                <Pencil size={16} />
-                {hasProgress ? "Bloqueado" : "Editar"}
-              </button>
-            ) : (
-              <button
-                className={s.saveBtn}
-                onClick={handleSave}
-                disabled={saving}
-              >
-                {saving ? (
-                  <div className={s.spinnerSmall} />
-                ) : (
-                  <Save size={16} />
-                )}
-                {saving ? "Guardando..." : "Guardar"}
-              </button>
-            )}
+          <div className={`${s.headerActions} ${w.headerActions}`}>
             <div className={s.actionGroup}>
               <button
                 className={s.actionBtn}
@@ -1196,9 +1166,14 @@ export default function PurchaseOrderForm(props) {
         </div>
 
         {/* Body: 2 Column Layout */}
-        <div className={s.bodyTwoColumns}>
+        <div className={`${s.bodyTwoColumns} ${w.bodyTwoColumns}`}>
+          <nav className={w.salesTabs} aria-label="Secciones de la compra">
+            <button type="button" className={purchaseTab === "products" ? w.salesTabActive : ""} onClick={() => setPurchaseTab("products")}><ShoppingBag size={15}/> Productos <span>{items.length}</span></button>
+            <button type="button" className={purchaseTab === "notes" ? w.salesTabActive : ""} onClick={() => setPurchaseTab("notes")}><FileText size={15}/> Observaciones</button>
+            <button type="button" className={purchaseTab === "docs" ? w.salesTabActive : ""} onClick={() => setPurchaseTab("docs")}><Receipt size={15}/> Documentos asociados</button>
+          </nav>
           {/* Columna Izquierda: Ítems y Productos */}
-          <div className={s.leftCol}>
+          <div className={`${s.leftCol} ${w.leftCol}`} style={{display: purchaseTab === "products" ? undefined : "none"}}>
             {!isReadOnly && (
               <div className={s.searchRibbon}>
                 <Autocomplete
@@ -1675,7 +1650,10 @@ export default function PurchaseOrderForm(props) {
               )}
             </div>
 
-            {/* OBSERVACIONES (Debajo de productos, misma columna) */}
+          </div>
+          <section className={w.notesTabPanel} style={{display: purchaseTab === "notes" ? undefined : "none"}} aria-label="Observaciones de la compra">
+            <h3>Observaciones de la compra</h3>
+            {/* OBSERVACIONES */}
             <div
               className={s.sideBlock}
               style={{
@@ -1726,10 +1704,10 @@ export default function PurchaseOrderForm(props) {
                 />
               )}
             </div>
-          </div>
+          </section>
 
           {/* Columna Derecha: Panel Lateral Administrativo */}
-          <div className={s.rightCol}>
+          <div className={`${s.rightCol} ${w.rightCol}`}>
             {/* Bloque Proveedor */}
             <div className={s.sideBlock}>
               <div className={s.sideBlockTitle}>
@@ -1894,6 +1872,8 @@ export default function PurchaseOrderForm(props) {
           </div>
         </div>
 
+        <section className={w.documentsTabPanel} style={{display: purchaseTab === "docs" ? undefined : "none"}} aria-label="Documentos asociados">
+          <div className={w.documentsIntro}><strong>Documentos asociados y seguimiento</strong><span>Orden · Remitos de entrada · Facturas · Pagos</span></div>
         {/* Secondary Bottom Tray - Relaciones y Estado */}
         <div className={s.relationsBar}>
           {/* OC */}
@@ -2109,8 +2089,9 @@ export default function PurchaseOrderForm(props) {
           </div>
         </div>
 
+        </section>
         {/* Footer with Totals */}
-        <div className={s.footerCompact}>
+        <div className={`${s.footerCompact} ${w.footerCompact}`}>
           <div className={s.footerCompactItem}>
             <span className={s.footerCompactLabel}>NETO GRAVADO</span>
             <span className={s.footerCompactValue}>{fmt(totals.net)}</span>
@@ -2127,6 +2108,9 @@ export default function PurchaseOrderForm(props) {
               TOTAL COMPRA
             </span>
             <span className={s.footerCompactTotal}>{fmt(totals.total)}</span>
+          </div>
+          <div className={w.saveArea}>
+            {isReadOnly ? <button type="button" className={s.saveBtn} onClick={() => { if (hasProgress) showToast("Esta orden tiene documentos vinculados. Edite con cuidado.", "warning"); setIsReadOnly(false); }}><Pencil size={16}/> Editar</button> : <button type="button" className={s.saveBtn} onClick={handleSave} disabled={saving}>{saving ? "Guardando..." : <><Save size={16}/> Guardar</>}</button>}
           </div>
         </div>
       </div>
