@@ -128,8 +128,8 @@ export default function PurchaseDeliveryNoteForm(props) {
   const totals = useMemo(() => {
     return items.reduce(
       (acc, i) => {
-        const factor = i._unit_content || 1;
-        const sub = (i.qty || 0) * factor * (i.unit_price || 0);
+        // qty ya está expresada en litros/kg; multiplicar por envase otra vez duplica importes.
+        const sub = (Number(i.qty) || 0) * (Number(i.unit_price) || 0);
         const bonif = sub * ((i.discount_pct || 0) / 100);
         const net = sub - bonif;
         const vat = net * (i.vat_rate || 0.21);
@@ -144,7 +144,7 @@ export default function PurchaseDeliveryNoteForm(props) {
     );
   }, [items]);
 
-  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + ((parseFloat(item.qty) || 0) * (parseFloat(item._unit_content) || 1)), 0), [items]);
+  const orderedLts = useMemo(() => items.reduce((acc, item) => acc + (parseFloat(item.qty) || 0), 0), [items]);
 
     useEffect(() => {
     if (oc_id) {
