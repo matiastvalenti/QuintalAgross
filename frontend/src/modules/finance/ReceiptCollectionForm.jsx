@@ -19,6 +19,7 @@ import api from '../../services/api';
 import s from './ReceiptCollectionForm.module.css';
 import Autocomplete from '../../components/ui/Autocomplete';
 import ReceiptPendingInvoicesSelector from './components/ReceiptCollectionShell/ReceiptPendingInvoicesSelector';
+import ChequeEntryDialog from './components/ChequeEntryDialog';
 import { formatNumberAR, formatDocumentType } from '../../utils/formatters';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
@@ -371,6 +372,19 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
     setShowCheckModal(true);
   };
 
+  const saveCheck = (check) => {
+    setPayments(previous => {
+      if (editingCheckId != null) {
+        return previous.map(payment => payment.id === editingCheckId
+          ? { ...payment, ...check, id: editingCheckId, type: "CHECK" }
+          : payment);
+      }
+      return [...previous, { ...check, id: generateId(), type: "CHECK" }];
+    });
+    setEditingCheckId(null);
+    setShowCheckModal(false);
+  };
+
   const validateForm = () => {
     if (!entity) return { valid: false, error: "No hay cliente seleccionado." };
     const needsFx = currency === 'USD' || applications.some(app => app.currency === 'USD');
@@ -396,6 +410,14 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
     for (let p of payments) {
       const isPartiallyFilled = Boolean(p.amount) || Boolean(p.bank_name) || Boolean(p.reference_number) || Boolean(p.description);
       if (!p.amount || Number(p.amount) <= 0) return { valid: false, error: isPartiallyFilled ? "Hay importes en 0 o inválidos." : null };
+      if (p.type === 'CHECK') {
+        if (!p.bank_name || !p.reference_number || !p.issue_date || !p.due_date) {
+          return { valid: false, error: "Completá banco, número y fechas de cada cheque." };
+        }
+        if (p.due_date < p.issue_date) {
+          return { valid: false, error: "Un cheque tiene vencimiento anterior a su emisión." };
+        }
+      }
       if (p.type === 'TRANSFER') {
         if (!p.bank_name) return { valid: false, error: isPartiallyFilled ? "Falta seleccionar banco en una transferencia." : null };
         if (!p.reference_number) return { valid: false, error: isPartiallyFilled ? "Falta número de referencia en una transferencia." : null };
@@ -1220,7 +1242,15 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
           </div>
         </div>
       )}
-      {/* CHECK MODAL OMITTED FOR BREVITY BUT WE CAN REUSE IT IF NEEDED */}
+      <ChequeEntryDialog
+        open={showCheckModal}
+        initialCheck={editingCheckId != null ? payments.find(payment => payment.id === editingCheckId) : null}
+        currency={currency}
+        suggestedAmount={!isAdvance && totalApplied > totalCollected ? Number((totalApplied - totalCollected).toFixed(2)) : ""}
+        banks={banks}
+        onClose={() => { setShowCheckModal(false); setEditingCheckId(null); }}
+        onSave={saveCheck}
+      />
     </div>
   );
 }

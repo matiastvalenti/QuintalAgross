@@ -38,6 +38,7 @@ import s from "./ReceiptForm.module.css";
 import t from "../../components/ui/Table.module.css";
 import FxAdjustmentDocModal from "../accounting/FxAdjustmentDocModal";
 import CheckInterestModal from "../accounting/CheckInterestModal";
+import ChequeEntryDialog from "./components/ChequeEntryDialog";
 
 export default function ReceiptForm({
   mode = "new",
@@ -93,7 +94,7 @@ export default function ReceiptForm({
   const [activeTab, setActiveTab] = useState("payments");
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [showCheckModal, setShowCheckModal] = useState(false);
-  const [currentCheck, setCurrentCheck] = useState(null);
+  const [checkDraft, setCheckDraft] = useState(null);
   const [retentions, setRetentions] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const submittingRef = useRef(false);
@@ -123,7 +124,6 @@ export default function ReceiptForm({
   const [totalBalance, setTotalBalance] = useState(0);
   const [history, setHistory] = useState([]);
   const [banks, setBanks] = useState([]);
-  const [modalChecks, setModalChecks] = useState([]);
 
   const paymentMethods = [
     { value: "CASH", label: "Efectivo", icon: <Banknote size={16} /> },
@@ -317,22 +317,23 @@ export default function ReceiptForm({
     const amt = diffToPay > 0 ? diffToPay : 0;
 
     if (type === "CHECK") {
-      const existingChecks = payments.filter(p => p.type === "CHECK");
-      // If we are adding via button, we normally want to open the multi-grid
-      setModalChecks(existingChecks.length > 0 ? existingChecks : [{
-        id: Math.random(),
+      setCheckDraft({
+        id: null,
         type: "CHECK",
-        amount: amt,
+        amount: amt || "",
+        currency,
         description: "",
         bank_name: "",
         reference_number: "",
-        due_date: new Date().toISOString().split("T")[0],
-        issue_date: new Date().toISOString().split("T")[0],
+        issue_date: date,
+        due_date: date,
         check_type: "FISICO",
-        issuer_tax_id: entity?.tax_id || "",
+        drawer_name: "",
+        drawer_cuit: "",
+        issuer_tax_id: "",
         accounting_account: "111010301",
-        business_unit: ctroCosto || "1"
-      }]);
+        business_unit: ctroCosto || "1",
+      });
       setShowCheckModal(true);
       return;
     }
@@ -354,11 +355,7 @@ export default function ReceiptForm({
 
     setPayments([...payments, newPayment]);
 
-    if (type === "CHECK") {
-      setCurrentCheck(newPayment);
-      setShowCheckModal(true);
-    }
-  };
+};
   
   const handleRetentionLookup = async (id, jurisdiction) => {
     if (!entity?.tax_id) {
@@ -392,9 +389,23 @@ export default function ReceiptForm({
     setPayments(
       payments.map((p) => (p.id === pid ? { ...p, [field]: value } : p)),
     );
-    if (currentCheck && currentCheck.id === pid) {
-      setCurrentCheck((prev) => ({ ...prev, [field]: value }));
-    }
+  };
+
+  const editCheck = (check) => {
+    setCheckDraft({ ...check });
+    setShowCheckModal(true);
+  };
+
+  const saveCheck = (check) => {
+    const saved = { ...check, id: check.id ?? Math.random(), type: "CHECK" };
+    setPayments(previous => {
+      const exists = previous.some(item => item.id === saved.id);
+      return exists
+        ? previous.map(item => item.id === saved.id ? saved : item)
+        : [...previous, saved];
+    });
+    setShowCheckModal(false);
+    setCheckDraft(null);
   };
 
   const autoApply = () => {
@@ -677,6 +688,7 @@ export default function ReceiptForm({
   if (loading && !isSaving && mode !== "new") return <LoadingScreen message="Cargando información..." />;
 
   return (
+    <>
     <ReceiptShell 
       headerTitle={mode === 'new' ? (isPayment ? 'Nueva Orden de Pago' : 'Nuevo Recibo') : `${isPayment ? 'Orden de Pago' : 'Recibo'} N° ${number || ''}`}
       headerSubtitle={isPayment ? 'Orden de Pago' : 'Recibo de Cobro'}
@@ -872,7 +884,7 @@ export default function ReceiptForm({
 
           {/* MEDIOS DE PAGO */}
           <ShellSection fullWidth 
-            title="Medios de Pago" 
+            title={isPayment ? "Medios de pago" : "Medios de cobro"} 
             toolbar={
               mode !== 'view' && (
                 <div style={{ display: 'flex', gap: 8, padding: '12px 16px' }}>
@@ -909,11 +921,18 @@ export default function ReceiptForm({
                           p.type === 'CHECK' ? `Cheque ${p.reference_number || ''}` :
                           p.type === 'TRANSFER' ? `Transf. ${p.reference_number || ''}` : p.description
                         ) : (
-                          <Input 
-                            value={p.type === 'CHECK' ? p.reference_number : p.description} 
-                            onChange={(e) => updatePayment(p.id, p.type === 'CHECK' ? 'reference_number' : 'description', e.target.value)} 
-                            placeholder="Detalle..."
-                          />
+                          p.type === "CHECK" ? (
+                            <div className={s.checkPaymentDetail}>
+                              <span>{p.bank_name || "Banco"} · N.º {p.reference_number || "-"} · Vto. {p.due_date || "-"}</span>
+                              <button type="button" className={s.btnSecondary} onClick={() => editCheck(p)}>Editar cheque</button>
+                            </div>
+                          ) : (
+                            <Input
+                              value={p.description}
+                              onChange={(e) => updatePayment(p.id, 'description', e.target.value)}
+                              placeholder="Detalle..."
+                            />
+                          )
                         )}
                       </td>
                       <td style={{ textAlign: 'right' }}>
@@ -945,5 +964,15 @@ export default function ReceiptForm({
         </div>
       }
     />
+    <ChequeEntryDialog
+      open={showCheckModal}
+      initialCheck={checkDraft}
+      currency={currency}
+      banks={banks}
+      isPayment={isPayment}
+      onClose={() => { setShowCheckModal(false); setCheckDraft(null); }}
+      onSave={saveCheck}
+    />
+    </>
   );
 }

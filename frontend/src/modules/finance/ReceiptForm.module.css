@@ -1192,3 +1192,40 @@
   .headerGrid {grid-template-columns:minmax(0,1fr);}
   .headerGroup {grid-column:1 !important;}
 }
+
+/* Acciones visibles en el tema oscuro (antes no tenían clase CSS y heredaban blanco). */
+.btnSecondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 5px 12px;
+  border: 1px solid #5f6e90;
+  border-radius: 7px;
+  background: #2a3a59;
+  color: #f8fafc;
+  font-size: 12px;
+  font-weight: 750;
+  cursor: pointer;
+}
+.btnSecondary:hover { background: #364a70; border-color: #a390ff; }
+.btnPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 16px;
+  border: 1px solid #8e7ae8;
+  border-radius: 8px;
+  background: #6955cf;
+  color: #fff;
+  font-weight: 800;
+  cursor: pointer;
+}
+.btnPrimary:disabled { opacity: .48; cursor: not-allowed; }
+.iconBtn { border: none; background: transparent; cursor: pointer; padding: 6px; }
+.checkPaymentDetail { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 190px; }
+.checkPaymentDetail > span { color: #d6dff0; font-size: 12px; }
+.checkPaymentDetail .btnSecondary { min-height: 27px; padding: 3px 9px; font-size: 11px; }
