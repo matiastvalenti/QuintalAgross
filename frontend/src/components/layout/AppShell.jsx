@@ -32,9 +32,21 @@ function AppShellContent({ children, openMobile, setOpenMobile }) {
         return () => window.removeEventListener('app-show-error', handleError);
     }, [setGlobalError]);
 
+    useEffect(() => {
+        if (!openMobile) return undefined;
+        const closeOnEscape = (event) => {
+            if (event.key === 'Escape') setOpenMobile(false);
+        };
+        document.addEventListener('keydown', closeOnEscape);
+        return () => document.removeEventListener('keydown', closeOnEscape);
+    }, [openMobile, setOpenMobile]);
+
     return (
         <div className={s.shell}>
             <Sidebar openMobile={openMobile} setOpenMobile={setOpenMobile} />
+            {openMobile && (
+              <button type="button" className={s.mobileBackdrop} aria-label="Cerrar menú lateral" onClick={() => setOpenMobile(false)} />
+            )}
             <div className={s.mainArea}>
                 <Topbar onMenuClick={() => setOpenMobile(!openMobile)} />
                 <main className={s.content} style={globalError ? { display: 'flex', alignItems: 'center', justifyContent: 'center' } : {}}>

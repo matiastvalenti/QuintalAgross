@@ -44,3 +44,19 @@
         padding: 16px;
     }
 }
+/* Capa modal para la navegación móvil; no tapa las ventanas del escritorio. */
+.mobileBackdrop { display: none; }
+@media (max-width: 1024px) {
+    .mobileBackdrop {
+        display: block;
+        position: fixed;
+        inset: 0;
+        z-index: 1050;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: rgba(3, 9, 23, .62);
+        backdrop-filter: blur(3px);
+        cursor: pointer;
+    }
+}

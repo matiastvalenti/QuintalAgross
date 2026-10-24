@@ -58,6 +58,10 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
     }, [promptText]);
 
     const toggleListening = () => {
+        if (!recognitionRef.current) {
+            setStatus('DICTADO NO DISPONIBLE EN ESTE NAVEGADOR');
+            return;
+        }
         if (isListening) {
             recognitionRef.current.stop();
         } else {
@@ -69,7 +73,7 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
         if (!promptText) return;
         
         setIsParsing(true);
-        setStatus('IA PROCESANDO...');
+        setStatus('INTERPRETANDO PEDIDO...');
         
         try {
             const result = await api.post('/ai/parse-prompt', { prompt: promptText });
@@ -87,8 +91,6 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
             const isInvoice = pLower.includes('factura') || pLower.includes('facturar');
             const isSalesOrder = pLower.includes('orden de venta') || pLower.includes('pedido') || pLower.includes('orden');
 
-            const confidence = result.confidence || 0;
-            const confPct = Math.round(confidence * 100);
 
             if (isInvoice) {
                 const draftId = crypto.randomUUID();
@@ -129,7 +131,7 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
             if (lineDescription) parts.push(`Prod: ${lineDescription}`);
             const msg = parts.length > 0 ? parts.join(' | ') : 'Formulario abierto';
 
-            showToast(`${msg} (${confPct}% confianza)`, confPct >= 50 ? 'success' : 'warning');
+            showToast(`${msg}. Revisá los datos sugeridos antes de registrar.`, 'info');
             onClose();
             setPromptText('');
             setStatus('ESPERANDO COMANDO');
@@ -154,10 +156,10 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
                 <div className={s.header}>
                     <div className={s.title}>
                         <Sparkles size={32} />
-                        Quintal AI
+                        Carga asistida
                     </div>
                     <p className={s.subtitle}>
-                        Dicta tu orden con lenguaje natural
+                        Escribí o dictá una operación y revisá los campos que encontremos.
                     </p>
                 </div>
 
@@ -205,7 +207,7 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
                         disabled={!promptText || isParsing}
                     >
                         {isParsing ? <Loader2 className="animate-spin" size={24} /> : <Send size={24} />}
-                        {isParsing ? 'PROCESANDO...' : 'PREPARAR SISTEMA'}
+                        {isParsing ? 'INTERPRETANDO...' : 'PREPARAR BORRADOR'}
                     </button>
                 </div>
             </div>

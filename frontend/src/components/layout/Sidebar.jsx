@@ -3,7 +3,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard, ShoppingCart, Truck, Package, DollarSign,
   BarChart3, Settings, ChevronRight, Calculator, CalendarCheck,
-  User as UserIcon, LogOut, LandPlot, Tractor, Sprout, CircleDollarSign, Wheat, Landmark, LineChart
+  User as UserIcon, LogOut, Tractor, Sprout, CircleDollarSign, Wheat, Landmark, LineChart, X
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWindow } from '../../context/WindowContext';
@@ -12,7 +12,7 @@ import s from './Sidebar.module.css';
 
 const NAV_GROUPS = [
   {
-    title: 'DASHBOARD',
+    title: 'INICIO',
     items: [
       { label: 'Dashboard', to: '/', icon: LayoutDashboard },
       { label: 'Dashboard CRM', to: '/crm/dashboard', icon: LineChart },
@@ -125,7 +125,7 @@ const NAV_GROUPS = [
     ]
   },
   {
-    title: 'ORGANIZACIÓN',
+    title: 'CONFIGURACIÓN',
     items: [
       { 
         label: 'Planificación', icon: CalendarCheck,
@@ -153,7 +153,7 @@ const NAV_GROUPS = [
 
 export default function Sidebar({ openMobile, setOpenMobile }) {
   const { user, logout, can } = useAuth();
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => localStorage.getItem('quintal-sidebar-collapsed') === 'true');
   const [expanded, setExpanded] = useState({});
   const location = useLocation();
   const navigate = useNavigate();
@@ -164,7 +164,7 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
   }, [location.pathname, setOpenMobile]);
 
   useEffect(() => {
-    if (collapsed) return;
+    if (collapsed && !openMobile) return;
     const path = location.pathname;
     const newExpanded = { ...expanded };
     NAV_GROUPS.forEach(group => {
@@ -176,7 +176,14 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
       });
     });
     setExpanded(newExpanded);
-  }, [location.pathname, collapsed]);
+  }, [location.pathname, collapsed, openMobile]);
+
+  const toggleCollapsed = () => {
+    setCollapsed(previous => {
+      localStorage.setItem('quintal-sidebar-collapsed', String(!previous));
+      return !previous;
+    });
+  };
 
   const toggleSection = (label) => {
     if (collapsed) setCollapsed(false);
@@ -258,16 +265,19 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
       }
   };
 
+  const compact = collapsed && !openMobile;
+
   return (
-    <aside className={`${s.sidebar} ${collapsed ? s.collapsed : ''} ${openMobile ? s.openMobile : ''}`}>
+    <aside id="quintal-sidebar" aria-label="Navegación principal" className={`${s.sidebar} ${compact ? s.collapsed : ''} ${openMobile ? s.openMobile : ''}`}>
       <div className={s.brandRow}>
-        <div className={`${s.brand} ${!collapsed ? s.full : ''}`}>
+        <div className={`${s.brand} ${!compact ? s.full : ''}`}>
           <div className={s.brandIcon}>QA</div>
-          <span className={s.brandText}>Quintal Agross</span>
+          <span className={s.brandText}><strong>QUINTAL</strong><small>AGROSS · GESTIÓN</small></span>
         </div>
-        <button className={s.miniToggle} onClick={() => setCollapsed(!collapsed)} title={collapsed ? "Expandir" : "Contraer"}>
+        <button type="button" className={s.miniToggle} onClick={toggleCollapsed} title={collapsed ? "Expandir menú" : "Contraer menú"} aria-label={collapsed ? "Expandir menú" : "Contraer menú"}>
           <ChevronRight size={16} style={{ transform: collapsed ? 'rotate(0)' : 'rotate(180deg)' }} />
         </button>
+        <button type="button" className={s.mobileClose} onClick={() => setOpenMobile?.(false)} aria-label="Cerrar menú"><X size={19} /></button>
       </div>
 
       <nav className={s.nav}>
@@ -286,11 +296,16 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
 
   return true;
 });
+          if (group.title === 'OPERACIONES') {
+            const priority = ['Ventas', 'Compras', 'Cereales', 'Campo', 'Servicios y trabajos', 'Fondos y rendiciones'];
+            allowedItems.sort((a, b) => priority.indexOf(a.label) - priority.indexOf(b.label));
+          }
+
           if (allowedItems.length === 0) return null;
 
           return (
             <div key={gIdx} className={s.navGroup}>
-              {!collapsed && <div className={s.groupTitle}>{group.title}</div>}
+              {!compact && <div className={s.groupTitle}>{group.title}</div>}
               
               {allowedItems.map(item => {
                 const Icon = item.icon;
@@ -309,11 +324,11 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
                       to={item.to}
                       onClick={(e) => handleItemClick(e, item)}
                       className={({ isActive }) => `${s.item} ${isActive ? s.active : ''}`}
-                      title={collapsed ? item.label : ''}
+                      title={compact ? item.label : ''}
                     >
                       <span className={s.itemIcon}><Icon size={18} strokeWidth={2.5} /></span>
                       <span className={s.itemLabel}>{item.label}</span>
-                      {badgeCount > 0 && !collapsed && <span className={s.badge}>{badgeCount}</span>}
+                      {badgeCount > 0 && !compact && <span className={s.badge}>{badgeCount}</span>}
                     </NavLink>
                   );
                 }
@@ -335,10 +350,10 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
 
                 return (
                   <div key={item.label} className={s.group}>
-                    <ItemElement {...itemProps} title={collapsed ? item.label : ''}>
+                    <ItemElement {...itemProps} title={compact ? item.label : ''} aria-expanded={Boolean(isOpen)} aria-label={compact ? item.label : undefined}>
                       <span className={s.itemIcon}><Icon size={18} strokeWidth={2.5} /></span>
                       <span className={s.itemLabel}>{item.label}</span>
-                      {badgeCount > 0 && !collapsed && <span className={s.badge}>{badgeCount}</span>}
+                      {badgeCount > 0 && !compact && <span className={s.badge}>{badgeCount}</span>}
                       <ChevronRight size={14} className={s.chevron} />
                     </ItemElement>
 
@@ -365,17 +380,17 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
 
       <div className={s.footer}>
         <div className={s.userCard}>
-          <div className={s.avatar} onClick={() => navigate('/perfil')}>
+          <button type="button" className={s.avatar} onClick={() => navigate('/perfil')} title="Ver perfil" aria-label="Ver perfil">
             {user?.full_name?.charAt(0) || 'U'}
-          </div>
-          {!collapsed && (
+          </button>
+          {!compact && (
             <div className={s.userInfo}>
               <div className={s.userName}>{user?.full_name || (user?.username ? `@${user.username}` : 'Usuario')}</div>
               <div className={s.userRole}>{user?.roles?.[0] || 'Miembro'}</div>
             </div>
           )}
-          {!collapsed && (
-            <button className={s.logoutBtn} onClick={logout} title="Cerrar Sesión">
+          {!compact && (
+            <button type="button" className={s.logoutBtn} onClick={logout} title="Cerrar sesión" aria-label="Cerrar sesión">
               <LogOut size={16} />
             </button>
           )}
