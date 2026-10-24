@@ -50,6 +50,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
     const [saving, setSaving] = useState(false);
     const [salespeople, setSalespeople] = useState([]);
     const [duplicateError, setDuplicateError] = useState(null);
+    const [lookingUpCuit, setLookingUpCuit] = useState(false);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
     const [formData, setFormData] = useState({
@@ -145,6 +146,52 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
     };
 
     const { showToast } = useToast ? useToast() : { showToast: console.log };
+
+    // Primero consultar entidades ya guardadas: evita duplicar un CUIT como
+    // cliente y proveedor cuando en realidad corresponde una entidad mixta.
+    const lookupExistingCuit = async () => {
+        const cuitDigits = (formData.tax_id || "").replace(/\D/g, "");
+        if (cuitDigits.length !== 11) {
+            showToast("Ingresá un CUIT de 11 dígitos para buscar.", "error");
+            return;
+        }
+        setLookingUpCuit(true);
+        try {
+            const token = localStorage.getItem("token");
+            const res = await fetch(
+                API_URL + "/entities/?q=" + encodeURIComponent(formData.tax_id) + "&limit=100",
+                { headers: { Authorization: "Bearer " + token } }
+            );
+            if (!res.ok) throw new Error("No se pudo consultar el padrón interno.");
+            const results = await res.json();
+            let candidates = Array.isArray(results) ? results : [];
+            if (!candidates.some(candidate => String(candidate.tax_id || "").replace(/\D/g, "") === cuitDigits)) {
+                const alternate = await fetch(API_URL + "/entities/?q=" + encodeURIComponent(cuitDigits) + "&limit=100",
+                    { headers: { Authorization: "Bearer " + token } });
+                if (alternate.ok) {
+                    const more = await alternate.json();
+                    if (Array.isArray(more)) candidates = candidates.concat(more);
+                }
+            }
+            const match = candidates.find(candidate =>
+                String(candidate.tax_id || "").replace(/\D/g, "") === cuitDigits &&
+                String(candidate.id) !== String(entity?.id || "")
+            );
+            if (match) {
+                setDuplicateError({
+                    code: "DUPLICATE_TAX_ID",
+                    message: "La entidad ya existe en el sistema.",
+                    existing_entity: match
+                });
+            } else {
+                showToast("CUIT no encontrado entre las entidades guardadas. La consulta externa a ARCA necesita autorización.", "info");
+            }
+        } catch (err) {
+            showToast(err.message || "No se pudo consultar el CUIT.", "error");
+        } finally {
+            setLookingUpCuit(false);
+        }
+    };
 
     const handleConvertToMixed = async (existingId) => {
         try {
@@ -422,6 +469,10 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                         onChange={e => handleChange('tax_id', e.target.value)} 
                                         placeholder="00-00000000-0" 
                                     />
+                                    <button type="button" onClick={lookupExistingCuit} disabled={lookingUpCuit}
+                                        style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 6, padding: '6px 10px', border: '1px solid var(--border-color)', borderRadius: 7, background: '#273551', color: '#f8fafc', cursor: lookingUpCuit ? 'wait' : 'pointer', fontSize: 11, fontWeight: 700 }}>
+                                        <Search size={14} /> {lookingUpCuit ? 'Buscando...' : 'Buscar CUIT en Quintal'}
+                                    </button>
                                 </FormGroup>
                                 <FormGroup label="Condición IVA">
                                     <select 

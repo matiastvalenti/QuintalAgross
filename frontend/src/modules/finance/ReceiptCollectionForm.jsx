@@ -372,14 +372,16 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
     setShowCheckModal(true);
   };
 
-  const saveCheck = (check) => {
+  const saveCheck = (checks) => {
+    const batch = Array.isArray(checks) ? checks : [checks];
     setPayments(previous => {
       if (editingCheckId != null) {
+        const check = batch[0];
         return previous.map(payment => payment.id === editingCheckId
           ? { ...payment, ...check, id: editingCheckId, type: "CHECK" }
           : payment);
       }
-      return [...previous, { ...check, id: generateId(), type: "CHECK" }];
+      return [...previous, ...batch.map(check => ({ ...check, id: generateId(), type: "CHECK" }))];
     });
     setEditingCheckId(null);
     setShowCheckModal(false);

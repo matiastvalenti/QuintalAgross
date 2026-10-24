@@ -36,6 +36,6 @@ jobs:
       - name: Dependencias de pruebas
         run: python -m pip install pytest
       - name: Verificar sintaxis de backend comercial
-        run: python -m compileall -q backend/app/modules/purchases backend/app/modules/sales backend/app/modules/accounting/document_router.py
+        run: python -m compileall -q backend/app/modules/purchases backend/app/modules/sales backend/app/modules/accounting/document_router.py backend/app/modules/config_router.py backend/app/modules/entities/router.py
       - name: Pruebas de unidades y envases
         run: PYTHONPATH=backend python -m pytest --confcutdir=backend/tests/unit backend/tests/unit/test_fractional_packages.py -q

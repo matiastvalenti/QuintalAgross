@@ -396,14 +396,15 @@ export default function ReceiptForm({
     setShowCheckModal(true);
   };
 
-  const saveCheck = (check) => {
-    const saved = { ...check, id: check.id ?? Math.random(), type: "CHECK" };
-    setPayments(previous => {
-      const exists = previous.some(item => item.id === saved.id);
+  const saveCheck = (checks) => {
+    const batch = Array.isArray(checks) ? checks : [checks];
+    setPayments(previous => batch.reduce((acc, check) => {
+      const saved = { ...check, id: check.id ?? Math.random(), type: "CHECK" };
+      const exists = acc.some(item => item.id === saved.id);
       return exists
-        ? previous.map(item => item.id === saved.id ? saved : item)
-        : [...previous, saved];
-    });
+        ? acc.map(item => item.id === saved.id ? saved : item)
+        : [...acc, saved];
+    }, previous));
     setShowCheckModal(false);
     setCheckDraft(null);
   };

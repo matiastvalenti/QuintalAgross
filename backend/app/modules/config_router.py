@@ -241,19 +241,44 @@ def save_pdf_config(config_key: str, data: config_schemas.PDFConfigUpdate, db: S
     }
 
 # --- Banks ---
+def _bank_digits(value):
+    return "".join(char for char in str(value or "") if char.isdigit())
+
+
+def _validated_bank_fields(db, Bank, name, tax_id, exclude_id=None):
+    bank_name = (name or "").strip()
+    cuit = _bank_digits(tax_id)
+    if not bank_name:
+        raise HTTPException(status_code=422, detail="La razón social del banco es obligatoria.")
+    if cuit and len(cuit) != 11:
+        raise HTTPException(status_code=422, detail="El CUIT del banco debe tener 11 dígitos.")
+    # Se conserva la compatibilidad con bancos antiguos que no tengan CUIT.
+    for existing in db.query(Bank).all():
+        if exclude_id and str(existing.id) == str(exclude_id):
+            continue
+        if (existing.name or "").strip().casefold() == bank_name.casefold():
+            raise HTTPException(status_code=409, detail="Ya existe un banco con esa razón social.")
+        if cuit and _bank_digits(existing.tax_id) == cuit:
+            raise HTTPException(status_code=409, detail="Ya existe un banco con ese CUIT.")
+    return bank_name, cuit or None
+
+
 @router.get("/banks", response_model=List[config_schemas.BankResponse])
 def get_banks(db: Session = Depends(get_db)):
     from app.db.models.commercial_models import Bank
     return db.query(Bank).filter(Bank.active == True).order_by(Bank.name).all()
 
+
 @router.post("/banks", response_model=config_schemas.BankResponse)
 def create_bank(data: config_schemas.ConfigCreate, db: Session = Depends(get_db)):
     from app.db.models.commercial_models import Bank
-    db_item = Bank(name=data.name, active=data.active, tax_id=data.tax_id)
+    bank_name, cuit = _validated_bank_fields(db, Bank, data.name, data.tax_id)
+    db_item = Bank(name=bank_name, active=data.active, tax_id=cuit)
     db.add(db_item)
     db.commit()
     db.refresh(db_item)
     return db_item
+
 
 @router.put("/banks/{item_id}", response_model=config_schemas.BankResponse)
 def update_bank(item_id: str, data: config_schemas.ConfigUpdate, db: Session = Depends(get_db)):
@@ -261,12 +286,18 @@ def update_bank(item_id: str, data: config_schemas.ConfigUpdate, db: Session = D
     db_item = db.query(Bank).filter(Bank.id == item_id).first()
     if not db_item:
         raise HTTPException(status_code=404, detail="No encontrado")
-    if data.name is not None: db_item.name = data.name
-    if data.tax_id is not None: db_item.tax_id = data.tax_id
+    name, cuit = _validated_bank_fields(
+        db, Bank, data.name if data.name is not None else db_item.name,
+        data.tax_id if data.tax_id is not None else db_item.tax_id,
+        exclude_id=db_item.id
+    )
+    db_item.name = name
+    db_item.tax_id = cuit
     if data.active is not None: db_item.active = data.active
     db.commit()
     db.refresh(db_item)
     return db_item
+
 
 @router.delete("/banks/{item_id}")
 def delete_bank(item_id: str, db: Session = Depends(get_db)):

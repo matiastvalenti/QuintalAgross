@@ -13,10 +13,23 @@ export default function BankConfigPage() {
     const [loading, setLoading] = useState(false);
     const [newName, setNewName] = useState('');
     const [newTaxId, setNewTaxId] = useState('');
+    const [query, setQuery] = useState('');
     const [editingItem, setEditingItem] = useState(null); // { id, name, tax_id }
     const { showToast } = useToast();
 
-    const endpoint = `/config/banks`;
+    const endpoint = "/config/banks";
+    const digits = value => String(value || "").replace(/\D/g, "");
+    const matchingBanks = items.filter(item => {
+        const term = query.trim().toLocaleLowerCase("es-AR");
+        if (!term) return true;
+        const termDigits = digits(term);
+        return item.name?.toLocaleLowerCase("es-AR").includes(term) ||
+            (termDigits.length > 0 && digits(item.tax_id).includes(termDigits));
+    });
+    const findExistingBank = (name, taxId, ownId = null) =>
+        items.find(item => item.id !== ownId &&
+            (item.name?.trim().toLocaleLowerCase("es-AR") === name.trim().toLocaleLowerCase("es-AR") ||
+            (digits(taxId).length === 11 && digits(item.tax_id) === digits(taxId))));
 
     useEffect(() => {
         fetchItems();
@@ -35,7 +48,14 @@ export default function BankConfigPage() {
     };
 
     const handleAdd = async () => {
-        if (!newName.trim()) return;
+        if (!newName.trim() || digits(newTaxId).length !== 11) {
+            showToast("Ingresá razón social y CUIT de 11 dígitos del banco.", "error");
+            return;
+        }
+        if (findExistingBank(newName, newTaxId)) {
+            showToast("Ya existe un banco con ese nombre o CUIT.", "error");
+            return;
+        }
         try {
             await api.post(endpoint, { 
                 name: newName, 
@@ -53,6 +73,14 @@ export default function BankConfigPage() {
 
     const handleUpdate = async () => {
         if (!editingItem || !editingItem.name.trim()) return;
+        if (editingItem.tax_id && digits(editingItem.tax_id).length !== 11) {
+            showToast("El CUIT debe tener 11 dígitos.", "error");
+            return;
+        }
+        if (findExistingBank(editingItem.name, editingItem.tax_id, editingItem.id)) {
+            showToast("Ya existe un banco con ese nombre o CUIT.", "error");
+            return;
+        }
         try {
             await api.put(`${endpoint}/${editingItem.id}`, { 
                 name: editingItem.name,
@@ -81,13 +109,13 @@ export default function BankConfigPage() {
         <div style={{ padding: 20 }}>
             <ContentHeader title="Configuración de Bancos" />
             
-            <Card style={{ marginTop: 20, maxWidth: 800 }}>
+            <Card style={{ marginTop: 20, maxWidth: 980 }}>
                 {/* Form Alta */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, marginBottom: 24, alignItems: 'flex-end' }}>
                     <div>
                         <Input 
-                            label="Nombre del Banco"
-                            placeholder="Ej: Banco Nación"
+                            label="Razón social / Nombre del Banco"
+                            placeholder="Ej: Banco de la Nación Argentina"
                             value={newName}
                             onChange={e => setNewName(e.target.value.toUpperCase())}
                         />
@@ -101,20 +129,28 @@ export default function BankConfigPage() {
                         />
                     </div>
                     <div>
-                        <Button onClick={handleAdd} disabled={!newName}>
+                        <Button onClick={handleAdd} disabled={!newName.trim() || digits(newTaxId).length !== 11}>
                             <Plus size={16} /> Agregar
                         </Button>
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    <label style={{ display: 'flex', flexDirection: 'column', gap: 6, color: 'var(--text-secondary)', fontSize: 12, fontWeight: 700 }}>
+                        Buscar banco cargado por razón social o CUIT
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#151f35', border: '1px solid #465875', borderRadius: 9, padding: '0 12px', color: '#c8d5e9' }}>
+                            <Search size={16} />
+                            <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Nombre o número de CUIT..." style={{ flex: 1, minWidth: 0, height: 39, border: 0, outline: 0, background: 'transparent', color: '#f8fafc' }} />
+                        </div>
+                    </label>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Estos resultados corresponden a los bancos guardados en Quintal. La consulta externa al padrón ARCA requiere integración autorizada.</span>
                     {loading ? (
                         <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando bancos...</div>
-                    ) : items.length === 0 ? (
+                    ) : matchingBanks.length === 0 ? (
                         <EmptyState 
                             icon={Landmark}
                             title="Sin Bancos"
-                            description="No hay bancos configurados aún."
+                            description={query ? "No se encontró ningún banco guardado con ese nombre o CUIT." : "No hay bancos configurados aún."}
                         />
                     ) : (
                         <div style={{ border: '1px solid var(--border-color)', borderRadius: 12, overflow: 'hidden' }}>
@@ -127,7 +163,7 @@ export default function BankConfigPage() {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {items.map(item => {
+                                    {matchingBanks.map(item => {
                                         const isEditing = editingItem?.id === item.id;
                                         
                                         return (

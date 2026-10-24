@@ -116,3 +116,36 @@
   .body { padding: 12px; }
   .header, .footer { padding: 12px; }
 }
+
+/* Carga masiva: guardar el renglón y seguir sin cerrar la ventana. */
+.bankSearch {position:relative;min-width:0;}
+.bankSearch input {padding-left:34px;}
+.searchIcon {position:absolute;left:11px;top:12px;color:#b8c5de;pointer-events:none;}
+.bankSuggestions {
+  position:absolute;z-index:50;left:0;right:0;top:calc(100% + 4px);
+  max-height:240px;overflow-y:auto;background:#172239;
+  border:1px solid #6b63a9;border-radius:9px;box-shadow:0 14px 30px #0008;
+}
+.bankSuggestions button {
+  width:100%;display:flex;justify-content:space-between;align-items:center;
+  gap:10px;padding:10px 11px;border:0;border-bottom:1px solid #354462;
+  color:#eff3ff;background:transparent;text-align:left;cursor:pointer;font:inherit;font-size:12px;
+}
+.bankSuggestions button:hover {background:#334568;}
+.bankSuggestions small {color:#aebfda;white-space:nowrap;}
+.bankHint {color:#9eaec8;font-size:11px;margin:11px 0 0;}
+.batchPanel {margin-top:18px;border:1px solid #485b7d;border-radius:10px;background:#172238;overflow:hidden;}
+.batchHeader {display:flex;gap:10px;align-items:center;justify-content:space-between;background:#293954;padding:10px 12px;color:#f2f5fc;font-size:12px;}
+.batchHeader span {font-size:13px;color:#c4b5fd;font-weight:800;}
+.batchList {max-height:195px;overflow-y:auto;}
+.batchRow {display:flex;align-items:center;gap:9px;padding:9px 11px;border-top:1px solid #34435f;}
+.batchIndex {display:grid;place-items:center;border-radius:50%;background:#3e4c67;width:22px;height:22px;font-size:10px;font-weight:800;flex:0 0 auto;}
+.batchDetails {flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+.batchDetails strong {font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.batchDetails small {color:#a8bad3;font-size:11px;}
+.batchEdit,.batchRemove {border:1px solid #495979;background:#283953;color:#d9e4f6;border-radius:6px;padding:5px 9px;cursor:pointer;font-size:11px;font-weight:700;}
+.batchRemove {padding:5px;display:grid;place-items:center;color:#fca5a5;}
+.footer .next {display:inline-flex;align-items:center;gap:6px;border:1px solid #7284ad;background:#2e405e;color:#f8fafc;}
+.footer .confirm {display:inline-flex;align-items:center;gap:6px;}
+.footer .next:hover {background:#43577c;}
+@media(max-width:560px) {.footer {flex-wrap:wrap;}.footer button {flex:1;}.batchHeader {flex-wrap:wrap;}}
