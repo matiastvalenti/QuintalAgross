@@ -774,3 +774,50 @@
 .container :is(.sectionBox,.summaryPanel,.checkCard,.subModal) {
   background:#202c46;border-color:#394861;
 }
+
+/* Reestructura de órdenes de pago: datos a todo el ancho, trabajo principal
+   a la izquierda y resumen fijo junto a las acciones. */
+.fullWidthBody {display:block !important;padding:12px 16px !important;min-width:0;}
+.container .header {padding:10px 18px;min-height:54px;gap:10px;}
+.container .headerLeft {gap:10px;}
+.container .iconWrap {width:34px;height:34px;}
+.container .headerTitle h2 {font-size:16px;}
+.container .headerTitle span {font-size:11px;}
+.container .headerRight {gap:16px;flex-wrap:wrap;}
+.container .headerStat span {font-size:10px;}
+.container .headerStat strong {font-size:13px;}
+.container .collectionBody {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(260px,300px);
+  grid-template-rows:auto auto;
+  align-items:start;
+  gap:12px;
+  padding:12px 16px 22px;
+}
+.container .topLeft {grid-column:1/-1;grid-row:1;min-width:0;}
+.container .summaryPanel {
+  grid-column:2;
+  grid-row:2;
+  position:sticky;
+  top:10px;
+  align-self:start;
+  max-height:calc(100vh - 120px);
+  overflow-y:auto;
+}
+.container .collectionBody > :last-child:not(.topLeft):not(.summaryPanel) {
+  grid-column:1;
+  grid-row:2;
+  min-width:0;
+}
+.container .sectionBox {border-radius:10px;}
+.container .sectionHeader {padding:9px 14px;}
+.container .sectionHeader h3 {font-size:13px;}
+.container .summaryContent {padding:12px;}
+.container .summaryFooter {padding:12px;}
+@container (max-width:950px) {
+  .container .collectionBody {grid-template-columns:minmax(0,1fr);gap:12px;padding:12px;}
+  .container .topLeft {grid-column:1;grid-row:1;}
+  .container .collectionBody > :last-child:not(.topLeft):not(.summaryPanel) {grid-column:1;grid-row:2;}
+  .container .summaryPanel {grid-column:1;grid-row:3;position:static;max-height:none;}
+  .container .headerRight {gap:9px;}
+}

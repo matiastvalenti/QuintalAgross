@@ -686,9 +686,9 @@ export default function ReceiptForm({
         { label: isPayment ? 'Total pagado' : 'Total cobrado', value: fmt(totalPayments + totalRetentions) }
       ]}
       topLeftContent={
-        <ShellSection title="Parámetros">
+        <ShellSection fullWidth title="Parámetros">
           <div className={s.headerGrid} style={{ pointerEvents: mode === 'edit' ? 'none' : 'auto', opacity: mode === 'edit' ? 0.8 : 1 }}>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 6' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 4' }}>
               <Autocomplete
                 label={isPayment ? "Proveedor" : "Cliente / Entidad"}
                 initialValue={entity}
@@ -701,35 +701,35 @@ export default function ReceiptForm({
                 disabled={mode === "edit"}
               />
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 2' }}>
               <Input label="Fecha" type="date" value={date} onChange={(e) => setDate(e.target.value)} disabled={mode === "edit"} />
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 2' }}>
               <Select label="Moneda" value={currency} onChange={(e) => setCurrency(e.target.value)} disabled={mode === "edit"}>
                 <option value="ARS">ARS</option>
                 <option value="USD">USD</option>
               </Select>
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 2' }}>
               <Input label="Cotización" type="number" value={exchangeRate} onChange={(e) => setExchangeRate(Number(e.target.value))} disabled={mode === "edit"} />
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 2' }}>
               <Select label="PV" value={pv} onChange={(e) => setPv(e.target.value)} disabled={mode === "edit"}>
                 {pointsOfSale.map((p) => <option key={p.id} value={p.pv}>{p.pv}</option>)}
               </Select>
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 6' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
               <Input label="Número" value={number} onChange={(e) => setNumber(e.target.value)} placeholder="0001-00000001" disabled={mode === "edit"} />
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 6' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 5' }}>
               <Input label="Concepto / Detalle" value={observations} onChange={(e) => setObservations(e.target.value)} disabled={mode === 'edit'} />
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 2' }}>
               <Select label="C. Costo" value={ctroCosto} onChange={(e) => setCtroCosto(e.target.value)} disabled={mode === "edit"}>
                 <option value="1">1</option><option value="2">2</option>
               </Select>
             </div>
-            <div className={s.headerGroup} style={{ gridColumn: 'span 3' }}>
+            <div className={s.headerGroup} style={{ gridColumn: 'span 2' }}>
               <label className={s.fileLabel}>
                 <Upload size={16} /> 
                 {uploading ? "Subiendo..." : (attachmentUrl ? "Cambiar Adjunto" : "Adjuntar Comprobante")}
@@ -743,11 +743,11 @@ export default function ReceiptForm({
       summaryContent={
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div className={s.summaryRow} style={{ color: 'var(--text-secondary)' }}>
-            <span>Total Aplicado a Facturas:</span>
+            <span>{isPayment ? "Aplicado a facturas de compra:" : "Aplicado a facturas de venta:"}</span>
             <span>{fmt(totalApplied)}</span>
           </div>
           <div className={s.summaryRow} style={{ color: 'var(--text-secondary)' }}>
-            <span>Total Medios de Pago:</span>
+            <span>{isPayment ? "Total medios de pago:" : "Total medios de cobro:"}</span>
             <span>{fmt(totalPayments)}</span>
           </div>
           <div className={s.summaryRow} style={{ color: 'var(--text-secondary)' }}>
@@ -755,7 +755,7 @@ export default function ReceiptForm({
             <span>{fmt(totalRetentions)}</span>
           </div>
           <div className={`${s.summaryRow} ${s.total}`}>
-            <span>Total Recibo:</span>
+            <span>{isPayment ? "Total orden de pago:" : "Total recibo:"}</span>
             <span>{fmt(totalPayments + totalRetentions)}</span>
           </div>
           <div className={`${s.summaryRow} ${difference < -0.01 ? s.warning : ''}`} style={{ fontWeight: 600 }}>
@@ -797,7 +797,7 @@ export default function ReceiptForm({
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
           
           {/* APLICACIONES (FACTURAS) */}
-          <ShellSection title="Facturas Aplicadas">
+          <ShellSection fullWidth title={isPayment ? "Facturas de compra aplicadas" : "Facturas de venta aplicadas"}>
             {pendingInvoices.length > 0 && mode !== 'view' && (
               <div style={{ marginBottom: 12 }}>
                 <button type="button" className={s.btnSecondary} onClick={autoApply}>
@@ -871,7 +871,7 @@ export default function ReceiptForm({
           </ShellSection>
 
           {/* MEDIOS DE PAGO */}
-          <ShellSection 
+          <ShellSection fullWidth 
             title="Medios de Pago" 
             toolbar={
               mode !== 'view' && (

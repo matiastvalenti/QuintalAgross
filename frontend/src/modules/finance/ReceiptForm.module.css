@@ -1178,42 +1178,17 @@
     color: #059669;
     font-weight: 600;
 }
-/* Recibos y órdenes de pago: eliminar las tarjetas blancas heredadas. */
-.container, .header, .tabs, .footer,
-.appsPending, .appsSelected, .tableWrap, .actionsBar {
-  background:#202c46;
-  color:#f8fafc;
-  border-color:#394861;
-}
-.container {--text:#f8fafc;--text-secondary:#bbc9dc;--border:#394861;--bg-light:#253551;--primary:#a390ff;background:#101729;}
-.headerGrid {gap:8px 10px;align-items:start;}
-.headerGroup {gap:4px;min-width:0;}
-.invCard, .paymentCard, .methodCard {
-  background:#1a2842;
-  border-color:#465875;
-  color:#f8fafc;
-}
-.invCard:hover, .invCard.selected, .dnRow:hover, .dnRow.selected {
-  background:#302b58;
-  border-color:#8e79e6;
-}
-.invNum, .invBalance, .appsSelected h4, .modalSectionTitle {color:#f8fafc;}
-.invDetails, .summaryRow {color:#b9c8de;}
-.payTypeBtn, .btnSecondary, .cellInput {
-  background:#273551;
-  border-color:#465875;
-  color:#e4eaf6;
-}
-.payTypeBtn:hover, .btnSecondary:hover, .cellInput:hover, .cellInput:focus {
-  background:#324260;
-  border-color:#9380e8;
-  color:#fff;
-}
-.btnPrimary, .confirmBtn {background:#6955cf;color:#fff;border-color:#8e79e6;}
-.payTypeBtn svg {color:#c4b5fd;}
-.summaryRow.total, .total {color:#f8fafc;}
-@container (max-width: 900px) {
-  .appsSplit {grid-template-columns: minmax(0,1fr);overflow:visible;height:auto;}
+/* Parámetros de OP/recibo en dos filas equilibradas; el contenedor ya ocupa
+   todo el ancho disponible mediante ShellSection fullWidth. */
+.headerGrid {grid-template-columns:repeat(12,minmax(0,1fr));gap:9px 11px;align-items:start;}
+.headerGroup {min-width:0;}
+.headerGroup :is(input,select) {width:100%;max-width:none;}
+.fileLabel {min-height:35px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;}
+@container (max-width:970px) {
   .headerGrid {grid-template-columns:repeat(6,minmax(0,1fr));}
   .headerGroup {grid-column:span 3 !important;}
+}
+@container (max-width:560px) {
+  .headerGrid {grid-template-columns:minmax(0,1fr);}
+  .headerGroup {grid-column:1 !important;}
 }

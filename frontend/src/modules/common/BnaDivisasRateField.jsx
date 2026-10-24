@@ -33,6 +33,7 @@ export default function BnaDivisasRateField({
   date,
   currency = "ARS",
   isNew = true,
+  compact = false,
 }) {
   const inputId = useId();
   const manuallyEdited = useRef(false);
@@ -122,7 +123,7 @@ export default function BnaDivisasRateField({
   };
 
   return (
-    <div className={s.field}>
+    <div className={`${s.field} ${compact ? s.compact : ""}`}>
       <label htmlFor={inputId}>T. CAMBIO <span className={s.tag}>BNA · DIVISAS VENTA</span></label>
       <div className={s.inputRow}>
         <input
@@ -153,9 +154,9 @@ export default function BnaDivisasRateField({
           error ? <span className={s.warning}>BNA: {error} Ingresá el TC verificado manualmente.</span> :
           !quote ? "Sin cotización verificada." :
           rateMatchesDate ?
-            <span>Banco Nación · Divisas vendedor USD {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} · {formatDate(quote.date)}{currency === "ARS" ? " · referencia USD/ARS" : ""}</span> :
+            compact ? null : <span>Banco Nación · Divisas vendedor USD {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} · {formatDate(quote.date)}{currency === "ARS" ? " · referencia USD/ARS" : ""}</span> :
           isLatestCloseForToday ?
-            <span className={s.warning}>Último cierre BNA divisas vendedor: {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} ({formatDate(quote.date)}). Cotización anterior a hoy: verificá antes de registrar el documento.</span> :
+            compact ? <span>Cierre BNA {formatDate(quote.date)}</span> : <span className={s.warning}>Último cierre BNA divisas vendedor: {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} ({formatDate(quote.date)}). Cotización anterior a hoy: verificá antes de registrar el documento.</span> :
             <span className={s.warning}>BNA publicó {formatDate(quote.date)}. No coincide con {formatDate(date)}; verificá el TC antes de facturar.</span>
         }
       </div>

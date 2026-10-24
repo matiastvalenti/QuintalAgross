@@ -70,13 +70,13 @@ export function ReceiptShell({
 // Exportamos también algunas cajas útiles para estandarizar los "sections" (ej. Payments Area, Params)
 // ------------------------------------
 
-export function ShellSection({ icon: Icon, title, children, toolbar, noPadding = false, style = {} }) {
+export function ShellSection({ icon: Icon, title, children, toolbar, noPadding = false, fullWidth = false, style = {} }) {
   return (
     <div className={s.sectionBox} style={style}>
       <div className={s.sectionHeader}>
         <h3>{Icon && <Icon size={16} />} {title}</h3>
       </div>
-      <div className={noPadding ? '' : s.parametersBody}>
+      <div className={noPadding ? '' : `${s.parametersBody} ${fullWidth ? s.fullWidthBody : ''}`}>
         {children}
       </div>
       {toolbar && (

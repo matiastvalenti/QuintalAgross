@@ -764,3 +764,54 @@
   .root .commercial > :global([class*="tabContent"]) {grid-template-columns: minmax(0,1fr) !important;}
   .root .commercial {grid-template-columns: minmax(0,1fr) !important;}
 }
+
+/* Renglón principal de conceptos, seguido de una banda de imputación de ancho
+   completo: los importes quedan alineados en una sola fila. */
+.lineDescription {min-width:0;display:flex;flex-direction:column;justify-content:center;gap:5px;}
+.root .items .lineDescription :global(input) {
+  display:block;
+  width:100%;
+  height:36px !important;
+  min-height:36px !important;
+  max-height:36px !important;
+  box-sizing:border-box;
+  padding:7px 10px !important;
+  font-size:12px;
+  font-weight:750;
+  text-align:left;
+}
+.packageDetail {font-size:10px;color:#b7c8df;font-weight:700;}
+.lineAccount {
+  grid-column:1/-1 !important;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  min-width:0;
+  border-top:1px solid #40516f;
+  padding:7px 0 1px;
+  margin-top:2px;
+}
+.lineAccountLabel {
+  flex:0 0 auto;
+  color:#b8c6df;
+  font-size:10px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.04em;
+}
+.accountControl {flex:0 1 360px;min-width:220px;max-width:440px;}
+.root .items .accountControl :global(select) {
+  width:100% !important;
+  height:33px !important;
+  min-height:33px !important;
+  max-height:33px !important;
+  color:#f8fafc !important;
+  background:#151f35 !important;
+  border:1px solid #465875 !important;
+}
+.lineOrigin {font-size:10px;color:#abbbd2;white-space:nowrap;}
+.root .items :global([class*="tableRow"]) {align-items:center !important;row-gap:3px;}
+@container (max-width:720px) {
+  .lineAccount {flex-wrap:wrap;}
+  .accountControl {min-width:160px;flex:1;}
+}

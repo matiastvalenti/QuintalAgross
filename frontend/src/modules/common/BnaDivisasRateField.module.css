@@ -89,3 +89,10 @@
   .field label { flex-wrap: wrap; white-space: normal; }
   .tag { font-size: 8px; }
 }
+
+/* Comprobantes: fuente BNA en una sola nota discreta, sin alerta visual. */
+.compact {min-height:0;gap:4px;}
+.compact .source:empty {display:none;}
+.compact .inputRow {height:32px;}
+.compact .inputRow input {height:32px !important;min-height:32px !important;max-height:32px !important;}
+.compact .refresh {height:32px;flex-basis:32px;}

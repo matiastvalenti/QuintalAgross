@@ -680,32 +680,18 @@ export default function PurchaseInvoiceForm(props) {
                                     
                                     return (
                                     <div key={item.id} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: 'minmax(150px, 2fr) 75px 75px 55px 90px 70px 60px 90px 50px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px' }}>
-                                        <div style={{ padding: '4px 0', overflow: 'hidden' }}>
-                                            <input 
-                                                type="text" 
-                                                className={s.tableInput} 
-                                                value={item.description || ''} 
-                                                onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)} 
-                                                placeholder="Ingrese concepto..."
-                                                style={{ fontWeight: 900, width: '100%', textAlign: 'left', background: 'transparent' }}
-
-                                            />
-                                            {item._unit_content && (
-                                                <div style={{ fontSize: 10, color: '#64748b', fontWeight: 700, marginTop: 2 }}>
-                                                    {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
-                                                </div>
-                                            )}
-                                            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 6, fontSize: 11 }}>
-                                                <span style={{ fontWeight: 800, color: '#475569' }}>Cuenta:</span>
-                                                <div style={{ flex: 1, minWidth: 0, maxWidth: 200 }}>
-                                                    <AccountSelector 
-                                                        value={item.accounting_account_id ?? ''} 
-                                                        onChange={(e) => handleUpdateItem(item.id, 'accounting_account_id', e.target.value)} 
-                                                        placeholder="Sin asignar"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <div className={w.lineDescription}>
+  <input type="text" className={s.tableInput}
+    value={item.description || ''}
+    onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)}
+    placeholder="Descripción del producto o concepto"
+  />
+  {item._unit_content && (
+    <span className={w.packageDetail}>
+      {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
+    </span>
+  )}
+</div>
                                         {/* ENVASES: el usuario ingresa cuántos bidones */}
                                         <input 
                                             type="number" 
@@ -738,6 +724,18 @@ export default function PurchaseInvoiceForm(props) {
                                             <button type="button" style={{ border: 'none', background: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }} onClick={() => setItems(items.filter(i => i.id !== item.id))} title="Eliminar línea">
                                                 <Trash2 size={16} />
                                             </button>
+                                        </div>
+                                        <div className={w.lineAccount}>
+                                          <span className={w.lineAccountLabel}>Cuenta contable</span>
+                                          <div className={w.accountControl}>
+                                            <AccountSelector
+                                              value={item.accounting_account_id ?? ''}
+                                              onChange={(e) => handleUpdateItem(item.id, 'accounting_account_id', e.target.value)}
+                                              placeholder="Seleccionar cuenta contable"
+                                              
+                                            />
+                                          </div>
+                                          
                                         </div>
                                     </div>
                                     );
@@ -884,6 +882,7 @@ export default function PurchaseInvoiceForm(props) {
                         </div>
                     ) : (
                         <BnaDivisasRateField
+                            compact
                             value={exchangeRate}
                             onChange={setExchangeRate}
                             date={date}

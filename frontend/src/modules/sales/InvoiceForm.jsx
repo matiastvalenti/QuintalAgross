@@ -1248,43 +1248,20 @@ export default function InvoiceForm(props) {
                                     
                                     return (
                                     <div key={item.id} className={`${s.tableRow} ${v.tableRow}`} style={{ gridTemplateColumns: 'minmax(200px, 1.8fr) 70px 80px 60px 80px 70px 60px 90px 30px', alignItems: 'flex-start', height: 'auto', minHeight: 48, padding: '8px 12px', background: isLocked ? '#f8fafc' : 'transparent', cursor: isLocked ? 'not-allowed' : 'default' }}>
-                                        <div style={{ padding: '4px 0', minWidth: 0, overflow: 'hidden', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                                            <input 
-                                                type="text" 
-                                                className={s.tableInput} 
-                                                value={item.description || ''} 
-                                                onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)} 
-                                                placeholder="Ingrese concepto..."
-                                                readOnly={isLocked}
-                                                style={{ fontWeight: 900, width: '100%', minWidth: 0, textAlign: 'left', background: 'transparent', color: isLocked ? '#334155' : 'inherit', cursor: isLocked ? 'not-allowed' : 'text', opacity: isLocked ? 0.9 : 1, textOverflow: 'ellipsis', whiteSpace: 'nowrap', overflow: 'hidden' }}
-                                                title={item.product_name || item.description || ''}
-                                            />
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px 12px', flexWrap: 'wrap' }}>
-                                                {item._unit_content && (
-                                                    <span style={{ fontSize: 10, color: '#64748b', fontWeight: 700 }}>
-                                                        {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
-                                                    </span>
-                                                )}
-                                                {isLocked && (
-                                                    <span style={{ fontSize: 10, color: '#94a3b8', fontWeight: 800 }}>
-                                                        &middot; {item.delivery_note_id || item.source_dn_line_id ? 'Desde Remito' : 'Desde OV'}
-                                                    </span>
-                                                )}
-                                                <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                                                    <span style={{ fontSize: 9, fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Cta:</span>
-                                                    <div style={{ width: 110 }}>
-                                                        <AccountSelector 
-                                                            value={item.accounting_account_id ?? ''} 
-                                                            onChange={(e) => handleUpdateItem(item.id, 'accounting_account_id', e.target.value)} 
-                                                            placeholder="Sin asignar"
-                                                            readOnly={item.accountLocked}
-                                                            style={{ opacity: item.accountLocked ? 0.8 : 1, cursor: item.accountLocked ? 'not-allowed' : 'pointer', background: item.accountLocked ? '#f1f5f9' : undefined }}
-                                                            title={item.accountLocked ? 'Cuenta configurada en el artículo' : ''}
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        <div className={w.lineDescription}>
+  <input type="text" className={s.tableInput}
+    value={item.description || ''}
+    onChange={(e) => handleUpdateItem(item.id, 'description', e.target.value)}
+    placeholder="Descripción del producto o concepto"
+    readOnly={isLocked}
+    title={item.product_name || item.description || ''}
+  />
+  {item._unit_content && (
+    <span className={w.packageDetail}>
+      {item.qty_packages || '?'} env × {item._unit_content} = {((item.qty_packages || 0) * item._unit_content).toLocaleString('es-AR', { maximumFractionDigits: 3 })} {item._unit_label || 'u'}
+    </span>
+  )}
+</div>
                                         {/* ENVASES: el usuario ingresa cuántos bidones */}
                                         <input 
                                             type="number" 
@@ -1323,6 +1300,18 @@ export default function InvoiceForm(props) {
                                                 <Trash2 size={16} />
                                             </button>
                                         )}
+                                        <div className={w.lineAccount}>
+                                          <span className={w.lineAccountLabel}>Cuenta contable</span>
+                                          <div className={w.accountControl}>
+                                            <AccountSelector
+                                              value={item.accounting_account_id ?? ''}
+                                              onChange={(e) => handleUpdateItem(item.id, 'accounting_account_id', e.target.value)}
+                                              placeholder="Seleccionar cuenta contable"
+                                              readOnly={item.accountLocked}
+                                            />
+                                          </div>
+                                          {isLocked && <span className={w.lineOrigin}>Origen: {item.delivery_note_id || item.source_dn_line_id ? 'Remito' : 'Orden de Venta'}</span>}
+                                        </div>
                                     </div>
                                     );
                                 })}
@@ -1561,6 +1550,7 @@ export default function InvoiceForm(props) {
                                     <ReadonlyField label="T. CAMBIO" value={exchangeRate} />
                                 ) : (
                                     <BnaDivisasRateField
+                            compact
                                         value={exchangeRate}
                                         onChange={setExchangeRate}
                                         date={date}

@@ -632,7 +632,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
             <strong>{entity ? entity.name : '-'}</strong>
           </div>
           <div className={s.headerStat}>
-            <span>Total Pagado</span>
+            <span>Total recibido</span>
             <strong style={{ color: 'var(--primary)' }}>{currency} {formatNumberAR(totalCollected)}</strong>
           </div>
         </div>
@@ -897,13 +897,6 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
                   </div>
                 )}
                 
-                <div className={s.summaryRow}>
-                  <span style={{ fontWeight: 500, color: '#334155' }}>Subtotal:</span>
-                  <span style={{ fontWeight: 500, color: '#334155' }}>
-                    {currency} {formatNumberAR(isAdvance ? 0 : totalApplied)}
-                  </span>
-                </div>
-
                 {totalCollected > 0 && (
                   <div style={{ paddingLeft: 12, borderLeft: '2px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: 8, margin: '8px 0' }}>
                     {totalCash > 0 && (

@@ -1083,3 +1083,85 @@
   background:#202c46 !important;color:#e4eaf6;border-color:#394861;
 }
 .container :is(.paymentTable th,table th) {background:#172239 !important;}
+
+/* Recibos: la cabecera de operación ocupa todo el ancho; debajo quedan las
+   facturas y los medios de cobro, con resumen y confirmar visibles a la derecha. */
+.container .header {padding:10px 18px;min-height:55px;gap:12px;}
+.container .headerLeft {gap:10px;}
+.container .iconWrap {height:34px;width:34px;}
+.container .headerTitle h2 {font-size:16px;}
+.container .headerTitle span {font-size:11px;}
+.container .headerRight {gap:16px;flex-wrap:wrap;}
+.container .headerStat span {font-size:10px;}
+.container .headerStat strong {font-size:13px;}
+.container .collectionBody {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(260px,300px);
+  gap:12px;
+  padding:12px 16px 24px;
+  align-items:start;
+}
+.container .leftColumn, .container .topLeft {display:contents;}
+.container .topLeft > .sectionBox:first-child {
+  grid-column:1/-1;
+  grid-row:1;
+  border-radius:10px;
+}
+.container .topLeft > .sectionBox:not(:first-child) {
+  grid-column:1;
+  grid-row:2;
+  border-radius:10px;
+  border-top:1px solid #394861 !important;
+}
+.container .paymentListArea {
+  grid-column:1;
+  grid-row:3;
+  min-height:190px;
+  max-height:none;
+}
+.container .summaryPanel {
+  grid-column:2;
+  grid-row:2 / span 2;
+  position:sticky;
+  top:10px;
+  align-self:start;
+  max-height:calc(100vh - 115px);
+  overflow-y:auto;
+}
+.container .parametersBody {
+  display:grid;
+  grid-template-columns:minmax(170px,1.15fr) minmax(230px,1.7fr) repeat(3,minmax(110px,.75fr));
+  gap:9px;
+  padding:11px 14px;
+}
+.container .sectionHeader {padding:9px 13px;}
+.container .sectionHeader h3 {font-size:13px;}
+.container .sectionBody {padding:10px 13px;}
+.container .paymentToolbar {display:flex;flex-wrap:wrap;gap:8px;padding:9px 13px;}
+.container .topLeft .sectionHeader button {
+  background:#302b58 !important;
+  color:#f8fafc !important;
+  border:1px solid #6456ab !important;
+  border-radius:8px !important;
+  font-weight:750 !important;
+}
+.container .summaryContent {padding:12px;}
+.container .summaryContent h3 {font-size:14px;}
+.container .summaryActions {margin-top:12px;}
+.container .paymentsCard {max-height:none;}
+@container (max-width:1120px) {
+  .container .parametersBody {grid-template-columns:repeat(3,minmax(0,1fr));}
+  .container .topLeft > .sectionBox:first-child {grid-column:1/-1;}
+}
+@container (max-width:940px) {
+  .container .collectionBody {grid-template-columns:minmax(0,1fr);gap:12px;padding:12px;}
+  .container .topLeft > .sectionBox:first-child {grid-column:1;grid-row:1;}
+  .container .topLeft > .sectionBox:not(:first-child) {grid-column:1;grid-row:2;}
+  .container .paymentListArea {grid-column:1;grid-row:3;}
+  .container .summaryPanel {grid-column:1;grid-row:4;position:static;max-height:none;}
+  .container .parametersBody {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@container (max-width:580px) {
+  .container .parametersBody {grid-template-columns:minmax(0,1fr);}
+  .container .headerRight {gap:9px;}
+}
