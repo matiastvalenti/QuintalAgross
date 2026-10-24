@@ -6,6 +6,7 @@
  * Compatible con window.open() — no depende de Electron.
  */
 import { useSearchParams, useParams } from "react-router-dom";
+import { useMemo } from "react";
 import { useAuth } from "../../context/AuthContext";
 import SalesOrderForm from "./SalesOrderForm";
 import LoadingScreen from "../../components/ui/LoadingScreen";
@@ -35,6 +36,16 @@ export default function OrdenVentaStandalonePage() {
   const { id: pathId } = useParams();
   const id = pathId || searchParams.get("id");
   const mode = id ? "edit" : "new";
+  const draftId = searchParams.get("draft_id");
+  const initialData = useMemo(() => {
+    if (!draftId || id) return null;
+    try {
+      const value = localStorage.getItem("sales_order_draft_" + draftId);
+      return value ? JSON.parse(value) : null;
+    } catch {
+      return null;
+    }
+  }, [draftId, id]);
 
   return (
     <StandaloneGuard>
@@ -42,6 +53,7 @@ export default function OrdenVentaStandalonePage() {
         mode={mode}
         id={id || null}
         isStandalone={true}
+        initialData={initialData}
       />
     </StandaloneGuard>
   );

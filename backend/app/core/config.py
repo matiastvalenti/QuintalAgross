@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     
+    # Gemini: solo modelos con nivel gratuito. La clave vive exclusivamente en backend/.env.
+    GEMINI_API_KEY: str = ""
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
+
     # CORS
     CORS_ORIGINS: list = ["*"]
     

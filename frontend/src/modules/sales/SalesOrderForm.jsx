@@ -139,6 +139,9 @@ export default function SalesOrderForm(props) {
   // ── AI Assistant: Pre-fill from initialData/initialLines ──
   useEffect(() => {
     if (mode === "new") {
+      if (initialData?.currency === "ARS" || initialData?.currency === "USD") {
+        setCurrency(initialData.currency);
+      }
       if (initialData?.entity_id) {
         const token = localStorage.getItem('token');
         fetch(`${API_URL}/entities/${initialData.entity_id}`, { headers: { Authorization: `Bearer ${token}` }})

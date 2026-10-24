@@ -172,7 +172,11 @@ export function openEditNotaCreditoCompra(id, options = {}) {
 }
 // === ÓRDENES DE COMPRA ===
 export function openNuevaOrdenCompra(options = {}) {
-  return openStandaloneWindow("/standalone/ordenes-compra/nueva", "orden-compra-nueva", options);
+  const { draft_id, ...windowOptions } = options;
+  const path = draft_id
+    ? "/standalone/ordenes-compra/nueva?draft_id=" + encodeURIComponent(draft_id)
+    : "/standalone/ordenes-compra/nueva";
+  return openStandaloneWindow(path, draft_id ? "oc-draft-" + draft_id : "orden-compra-nueva", { ...DOCUMENT_WINDOW, ...windowOptions });
 }
 
 export function openEditPurchaseOrder(id, options = {}) {
