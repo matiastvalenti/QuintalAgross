@@ -21,7 +21,7 @@ productos **en la base local** del ERP. Nunca registra documentos automáticamen
 5. Probá con datos ficticios: «Orden de venta para Cliente de Prueba,
    500 litros de Producto de Prueba a USD 12,5».
 
-El endpoint autenticado `GET /api/ai/status` permite ver si la clave está configurada.
+El endpoint autenticado `GET http://localhost:8000/ai/status` permite ver si la clave está configurada.
 
 ## Alcance
 
