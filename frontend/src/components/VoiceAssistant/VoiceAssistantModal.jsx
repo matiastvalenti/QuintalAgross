@@ -6,9 +6,7 @@ import {
 import s from './VoiceAssistantModal.module.css';
 import api from '../../services/api';
 import { useToast } from '../../context/ToastContext';
-import {
-    openNuevaOrdenVenta, openNuevaOrdenCompra, openNuevoRecibo, openNuevoPago
-} from '../../utils/openStandaloneWindow';
+import { useWindow } from '../../context/WindowContext';
 
 const OPERATIONS = {
     sales_order: { label: 'Orden de venta', open: 'Abrir orden de venta' },
@@ -25,24 +23,56 @@ const PURCHASE_DOCUMENTS = ['purchase_order', 'purchase_invoice'];
 const NEEDS_PREVIOUS_ORDER = ['sales_invoice', 'purchase_invoice', 'sales_delivery_note'];
 const formatNumber = value => value == null ? 'Sin indicar' : Number(value).toLocaleString('es-AR', { maximumFractionDigits: 3 });
 
+const normalizeUnit = value => String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const isPackageUnit = unit => /\b(bidones?|bolsas?|frascos?|tambores?|envases?|cajas?|packs?|paquetes?)\b/i.test(normalizeUnit(unit));
+const requestedKind = unit => {
+    const normalized = normalizeUnit(unit);
+    if (/\b(l|lt|lts|litros?)\b/.test(normalized)) return 'L';
+    if (/\b(kg|kgs|kilos?|kilogramos?)\b/.test(normalized)) return 'KG';
+    return null;
+};
+const catalogKind = unit => {
+    const normalized = normalizeUnit(unit);
+    if (/^(l|lt|lts|litros?)$/.test(normalized)) return 'L';
+    if (/^(kg|kgs|kilos?|kilogramos?)$/.test(normalized)) return 'KG';
+    return null;
+};
+const incompatibleUnit = line => {
+    const asked = requestedKind(line.unit);
+    const configured = catalogKind(line.unit_of_measure);
+    return Boolean(asked && configured && asked !== configured);
+};
+const packageCount = line => {
+    const factor = Number(line.quantity_per_container);
+    const qty = Number(line.quantity);
+    if (!(factor > 0) || !(qty > 0)) return null;
+    return isPackageUnit(line.unit) ? qty : qty / factor;
+};
+
 function toDraftLine(line) {
-    const isContainer = /bid[oó]n|bolsa|frasco|tambor|envase|caja|pack/i.test(line.unit || '');
-    const factor = Number(line.quantity_per_container) > 0 ? Number(line.quantity_per_container) : 1;
-    const requestedQty = Number(line.quantity || 0);
-    const qty = isContainer ? requestedQty * factor : requestedQty;
+    const factor = Number(line.quantity_per_container);
+    const requestedQty = Number(line.quantity);
+    const qty = isPackageUnit(line.unit) ? requestedQty * factor : requestedQty;
     return {
-        product_id: line.product_id || null,
-        name: line.product_name || line.product_query || '',
-        description: line.product_name || line.product_query || '',
+        product_id: line.product_id,
+        name: line.product_name,
+        description: line.product_name,
         qty,
-        qty_packages: isContainer ? requestedQty : qty / factor,
+        qty_packages: packageCount(line),
         _unit_content: factor,
+        _unit_label: line.unit_of_measure || 'u',
+        vat_rate: line.vat_rate ?? 0.21,
         unit_price: Number(line.unit_price || 0),
     };
 }
 
 export default function VoiceAssistantModal({ isOpen, onClose }) {
     const { showToast } = useToast();
+    const { openWindow } = useWindow();
+    const [productQueries, setProductQueries] = useState({});
+    const [productResults, setProductResults] = useState({});
+    const [searchingProducts, setSearchingProducts] = useState({});
+    const [editingProducts, setEditingProducts] = useState({});
     const [isListening, setIsListening] = useState(false);
     const [promptText, setPromptText] = useState('');
     const [status, setStatus] = useState('LISTO PARA INTERPRETAR');
@@ -120,6 +150,9 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
         try {
             const result = await api.post('/ai/parse-prompt', { prompt });
             setParsed(result);
+            setProductQueries(Object.fromEntries((result.lines || []).map((line, index) => [index, line.product_query || ''])));
+            setProductResults(Object.fromEntries((result.lines || []).map((line, index) => [index, line.product_candidates || []])));
+            setEditingProducts({});
             setStatus('INTERPRETACIÓN LISTA · REVISÁ LOS DATOS');
         } catch (err) {
             setError(err?.message || 'No se pudo interpretar el pedido.');
@@ -129,50 +162,101 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
         }
     };
 
+    const searchCatalog = async index => {
+        const q = String(productQueries[index] || '').trim();
+        if (q.length < 2) {
+            setError('Escribí al menos dos letras del producto que buscás.');
+            return;
+        }
+        setSearchingProducts(prev => ({ ...prev, [index]: true }));
+        setError('');
+        try {
+            const matches = await api.get('/ai/catalog-products', { params: { q } });
+            setProductResults(prev => ({ ...prev, [index]: matches }));
+        } catch (err) {
+            setError(err?.message || 'No se pudo buscar en el catálogo.');
+        } finally {
+            setSearchingProducts(prev => ({ ...prev, [index]: false }));
+        }
+    };
+
+    const chooseProduct = (index, product) => {
+        setParsed(prev => ({
+            ...prev,
+            lines: (prev.lines || []).map((line, position) => position !== index ? line : ({
+                ...line,
+                product_id: product.id,
+                product_name: product.name,
+                quantity_per_container: product.quantity_per_container,
+                unit_of_measure: product.unit_of_measure,
+                container_name: product.container_name,
+                vat_rate: product.vat_rate,
+                packaging_needs_review: product.packaging_needs_review,
+                warnings: [
+                    ...(line.warnings || []).filter(item => !/producto sin coincidencia|envase tienen capacidades/i.test(item)),
+                    ...(product.packaging_needs_review ? ['El producto y su envase tienen capacidades distintas: corregilo en Productos.'] : []),
+                ],
+            })),
+        }));
+        setProductResults(prev => ({ ...prev, [index]: [] }));
+        setEditingProducts(prev => ({ ...prev, [index]: false }));
+        setError('');
+    };
+
     const handleOpen = () => {
         if (!parsed || parsed.operation_type === 'unknown') return;
         const operation = parsed.operation_type;
         const entityId = parsed.entity_id || null;
-        let opened = null;
-        let draftKey = null;
-
-        if (SALES_DOCUMENTS.includes(operation) || PURCHASE_DOCUMENTS.includes(operation)) {
-            const isPurchase = PURCHASE_DOCUMENTS.includes(operation);
-            const draftId = crypto.randomUUID();
-            draftKey = isPurchase ? 'purchase_order_draft_' + draftId : 'sales_order_draft_' + draftId;
-            const currencies = [...new Set((parsed.lines || []).map(line => line.currency).filter(Boolean))];
+        const isPurchase = PURCHASE_DOCUMENTS.includes(operation);
+        const isOrder = SALES_DOCUMENTS.includes(operation) || isPurchase;
+        if (isOrder) {
+            const lines = parsed.lines || [];
+            if (!lines.length) {
+                setError('No hay renglones para crear la orden. Volvé a interpretar el pedido.');
+                return;
+            }
+            if (lines.some(line => !line.product_id || !(Number(line.quantity) > 0) ||
+                !(Number(line.quantity_per_container) > 0) || line.packaging_needs_review || incompatibleUnit(line))) {
+                setError('Vinculá todos los productos reales, verificá sus cantidades y envases antes de abrir la orden. No se crearán conceptos ni unidades ficticias.');
+                return;
+            }
+            const currencies = [...new Set(lines.map(line => line.currency).filter(Boolean))];
+            if (currencies.length > 1) {
+                setError('El documento tiene distintas monedas. Separá las órdenes o corregí los precios.');
+                return;
+            }
             const draft = {
                 entity_id: entityId,
                 currency: currencies.length === 1 ? currencies[0] : undefined,
                 salesperson_id: parsed.salesperson_id || null,
                 sale_condition_id: parsed.condition_id || null,
-                lines: (parsed.lines || []).map(toDraftLine),
+                lines: lines.map(toDraftLine),
                 source: 'gemini-assistant',
             };
-            try {
-                localStorage.setItem(draftKey, JSON.stringify(draft));
-                opened = isPurchase
-                    ? openNuevaOrdenCompra({ draft_id: draftId })
-                    : openNuevaOrdenVenta({ draft_id: draftId });
-            } catch {
-                setError('No se pudo preparar el borrador en este navegador.');
-                return;
-            }
-        } else if (operation === 'receipt') {
-            opened = openNuevoRecibo({ entityId });
-        } else if (operation === 'payment') {
-            opened = openNuevoPago({ entityId });
-        }
-
-        if (!opened) {
-            if (draftKey) localStorage.removeItem(draftKey);
-            setError('No se abrió el formulario. Permití las ventanas emergentes para este sitio.');
+            openWindow(isPurchase ? 'purchase-order' : 'sales-order',
+                { mode: 'new', initialData: draft },
+                {
+                    title: isPurchase ? 'Nueva orden de compra · Asistente' : 'Nueva orden de venta · Asistente',
+                    width: 1280, height: 690, minWidth: 720, minHeight: 470,
+                    allowMultiple: true, singletonKey: `ai-order-${crypto.randomUUID()}`,
+                }
+            );
+        } else if (operation === 'receipt' || operation === 'payment') {
+            openWindow('receipt-form',
+                { mode: 'new', initialEntityId: entityId, isPayment: operation === 'payment' },
+                {
+                    title: operation === 'payment' ? 'Nueva orden de pago · Asistente' : 'Nuevo recibo · Asistente',
+                    width: 1280, height: 690, minWidth: 720, minHeight: 470,
+                    allowMultiple: true, singletonKey: `ai-receipt-${crypto.randomUUID()}`,
+                }
+            );
+        } else {
+            setError('No se pudo identificar el formulario que corresponde.');
             return;
         }
-        const message = NEEDS_PREVIOUS_ORDER.includes(operation)
-            ? 'Abrimos la orden previa: el circuito comercial requiere esa orden antes del documento solicitado.'
-            : 'Formulario abierto. Revisá y completá los datos antes de guardar.';
-        showToast(message, 'info');
+        showToast(NEEDS_PREVIOUS_ORDER.includes(operation)
+            ? 'Orden previa abierta dentro del sistema: completá y guardá antes del siguiente documento.'
+            : 'Formulario abierto dentro del sistema. Revisá los datos antes de guardar.', 'info');
         setPromptText('');
         setParsed(null);
         setError('');
@@ -186,7 +270,13 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
     const isOrder = SALES_DOCUMENTS.includes(operation) || PURCHASE_DOCUMENTS.includes(operation);
     const hasMissingMatches = parsed && (
         (isOrder && !parsed.entity_id) ||
-        (parsed.lines || []).some(line => !line.product_id || !line.quantity || line.unit_price == null)
+        (parsed.lines || []).some(line => !line.product_id || !line.quantity ||
+            line.unit_price == null || line.packaging_needs_review || incompatibleUnit(line))
+    );
+    const blockedProducts = isOrder && (
+        !(parsed.lines || []).length ||
+        (parsed.lines || []).some(line => !line.product_id || !(Number(line.quantity) > 0) ||
+            line.packaging_needs_review || incompatibleUnit(line))
     );
 
     return (
@@ -257,12 +347,44 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
                                         <div className={s.lineTitle}>
                                             <strong>{line.product_name || line.product_query || 'Producto sin nombre'}</strong>
                                             {!line.product_id && <span className={s.unmatched}>Sin vincular</span>}
+                                            <button type="button" className={s.changeProduct} onClick={() => setEditingProducts(prev => ({ ...prev, [index]: !prev[index] }))}>
+                                                {editingProducts[index] ? 'Ocultar búsqueda' : line.product_id ? 'Cambiar producto' : 'Buscar en catálogo'}
+                                            </button>
                                         </div>
                                         <span>
                                             {formatNumber(line.quantity)} {line.unit || 'unid.'} ·
                                             {' '}{line.currency || '$'} {formatNumber(line.unit_price)} c/u
                                         </span>
+                                        {line.product_id && <span className={s.packageDetail}>
+                                            Catálogo: {formatNumber(packageCount(line))} envase(s) × {formatNumber(line.quantity_per_container)} {line.unit_of_measure || 'u'} = {formatNumber(isPackageUnit(line.unit) ? Number(line.quantity) * Number(line.quantity_per_container) : line.quantity)} {line.unit_of_measure || 'u'}
+                                        </span>}
+                                        {incompatibleUnit(line) && <small>La unidad solicitada no coincide con la del producto. Revisá la selección.</small>}
                                         {line.warnings?.length > 0 && <small>{line.warnings.join(' · ')}</small>}
+                                        {(!line.product_id || editingProducts[index]) && (
+                                            <div className={s.catalogPicker}>
+                                                <div className={s.catalogSearch}>
+                                                    <input
+                                                        aria-label={`Buscar producto del renglón ${index + 1}`}
+                                                        placeholder="Nombre, marca o SKU del catálogo..."
+                                                        value={productQueries[index] || ''}
+                                                        onChange={event => setProductQueries(prev => ({ ...prev, [index]: event.target.value }))}
+                                                        onKeyDown={event => { if (event.key === 'Enter') { event.preventDefault(); searchCatalog(index); } }}
+                                                    />
+                                                    <button type="button" onClick={() => searchCatalog(index)} disabled={searchingProducts[index]}>
+                                                        {searchingProducts[index] ? 'Buscando...' : 'Buscar'}
+                                                    </button>
+                                                </div>
+                                                <div className={s.catalogResults}>
+                                                    {(productResults[index] || []).map(product => (
+                                                        <button key={product.id} type="button" className={s.catalogResult} onClick={() => chooseProduct(index, product)}>
+                                                            <strong>{product.name}</strong>
+                                                            <span>{product.container_name || 'Envase'} · {formatNumber(product.quantity_per_container)} {product.unit_of_measure || 'u'}{product.sku ? ` · SKU ${product.sku}` : ''}</span>
+                                                        </button>
+                                                    ))}
+                                                    {(productResults[index] || []).length === 0 && <small>Buscá por nombre o SKU. Solo se pueden vincular productos existentes.</small>}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -276,7 +398,9 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
                         {hasMissingMatches && (
                             <div className={s.notice}>
                                 <AlertTriangle size={16} /> Hay datos incompletos o sin vincular.
-                                El formulario abrirá con estos campos para que los corrijas.
+                                {blockedProducts
+                                    ? 'Vinculá y verificá los productos antes de abrir. Así evitamos cantidades o envases incorrectos.'
+                                    : 'El cliente o algún precio se completará manualmente dentro del formulario.'}
                             </div>
                         )}
                         {(parsed.warnings || []).map((warning, index) => (
@@ -313,7 +437,7 @@ export default function VoiceAssistantModal({ isOpen, onClose }) {
                             {isParsing ? 'INTERPRETANDO...' : 'INTERPRETAR CON GEMINI'}
                         </button>
                     ) : (
-                        <button className={s.confirmBtn} onClick={handleOpen} disabled={operation === 'unknown'}>
+                        <button className={s.confirmBtn} onClick={handleOpen} disabled={operation === 'unknown' || blockedProducts}>
                             <ArrowRight size={19} /> {operationInfo.open}
                         </button>
                     )}

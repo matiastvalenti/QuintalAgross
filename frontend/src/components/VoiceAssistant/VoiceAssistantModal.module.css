@@ -145,3 +145,69 @@
     .title { font-size: 20px; }
     .textArea { font-size: 13px; }
 }
+
+/* Vinculación explícita de artículos: no se generan conceptos inventados. */
+.catalogPicker {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 8px;
+    padding: 10px;
+    background: #10192d;
+    border: 1px solid #394866;
+    border-radius: 10px;
+}
+.catalogSearch { display: flex; gap: 8px; min-width: 0; }
+.catalogSearch input {
+    flex: 1;
+    min-width: 0;
+    padding: 9px 11px;
+    color: #f4f6ff;
+    background: #0b1426;
+    border: 1px solid #506184;
+    border-radius: 8px;
+    font: inherit;
+}
+.catalogSearch input:focus { outline: 2px solid #8d7bea; outline-offset: 1px; }
+.catalogSearch button {
+    padding: 8px 13px;
+    color: #fff;
+    font-weight: 700;
+    background: #5b50aa;
+    border: 1px solid #8177d0;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.catalogSearch button:disabled { opacity: .45; cursor: wait; }
+.catalogResults { display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto; }
+.catalogResult {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+    padding: 10px;
+    color: #e7ecff;
+    background: #1c2942;
+    border: 1px solid #3a4b70;
+    border-radius: 8px;
+    cursor: pointer;
+}
+.catalogResult:hover { border-color: #a699ef; background: #283859; }
+.catalogResult strong { flex: 1; }
+.catalogResult span { color: #c2cdec; font-size: 11px; }
+.packageDetail { color: #83e7c5; font-size: 12px; }
+@media (max-width: 540px) {
+    .catalogResult { flex-direction: column; }
+}
+
+.changeProduct {
+    color: #c9bcff;
+    background: transparent;
+    border: 1px solid #655b9e;
+    border-radius: 7px;
+    font-size: 11px;
+    padding: 4px 7px;
+    cursor: pointer;
+}
+.changeProduct:hover { color: #fff; border-color: #aea2ff; }

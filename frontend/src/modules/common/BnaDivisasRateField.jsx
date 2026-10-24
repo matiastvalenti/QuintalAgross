@@ -24,7 +24,7 @@ const formatDate = (iso) => {
  *
  * En comprobantes nuevos completa el TC cuando coincide con el día del
  * comprobante o, si es hoy, con el último cierre oficialmente publicado.
- * Los cierres anteriores se muestran con advertencia visible.
+ * El último cierre publicado puede completar el TC sin mostrar avisos de antigüedad.
  * Nunca modifica facturas existentes ni una cotización ingresada manualmente.
  */
 export default function BnaDivisasRateField({
@@ -155,9 +155,7 @@ export default function BnaDivisasRateField({
           !quote ? "Sin cotización verificada." :
           rateMatchesDate ?
             compact ? null : <span>Banco Nación · Divisas vendedor USD {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} · {formatDate(quote.date)}{currency === "ARS" ? " · referencia USD/ARS" : ""}</span> :
-          isLatestCloseForToday ?
-            compact ? <span>Cierre BNA {formatDate(quote.date)}</span> : <span className={s.warning}>Último cierre BNA divisas vendedor: {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} ({formatDate(quote.date)}). Cotización anterior a hoy: verificá antes de registrar el documento.</span> :
-            <span className={s.warning}>BNA publicó {formatDate(quote.date)}. No coincide con {formatDate(date)}; verificá el TC antes de facturar.</span>
+          null
         }
       </div>
     </div>

@@ -170,7 +170,7 @@ export default function SalesOrderForm(props) {
           discount_pct: Number(l.discount_pct ?? 0),
           vat_rate: l.vat_rate ?? 0.21,
           _unit_content: Number(l._unit_content ?? l.package_size ?? l.quantity_per_container ?? 1) || 1,
-          _unit_label: 'u',
+          _unit_label: l._unit_label || l.unit_of_measure || 'u',
         }));
         if (mappedLines.length > 0) setItems(mappedLines);
       }

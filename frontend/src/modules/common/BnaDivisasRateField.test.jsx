@@ -44,7 +44,7 @@ describe("cotización oficial BNA divisas vendedor", () => {
     expect(screen.getByRole("status")).toHaveTextContent("22/10/2026");
   });
 
-  it("para comprobantes de hoy carga último cierre publicado con advertencia", async () => {
+  it("para comprobantes de hoy carga último cierre publicado sin aviso de antigüedad", async () => {
     const today = argentinaToday();
     const yesterday = new Date(`${today}T12:00:00Z`);
     yesterday.setUTCDate(yesterday.getUTCDate() - 1);
@@ -52,8 +52,8 @@ describe("cotización oficial BNA divisas vendedor", () => {
     vi.stubGlobal("fetch", vi.fn(async () => published(previousDate, 1530)));
     render(<Form date={today} currency="USD" />);
     await waitFor(() => expect(screen.getByRole("spinbutton")).toHaveValue(1530));
-    expect(screen.getByRole("status")).toHaveTextContent("Último cierre");
-    expect(screen.getByRole("status")).toHaveTextContent("anterior a hoy");
+    expect(screen.getByRole("status")).not.toHaveTextContent("Último cierre");
+    expect(screen.getByRole("status")).not.toHaveTextContent("anterior a hoy");
   });
 
   it("no acepta otra fuente ni inventa un tipo de cambio si BNA falla", async () => {
