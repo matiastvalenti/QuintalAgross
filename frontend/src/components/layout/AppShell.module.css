@@ -5,7 +5,7 @@
     width: 100vw;
     overflow: hidden;
     /* No global scroll */
-    background: var(--bg-page);
+    background: #101729; /* mismo lienzo que los módulos oscuros */
 }
 
 .mainArea {
@@ -27,6 +27,7 @@
     overflow-x: hidden;
     /* No horizontal scroll */
     width: 100%;
+    background: #101729;
     padding: 16px 20px;
     /* Consistent padding - compacted */
     display: flex;
