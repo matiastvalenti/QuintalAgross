@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ContentHeader from '../../components/layout/ContentHeader';
+import financeStyles from './FinanceDocumentList.module.css';
 import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import Card from '../../components/ui/Card';
@@ -138,7 +139,7 @@ export default function PaymentsPage() {
   if (error) return <ErrorState message={error} onRetry={() => fetchData()} />;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', overflow: 'hidden' }}>
+    <div className={financeStyles.page} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', overflow: 'hidden' }}>
       <div style={{ padding: '20px 24px 0 24px' }}>
         <ContentHeader 
           title="Órdenes de Pago" 

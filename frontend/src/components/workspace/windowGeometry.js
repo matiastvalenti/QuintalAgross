@@ -1,6 +1,6 @@
-// Medidas comunes al escritorio interno: el dock ocupa los últimos 40 px.
+// Medidas comunes al escritorio interno: el dock ocupa los últimos 58 px.
 // Ningún documento debe abrirse con la barra inferior por debajo del dock.
-export const DOCK_HEIGHT = 40;
+export const DOCK_HEIGHT = 58;
 export const WINDOW_MARGIN = 10;
 
 export function clampWindowBounds(win, viewportWidth, viewportHeight) {

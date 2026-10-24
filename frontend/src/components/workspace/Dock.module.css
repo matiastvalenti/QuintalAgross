@@ -1,91 +1,86 @@
+/* Barra de tareas del escritorio: siempre localizable, incluso con otra ventana encima. */
 .dockContainer {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 40px;
-    background: rgba(255, 255, 255, 0.9);
-    border-top: 1px solid var(--border-color);
-    display: flex;
-    align-items: center;
-    padding: 0 16px;
-    gap: 8px;
-    z-index: 9999;
-    /* Topmost */
-    backdrop-filter: blur(4px);
+  position: fixed;
+  bottom: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(96vw, 1100px);
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1px solid #4b5d80;
+  border-radius: 11px;
+  background: rgba(15, 23, 42, .98);
+  color: #e4eaf6;
+  box-shadow: 0 12px 32px rgba(0,0,0,.38);
+  z-index: 99999;
+  pointer-events: auto;
 }
-
+.dockLabel {
+  padding: 0 6px;
+  color: #a7b6ce;
+  font-size: 10px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.windowList {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-color: #566989 transparent;
+}
 .chip {
-    height: 30px;
-    padding: 0 12px;
-    background: white;
-    border: 1px solid var(--border-color);
-    border-radius: var(--r-sm);
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    cursor: pointer;
-    font-size: 12px;
-    color: var(--text-secondary);
-    transition: all 100ms;
-    max-width: 160px;
-    user-select: none;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border: 1px solid #465875;
+  border-radius: 8px;
+  background: #263451;
+  color: #e3ebfa;
 }
-
-.chip:hover {
-    background: var(--bg-page);
-    color: var(--text);
+.chip.active { background: #382e68; border-color: #9983ff; }
+.chip.minimized { border-style: dashed; border-color: #8192b5; }
+.windowButton, .closeButton {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 27px;
 }
-
-.chip.active {
-    background: var(--primary-light);
-    color: var(--primary-text);
-    border-color: var(--primary);
-    font-weight: 500;
+.windowButton { gap: 7px; padding: 4px 5px 4px 9px; max-width: 235px; }
+.closeButton { width: 26px; border-radius: 0 7px 7px 0; color: #a9b7cb; }
+.windowButton:hover, .closeButton:hover { background: #435174; color: white; }
+.windowButton:focus-visible, .closeButton:focus-visible {
+  outline: 2px solid #c6baff;
+  outline-offset: 2px;
 }
-
-.chip.minimized {
-    opacity: 0.7;
-    border-style: dashed;
-}
-
-.icon {
-    font-size: 14px;
-}
-
 .title {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  font-weight: 700;
 }
-/* Bandeja contextual: sólo documentos minimizados, sin franja blanca a lo ancho. */
-.dockContainer {
-    position: absolute;
-    bottom: 10px;
-    left: 50%;
-    right: auto;
-    transform: translateX(-50%);
-    width: max-content;
-    max-width: min(94vw, 900px);
-    min-height: 44px;
-    height: auto;
-    padding: 6px 8px;
-    border: 1px solid #41516d;
-    border-radius: 12px;
-    background: rgba(20, 29, 49, 0.96);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
-    overflow-x: auto;
-    overflow-y: hidden;
-    backdrop-filter: blur(8px);
+.minimizedBadge {
+  color: #c7b8ff;
+  font-size: 9px;
+  font-weight: 800;
 }
-.chip {
-    flex: 0 0 auto;
-    min-height: 30px;
-    border-radius: 8px;
-    border: 1px solid #465874;
-    background: #263451;
-    color: #e3ebfa;
+@media (max-width: 650px) {
+  .dockContainer { left: 8px; right: 8px; transform: none; max-width: none; }
+  .dockLabel { display: none; }
+  .windowList { flex: 1; }
 }
-.chip:hover {background: #36496d;color:#fff;}
-.chip.minimized {opacity:1;border-style:solid;}
-.title {color: inherit;}

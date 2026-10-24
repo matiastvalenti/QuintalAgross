@@ -1045,3 +1045,41 @@
   .header { flex-wrap: wrap; gap: 12px; }
   .headerRight { flex-wrap: wrap; gap: 16px; }
 }
+
+/* Oscuro consistente incluso en las secciones antiguas de cobranzas. */
+.container {
+  --border:#394861;
+  --bg-light:#253551;
+  --text-primary:#f8fafc;
+  --muted:#a9b9d0;
+}
+.container :is(.summaryPanel,.paymentsCard,.sectionBox,.paymentTable,.paymentLineCard,.checkCard,.subModal,.modalCard,.appliedDocumentRow,.appliedDocRow,.actionsBar,.tableWrap,.invCard) {
+  background:#202c46 !important;
+  color:#f8fafc !important;
+  border-color:#394861 !important;
+  box-shadow:none;
+}
+.container :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),select,textarea) {
+  background:#151f35 !important;
+  color:#f8fafc !important;
+  -webkit-text-fill-color:#f8fafc;
+  border:1px solid #465875 !important;
+  color-scheme:dark;
+}
+.container :is(.appliedDocCell,.appliedDocCellAmount,.appliedDocCellMain,.appliedDocMain,.invCard) :is(span,strong) {
+  color:#e4eaf6 !important;
+}
+.container :is(.sectionHeader,.paymentTableHeader,.modalFooter,.subModalFooter,.summaryActions,.actionsBar) {
+  background:#273551 !important;
+  border-color:#394861 !important;
+}
+.container :is(.actionBtn,.secondaryActionBtn,.secondaryButton,.dangerActionBtn,.btnSecondary) {
+  background:#273551 !important;color:#f8fafc !important;border-color:#465875 !important;
+}
+.container :is(.primaryActionBtn,.primaryButton,.btnPrimary) {
+  background:#6955cf !important;color:#fff !important;border-color:#8e7ae8 !important;
+}
+.container :is(.paymentTable th,.paymentTable td,table th,table td) {
+  background:#202c46 !important;color:#e4eaf6;border-color:#394861;
+}
+.container :is(.paymentTable th,table th) {background:#172239 !important;}

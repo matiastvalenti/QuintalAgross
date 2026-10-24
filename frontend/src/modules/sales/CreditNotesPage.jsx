@@ -547,6 +547,7 @@ export default function CreditNotesPage() {
   return (
     <>
       <DocumentListPage 
+        theme="quintal"
         title="Libro de Notas de Crédito"
         breadcrumbs={[{ label: 'Suite Comercial' }, { label: 'Notas de Crédito' }]}
         kpis={kpis}

@@ -866,3 +866,44 @@
   font-size: 13px;
 }
 .quintalTheme .tableEmptyContent button {margin-top: 4px !important;}
+
+/* 2026-10-24: listados comerciales más compactos y legibles. */
+.quintalTheme {
+  padding:18px 22px 28px;
+  gap:12px;
+}
+.quintalTheme .kpiRow {
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:10px;
+  margin:0;
+}
+.quintalTheme .kpiCard {
+  min-width:0;
+  min-height:85px;
+  padding:12px 15px;
+  border-radius:11px;
+  box-shadow:none;
+}
+.quintalTheme .kpiHeader {font-size:10px;letter-spacing:.07em;}
+.quintalTheme .kpiValue {font-size:21px;line-height:1.15;}
+.quintalTheme .kpiSub {font-size:10px;}
+.quintalTheme .toolbar {padding:11px 13px;gap:10px;border-radius:11px;box-shadow:none;}
+.quintalTheme .toolbarMain {gap:9px;}
+.quintalTheme .searchWrap {min-width:230px;max-width:520px;}
+.quintalTheme .searchWrap input {height:37px;font-size:12px;border-radius:8px;}
+.quintalTheme :is(.filterToggle,.ghostBtn,.primaryCta) {min-height:35px;border-radius:8px;}
+.quintalTheme .cardTable {min-height:0;border-radius:11px;box-shadow:none;}
+.quintalTheme .tableWrap {overflow-x:auto;}
+.quintalTheme .th {padding:11px 12px;font-size:10px;white-space:nowrap;}
+.quintalTheme .td {padding:10px 12px;font-size:12px;}
+.quintalTheme .paginationBar {padding:9px 12px;box-shadow:none;}
+@media (max-width:1150px) {
+  .quintalTheme .kpiRow {grid-template-columns:repeat(2,minmax(0,1fr));}
+}
+@media (max-width:640px) {
+  .quintalTheme {padding:12px;}
+  .quintalTheme .kpiRow {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .quintalTheme .toolbarMain {flex-wrap:wrap;}
+  .quintalTheme .searchWrap {min-width:0;flex-basis:100%;}
+}

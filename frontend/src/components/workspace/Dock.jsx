@@ -1,36 +1,46 @@
 import React from 'react';
+import { FileText, X } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
 import s from './Dock.module.css';
 
+/**
+ * Barra permanente de tareas cuando hay varias ventanas (o alguna minimizada).
+ * Una ventana minimizada nunca desaparece: queda disponible para restaurar.
+ */
 export default function Dock() {
-    const { windows, focusWindow, closeWindow } = useWindow();
-    const minimizedWindows = windows.filter(w => w.isMinimized);
-    
-    // No ocupar toda la parte inferior si las ventanas están abiertas.
-    // El dock aparece únicamente cuando hay documentos minimizados.
-    if (minimizedWindows.length === 0) return null;
+  const { windows, activeId, focusWindow, closeWindow } = useWindow();
+  if (!windows.length || (windows.length === 1 && !windows[0].isMinimized)) return null;
 
-    return (
-        <div className={s.dockContainer}>
-            {minimizedWindows.map(w => {
-                 return (
-                     <div 
-                        key={w.id} 
-                        className={`${s.chip} ${s.minimized}`}
-                        onClick={() => focusWindow(w.id)}
-                        onMouseDown={(e) => {
-                            if (e.button === 1) { // Middle click
-                                e.preventDefault();
-                                closeWindow(w.id);
-                            }
-                        }}
-                        title={w.title}
-                     >
-                        <span className={s.icon}>🗔</span>
-                        <span className={s.title}>{w.title}</span>
-                     </div>
-                 );
-            })}
-        </div>
-    );
+  return (
+    <nav className={s.dockContainer} aria-label="Ventanas del ERP">
+      <span className={s.dockLabel}>Ventanas</span>
+      <div className={s.windowList}>
+        {windows.map(win => (
+          <div
+            key={win.id}
+            className={`${s.chip} ${win.isMinimized ? s.minimized : ''} ${activeId === win.id && !win.isMinimized ? s.active : ''}`}
+          >
+            <button
+              type="button"
+              className={s.windowButton}
+              title={win.title}
+              aria-label={`${win.isMinimized ? 'Restaurar' : 'Ir a'} ${win.title}`}
+              onClick={() => focusWindow(win.id)}
+            >
+              <FileText size={14} aria-hidden="true" />
+              <span className={s.title}>{win.title}</span>
+              {win.isMinimized && <span className={s.minimizedBadge}>Min.</span>}
+            </button>
+            <button
+              type="button"
+              className={s.closeButton}
+              aria-label={`Cerrar ${win.title}`}
+              title={`Cerrar ${win.title}`}
+              onClick={() => closeWindow(win.id)}
+            ><X size={13} /></button>
+          </div>
+        ))}
+      </div>
+    </nav>
+  );
 }

@@ -685,3 +685,82 @@
   outline: 2px solid #a390ff;
   outline-offset: 1px;
 }
+
+/* 2026-10-24: encabezado de comprobantes equilibrado; prioridad al detalle.
+   El usuario debe poder ver productos sin desperdiciar altura en tarjetas vacías. */
+.root .layout {
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr) !important;
+  gap: 9px 12px !important;
+}
+.root .layout .party,
+.root .layout .commercial {
+  align-self: start !important;
+  min-height: 0 !important;
+  padding: 10px 13px !important;
+  gap: 5px !important;
+}
+.root .party :global([class*="clientPanelBody"]) {gap: 5px !important;}
+.root .party :global([class*="clientField"]),
+.root .party > :global([class*="sideField"]) {
+  min-height: 31px !important;
+  grid-template-columns: 84px minmax(0,1fr) !important;
+  gap: 8px !important;
+}
+.root .party :global([class*="panelTitle"]),
+.root .party :global([class*="sideBlockTitle"]),
+.root .commercial :global([class*="panelTitle"]),
+.root .commercial :global([class*="sideBlockTitle"]) {margin-bottom: 5px !important;}
+.root .commercial > :global([class*="tabContent"]) {gap: 5px 10px !important; grid-auto-rows: auto !important;}
+.root .commercial :global([class*="commercialField"]),
+.root .commercial > :global([class*="sideField"]) {min-height: 45px !important; gap: 3px !important;}
+.root .commercial :global([class*="commercialControl"]),
+.root .commercial :global([class*="commercialControl"]) select,
+.root .commercial :global([class*="commercialControl"]) input,
+.root .commercial :global([class*="sideInput"]),
+.root .commercial :global([class*="sideSelect"]) {height: 32px !important; min-height: 32px !important; max-height: 32px !important;}
+.root .commercial :global([class*="panelTabs"]) {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px !important;
+  border: 1px solid #465875;
+  border-radius: 8px;
+  background: #151f35 !important;
+  min-height: 30px;
+}
+.root .commercial :global([class*="panelTab"]) {
+  flex: 1;
+  min-height: 26px;
+  border-radius: 6px;
+  background: transparent !important;
+  color: #c2cee2 !important;
+  font-size: 11px;
+}
+.root .commercial :global([class*="panelTabActive"]) {
+  background: #6955cf !important;
+  color: #fff !important;
+}
+.root .items {
+  height: clamp(220px, 38vh, 390px) !important;
+  min-height: 220px !important;
+  max-height: 390px !important;
+}
+.root[data-has-items="false"] .items {
+  height: clamp(175px, 24vh, 230px) !important;
+  min-height: 175px !important;
+  max-height: 230px !important;
+}
+.root[data-has-items="false"] .items :global([class*="itemsList"]) {min-height: 170px !important;}
+.root[data-doc-kind="note"] .layout {
+  grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr) !important;
+}
+.root[data-doc-kind="note"] .party {border-color: #465875 !important;}
+.root[data-doc-kind="note"] .commercial {border-color: #7162ae !important;}
+@container (max-width: 910px) {
+  .root .layout, .root[data-doc-kind="note"] .layout {grid-template-columns: minmax(0,1fr) !important;}
+  .root .party, .root .commercial {grid-column: 1 / -1 !important;}
+}
+@container (max-width: 600px) {
+  .root .commercial > :global([class*="tabContent"]) {grid-template-columns: minmax(0,1fr) !important;}
+  .root .commercial {grid-template-columns: minmax(0,1fr) !important;}
+}

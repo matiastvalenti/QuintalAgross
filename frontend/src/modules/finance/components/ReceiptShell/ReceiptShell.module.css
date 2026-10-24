@@ -752,3 +752,25 @@
   .header { flex-wrap: wrap; gap: 12px; }
   .headerRight { flex-wrap: wrap; gap: 16px; }
 }
+
+/* Pagos a proveedores: controles y grillas conservan el tema de la ventana. */
+.container {
+  --text-primary:#f8fafc;
+  --border:#394861;
+  --bg-light:#253551;
+}
+.container :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),select,textarea) {
+  background:#151f35 !important;
+  color:#f8fafc !important;
+  -webkit-text-fill-color:#f8fafc;
+  border:1px solid #465875 !important;
+  color-scheme:dark;
+}
+.container :is(input,textarea)::placeholder {color:#9aabc2 !important;-webkit-text-fill-color:#9aabc2;}
+.container :is(table,thead,tbody,tr,td,th) {color:#e4eaf6;border-color:#394861;}
+.container th {background:#172239 !important;color:#cbd5e1 !important;}
+.container td {background:#202c46 !important;color:#e4eaf6 !important;}
+.container tr:hover td {background:#293956 !important;}
+.container :is(.sectionBox,.summaryPanel,.checkCard,.subModal) {
+  background:#202c46;border-color:#394861;
+}

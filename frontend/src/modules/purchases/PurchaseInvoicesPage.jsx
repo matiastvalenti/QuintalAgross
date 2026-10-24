@@ -441,6 +441,7 @@ export default function PurchaseInvoicesPage() {
   return (
     <>
       <DocumentListPage 
+        theme="quintal"
         title="Facturas de Compra"
         breadcrumbs={[{ label: 'Compras' }, { label: 'Facturas' }]}
         kpis={kpis}

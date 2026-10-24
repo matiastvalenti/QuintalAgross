@@ -1,0 +1,63 @@
+/* Finanzas: listados de Recibos y Órdenes de Pago como parte del ERP oscuro. */
+.page {
+  --bg-page:#101729;
+  --text:#f8fafc;
+  --text-primary:#f8fafc;
+  --text-secondary:#b9c8de;
+  --text-tertiary:#96a8c1;
+  --border-color:#394861;
+  --border-light:#394861;
+  --primary:#806ce7;
+  --primary-light:#392f65;
+  color:#f8fafc;
+  background:#101729 !important;
+  min-width:0;
+}
+.page > div:nth-child(2) {min-height:0;overflow:auto !important;gap:12px !important;}
+.page > div:nth-child(2) > div:first-child {
+  display:grid !important;
+  grid-template-columns:repeat(4,minmax(0,1fr)) !important;
+  gap:12px !important;
+}
+.page > div:nth-child(2) > div:first-child > div,
+.page > div:nth-child(2) > div:last-child {
+  min-width:0;
+  background:#202c46 !important;
+  border:1px solid #394861 !important;
+  border-radius:12px !important;
+  color:#f8fafc !important;
+  box-shadow:none !important;
+}
+.page > div:nth-child(2) > div:first-child > div > div {
+  min-height:76px;
+  padding:12px 15px !important;
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.page > div:nth-child(2) > div:last-child {overflow:hidden;}
+.page [style*="background: white"],
+.page [style*="background-color: white"] {background:#273551 !important;}
+.page input:not([type="checkbox"]):not([type="radio"]),
+.page select {
+  background:#151f35 !important;
+  color:#f8fafc !important;
+  border:1px solid #465875 !important;
+  border-radius:8px;
+  color-scheme:dark;
+}
+.page input::placeholder {color:#99aac0;}
+.page th {background:#172239 !important;color:#c2cee2 !important;border-color:#394861 !important;}
+.page td {background:#202c46 !important;color:#e4eaf6 !important;border-color:#394861 !important;}
+.page tr:hover td {background:#293956 !important;}
+.page [style*="color: rgb(100, 116, 139)"],
+.page [style*="color: #64748b"] {color:#b9c8de !important;}
+.page button {border-radius:8px;}
+.page button:focus-visible {outline:2px solid #c4b5fd;outline-offset:2px;}
+@media (max-width:1100px) {
+  .page > div:nth-child(2) > div:first-child {grid-template-columns:repeat(2,minmax(0,1fr)) !important;}
+}
+@media (max-width:650px) {
+  .page > div:nth-child(2) > div:first-child {grid-template-columns:1fr !important;}
+  .page > div:nth-child(2) {padding:12px !important;}
+}

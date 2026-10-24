@@ -385,3 +385,82 @@
     color: white;
     box-shadow: 0 8px 16px -4px rgba(99, 102, 241, 0.4);
 }
+
+/* Remitos de Entrada: mismo escritorio oscuro que los listados de Ventas. */
+.pageLayout {
+  --bg-page: #101729;
+  --text: #f8fafc;
+  --text-primary: #f8fafc;
+  --text-secondary: #bdcbe0;
+  --muted: #a9b9d0;
+  --border-color: #394861;
+  --primary: #806ce7;
+  --primary-light: #382f61;
+  padding: 20px 24px 36px;
+  gap: 14px;
+  min-height: 100%;
+  background: #101729;
+  color: #f8fafc;
+}
+.kpiCards {grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0;}
+.pageLayout .kpiCard {
+  min-width:0;
+  height:auto;
+  min-height:94px;
+  padding:12px 16px;
+  border-radius:12px;
+  background:#202c46 !important;
+  border:1px solid #394861;
+  color:#c4b5fd;
+  box-shadow:none;
+  cursor:default;
+}
+.kpiValue {font-family:inherit;font-size:23px;color:#f8fafc;margin-top:2px;}
+.kpiLabel {font-size:10px;color:#b7c6dd;}
+.kpiChevron {color:#8c7dd5;}
+.toolbar, .cardTable {
+  background:#202c46;
+  border:1px solid #394861;
+  border-radius:12px;
+  padding:12px 14px;
+  box-shadow:none;
+}
+.searchWrap input, .filterSelect, .dateInput {
+  background:#151f35 !important;
+  border:1px solid #465875;
+  border-radius:8px;
+  color:#f8fafc;
+  height:36px;
+  color-scheme:dark;
+}
+.searchWrap input::placeholder {color:#99aac0;}
+.filterToggle, .pageLayout button:not([class*="primary"]) {
+  color:#d3dff0;
+}
+.filterToggle, .expandedFilters, .compactFiltersRow {
+  background:#172239;
+  border-color:#394861;
+  color:#f8fafc;
+}
+.filterSelect:focus, .dateInput:focus, .searchWrap input:focus {
+  border-color:#9b87ff;box-shadow:0 0 0 3px #6955cf44;
+}
+.filterLabel, .verCanceladosLabel {color:#c5d1e2;}
+.cardTable {padding:0;overflow:hidden;}
+.tableWrap {overflow:auto;}
+.th, .pageLayout thead th {background:#172239 !important;color:#cbd5e1 !important;border-color:#394861;}
+.td, .pageLayout tbody td {background:#202c46 !important;color:#e2e8f0 !important;border-color:#394861;}
+.row:hover .td, .pageLayout tbody tr:hover td {background:#293956 !important;}
+.rowSelected .td {background:#302b58 !important;}
+.numberLink {color:#c6b9ff !important;}
+.emptyTitle {color:#e9effa !important;}
+.pageLayout input[type="checkbox"] {accent-color:#806ce7;}
+.pageLayout h1 {color:#f8fafc;}
+@media (max-width:1050px) {
+  .kpiCards {grid-template-columns:repeat(2,minmax(0,1fr));}
+  .toolbarMain {flex-wrap:wrap;}
+}
+@media (max-width:640px) {
+  .pageLayout {padding:14px;}
+  .kpiCards {grid-template-columns:repeat(2,minmax(0,1fr));}
+}

@@ -151,7 +151,7 @@ export default function InvoiceForm(props) {
   const [loading, setLoading] = useState(initialMode === "edit");
   const [saving, setSaving] = useState(false);
   const [isReadOnly, setIsReadOnly] = useState(initialMode === "edit");
-  const [activeContextTab, setActiveContextTab] = useState('comercial');
+  const [activeContextTab, setActiveContextTab] = useState(initialDocType === 'INVOICE' ? 'comercial' : 'ajuste');
   const [activeBottomTab, setActiveBottomTab] = useState('observaciones');
   const [invoiceTab, setInvoiceTab] = useState('products');
   const invoiceTabId = useId();
@@ -1063,7 +1063,7 @@ export default function InvoiceForm(props) {
   const isAdminLocked = isReadOnly;
 
   return (
-    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} className={`${s.formCard} ${w.root} ${isStandalone ? w.standalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} data-doc-kind={docType === 'INVOICE' ? 'invoice' : 'note'} className={`${s.formCard} ${w.root} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
         <div className={`${s.headerLine} ${w.header}`}>

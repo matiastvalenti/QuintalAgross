@@ -437,6 +437,7 @@ export default function PurchaseCreditNotesPage() {
   return (
     <>
       <DocumentListPage 
+        theme="quintal"
         title="Notas de Crédito de Compra"
         breadcrumbs={[{ label: 'Compras' }, { label: 'Notas de Crédito' }]}
         kpis={kpis}

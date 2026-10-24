@@ -528,7 +528,7 @@ export default function PurchaseInvoiceForm(props) {
   if (loading) return <LoadingScreen message={`Cargando ${documentLabel.toLowerCase()}...`} />;
 
   return (
-    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} className={`${s.formCard} ${w.root} ${w.withExpense} ${isStandalone ? w.standalone : ''}`}>
+    <div data-commercial-document="true" data-active-view={invoiceTab} data-has-items={items.length > 0} data-doc-kind={docType === 'PURCHASE_INVOICE' ? 'invoice' : 'note'} className={`${s.formCard} ${w.root} ${w.withExpense} ${isStandalone ? w.standalone : ''}`}>
         
         {/* Header Area */}
         <div className={`${s.headerLine} ${w.header}`}>
@@ -801,7 +801,7 @@ export default function PurchaseInvoiceForm(props) {
 
                 {/* Bloque Comercial */}
                 <div className={`${s.sideBlock} ${w.commercial}`}>
-                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><ShoppingBag size={12}/> COMERCIAL</div>
+                    <div className={`${s.sideBlockTitle} ${v.panelTitle}`}><ShoppingBag size={12}/> {docType === "PURCHASE_INVOICE" ? "COMERCIAL" : "AJUSTE / COMERCIAL"}</div>
 
                     {(docType === 'DEBIT_NOTE' || docType === 'CREDIT_NOTE' || docType === 'PURCHASE_DEBIT_NOTE' || docType === 'PURCHASE_CREDIT_NOTE') && (
                         <div className={s.sideField}>

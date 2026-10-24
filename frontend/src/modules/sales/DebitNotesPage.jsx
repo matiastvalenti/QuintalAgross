@@ -537,6 +537,7 @@ export default function DebitNotesPage() {
   return (
     <>
       <DocumentListPage 
+        theme="quintal"
         title="Libro de Notas de Débito"
         breadcrumbs={[{ label: 'Suite Comercial' }, { label: 'Notas de Débito' }]}
         kpis={kpis}
