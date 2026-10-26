@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, Fragment } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { openNuevaOrdenVenta, openEditOrdenVenta, openNuevoRemito } from '../../utils/openStandaloneWindow';
+import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import ContentHeader from '../../components/layout/ContentHeader';
 import Card from '../../components/ui/Card';
 import Button from '../../components/ui/Button';
@@ -61,7 +61,8 @@ export default function SalesOrdersPage({ isWindow }) {
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
   
-  const { openWindow } = useWindow(); 
+  const { openWindow } = useWindow();
+  const { openNuevoRemito } = useInternalCommercialDocuments(); 
   const { showToast } = useToast();
   
   // Modal States

@@ -54,6 +54,8 @@ def run_migrations(engine):
             for col_def in [
                 ("issue_date", "DATETIME"),
                 ("check_type", "TEXT"),
+                ("check_origin", "TEXT"),
+                ("source_cheque_id", "INTEGER"),
                 ("drawer_name", "TEXT"),
                 ("drawer_cuit", "TEXT"),
             ]:
@@ -64,7 +66,7 @@ def run_migrations(engine):
                 except Exception:
                     pass
 
-            for col_def in [("librador", "TEXT"), ("f_emision", "DATE")]:
+            for col_def in [("librador", "TEXT"), ("f_emision", "DATE"), ("origen", "TEXT")]:
                 try:
                     conn.execute(text(f"ALTER TABLE cheques ADD COLUMN {col_def[0]} {col_def[1]}"))
                     conn.commit()

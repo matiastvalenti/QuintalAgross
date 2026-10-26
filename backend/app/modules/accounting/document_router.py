@@ -923,6 +923,7 @@ def create_document(
                             banco=bank,
                             nro_cheque=number,
                             tipo=pay.check_type or "FISICO",
+                            origen="TERCERO",
                             importe=pay.amount,
                             moneda=db_doc.currency,
                             f_pago=pay.due_date.date() if pay.due_date else datetime.now().date(),
@@ -936,50 +937,89 @@ def create_document(
                         )
                         db.add(new_cheque)
                     elif db_doc.doc_type == models.DocumentType.PAYMENT:
-                        # Intentar marcar como endosado un cheque existente en cartera
-                        import logging
-                        # Usar el logger global en lugar de redefinirlo localmente
-                        logger.info(f"BUSCANDO CHEQUE PARA ENDOSO: Nro={pay.reference_number}, Importe={pay.amount}")
-
-                        from sqlalchemy import func, cast, Integer
-
-                        # Limpiar el número de referencia para la búsqueda (quitar ceros a la izquierda)
-                        ref_num_str = str(pay.reference_number or "0").strip().lstrip('0')
-                        if not ref_num_str: ref_num_str = "0"
-
-                        # No endosar solamente por número e importe: otros bancos
-                        # pueden emitir el mismo número de cheque.
-                        cheque_query = db.query(finance_models.Cheque).filter(
-                            func.ltrim(finance_models.Cheque.nro_cheque, '0') == ref_num_str,
-                            finance_models.Cheque.importe >= float(pay.amount) - 0.05,
-                            finance_models.Cheque.importe <= float(pay.amount) + 0.05,
-                            finance_models.Cheque.estado.in_(["EN_CARTERA", "PENDIENTE"])
-                        )
-                        if pay.bank_name:
-                            cheque_query = cheque_query.filter(
-                                func.lower(finance_models.Cheque.banco) == pay.bank_name.strip().lower()
-                            )
-                        if pay.drawer_cuit:
-                            cuit = "".join(ch for ch in pay.drawer_cuit if ch.isdigit())
-                            cheque_query = cheque_query.filter(finance_models.Cheque.cuit_emisor == cuit)
-                        matches = cheque_query.limit(2).all()
-                        if len(matches) > 1:
-                            raise HTTPException(status_code=409, detail=(
-                                "Hay más de un cheque en cartera con esos datos. "
-                                "Seleccioná uno inequívocamente antes de endosarlo."
-                            ))
-                        existing_ch = matches[0] if matches else None
-
-                        if existing_ch:
-                            logger.info(f"CHEQUE ENCONTRADO: ID={existing_ch.id}, Nro={existing_ch.nro_cheque}, Nuevo Estado=ENDOSADO")
+                        # La OP debe distinguir el cheque propio del cheque de terceros.
+                        # Nunca se adivina el origen buscando solamente por importe.
+                        bank = (pay.bank_name or "").strip()
+                        number = (pay.reference_number or "").strip()
+                        drawer_cuit = "".join(ch for ch in (pay.drawer_cuit or "") if ch.isdigit())
+                        if not bank or not number:
+                            raise HTTPException(status_code=422, detail="Indicá banco y número de cada cheque de la orden de pago.")
+                        if drawer_cuit and len(drawer_cuit) != 11:
+                            raise HTTPException(status_code=422, detail=f"CUIT inválido en el cheque {number}.")
+                        if pay.check_origin == "TERCERO":
+                            if not pay.source_cheque_id:
+                                raise HTTPException(status_code=422, detail=(
+                                    f"Seleccioná el cheque de terceros {number} desde Cartera antes de endosarlo."
+                                ))
+                            existing_ch = db.query(finance_models.Cheque).filter(
+                                finance_models.Cheque.id == pay.source_cheque_id
+                            ).first()
+                            if not existing_ch or existing_ch.estado not in ("EN_CARTERA", "PENDIENTE"):
+                                raise HTTPException(status_code=409, detail=(
+                                    f"El cheque de terceros {number} ya no está disponible en cartera."
+                                ))
+                            if (existing_ch.banco or "").strip().casefold() != bank.casefold() or (
+                                str(existing_ch.nro_cheque or "").strip() != number
+                            ) or abs(float(existing_ch.importe or 0) - float(pay.amount)) > 0.01:
+                                raise HTTPException(status_code=409, detail=(
+                                    f"Los datos del cheque de cartera {number} cambiaron. Volvé a seleccionarlo."
+                                ))
+                            if existing_ch.moneda and str(existing_ch.moneda) != str(db_doc.currency.value if hasattr(db_doc.currency, "value") else db_doc.currency):
+                                raise HTTPException(status_code=409, detail=(
+                                    f"La moneda del cheque de cartera {number} no coincide con la orden de pago."
+                                ))
+                            if drawer_cuit and existing_ch.cuit_emisor and drawer_cuit != "".join(ch for ch in existing_ch.cuit_emisor if ch.isdigit()):
+                                raise HTTPException(status_code=409, detail=f"El CUIT del cheque {number} no coincide con cartera.")
                             existing_ch.estado = "ENDOSADO"
+                            existing_ch.origen = "TERCERO"
                             existing_ch.endorsee_id = db_doc.entity_id
                             existing_ch.endorsement_date = db_doc.date
                             existing_ch.entregado_a = entity.name
                             existing_ch.fecha_entrega = db_doc.date.date() if db_doc.date else datetime.now().date()
                             existing_ch.nro_orden_pago = db_doc.number
+                        elif pay.check_origin == "PROPIO":
+                            # Emisión propia: se registra como salida, jamás en cartera
+                            # disponible para endosos de terceros.
+                            if len(drawer_cuit) != 11:
+                                raise HTTPException(status_code=422, detail=(
+                                    f"Para emitir el cheque propio {number}, ingresá el CUIT del librador (11 dígitos)."
+                                ))
+                            existing = db.query(finance_models.Cheque).filter(
+                                func.lower(finance_models.Cheque.banco) == bank.lower(),
+                                finance_models.Cheque.nro_cheque == number,
+                                finance_models.Cheque.cuit_emisor == drawer_cuit
+                            ).first()
+                            if existing:
+                                raise HTTPException(status_code=409, detail=(
+                                    f"El cheque propio {number} del banco {bank} ya fue registrado."
+                                ))
+                            emitted = finance_models.Cheque(
+                                entity_id=None,
+                                source_document_id=db_doc.id,
+                                endorsee_id=db_doc.entity_id,
+                                endorsement_date=db_doc.date,
+                                banco=bank,
+                                nro_cheque=number,
+                                tipo=pay.check_type or "FISICO",
+                                origen="PROPIO",
+                                importe=pay.amount,
+                                moneda=db_doc.currency,
+                                f_pago=pay.due_date.date() if pay.due_date else datetime.now().date(),
+                                f_vencimiento=pay.due_date.date() if pay.due_date else None,
+                                f_emision=pay.issue_date.date() if pay.issue_date else None,
+                                librador=pay.drawer_name or None,
+                                cuit_emisor=drawer_cuit,
+                                entregado_a=entity.name,
+                                fecha_entrega=db_doc.date.date() if db_doc.date else datetime.now().date(),
+                                nro_orden_pago=db_doc.number,
+                                estado="EMITIDO",
+                                cost_center=db_doc.cost_center,
+                            )
+                            db.add(emitted)
                         else:
-                            logger.warning(f"CHEQUE NO ENCONTRADO PARA ENDOSO: Nro={pay.reference_number}, Importe={pay.amount}")
+                            raise HTTPException(status_code=422, detail=(
+                                "Indicá si cada cheque de la orden de pago es propio o de terceros."
+                            ))
 
         # Guardar Percepciones si se proporcionan
         if doc.perceptions:

@@ -7,6 +7,7 @@ class ChequeOut(BaseModel):
     banco: Optional[str] = "S/D"
     nro_cheque: Optional[str] = "S/N"
     tipo: Optional[str] = None
+    origen: Optional[str] = None
     importe: Optional[float] = None
     moneda: Optional[str] = None
     f_pago: Optional[date] = None

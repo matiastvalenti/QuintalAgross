@@ -8,7 +8,7 @@ import ReceiptCollectionForm from "./ReceiptCollectionForm";
  * Mantiene el circuito completo de recibos dentro de una ventana del ERP,
  * sin redirigir el navegador al guardar, editar o consultar el comprobante.
  */
-export default function ReceiptCollectionWindow({ mode = "new", id = null, windowId }) {
+export default function ReceiptCollectionWindow({ mode = "new", id = null, initialInvoice = null, windowId }) {
   const { closeWindow } = useWindow();
   const [currentMode, setCurrentMode] = useState(mode);
   const [receiptId, setReceiptId] = useState(id);
@@ -61,7 +61,8 @@ export default function ReceiptCollectionWindow({ mode = "new", id = null, windo
     <ReceiptCollectionForm
       key={`${receiptId || "new"}-${currentMode}`}
       mode={currentMode}
-      source="manual"
+      source={initialInvoice && currentMode === "new" ? "invoice" : "manual"}
+      initialInvoice={initialInvoice}
       initialData={receipt}
       onClose={close}
       onModeChange={setCurrentMode}

@@ -526,7 +526,8 @@ export default function ReceiptForm({
           due_date: p.type === "CHECK" ? p.due_date : null,
           issue_date: p.type === "CHECK" ? p.issue_date : null,
           check_type: p.type === "CHECK" ? p.check_type : null,
-          issue_date: p.type === "CHECK" ? p.issue_date : null,
+          check_origin: p.type === "CHECK" ? p.check_origin : null,
+          source_cheque_id: p.type === "CHECK" && p.check_origin === "TERCERO" && isPayment ? p.source_cheque_id : null,
           drawer_name: p.type === "CHECK" ? p.drawer_name : null,
           drawer_cuit: p.type === "CHECK" ? (p.drawer_cuit || p.issuer_tax_id || "") : null,
           accounting_account: p.accounting_account

@@ -103,4 +103,48 @@ describe("Carga por lote de cheques", () => {
     });
   });
 
+  it("en una orden de pago exige origen y CUIT si se emite un cheque propio", () => {
+    const onSave = vi.fn();
+    render(<ChequeEntryDialog open isPayment banks={[{ name: "Banco Nación" }]} onSave={onSave} onClose={vi.fn()} />);
+    expect(screen.getByLabelText("Origen del cheque")).toHaveValue("PROPIO");
+    fireEvent.change(screen.getByLabelText("Buscar banco por nombre o CUIT"), { target: { value: "Banco Nación" } });
+    fireEvent.change(screen.getByPlaceholderText("Número / referencia"), { target: { value: "CP-001" } });
+    fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "50000" } });
+    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("CUIT del librador");
+    fireEvent.change(screen.getByPlaceholderText("Opcional"), { target: { value: "30-12345678-9" } });
+    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }));
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][0][0]).toMatchObject({
+      check_origin: "PROPIO", drawer_cuit: "30123456789", reference_number: "CP-001"
+    });
+  });
+
+  it("en una orden de pago vincula un cheque de terceros por ID de cartera", async () => {
+    api.get.mockReset();
+    api.get.mockResolvedValue([{
+      id: 84, banco: "Banco Nación", nro_cheque: "CH-84", importe: 12500,
+      moneda: "ARS", tipo: "ECHEQ", cuit_emisor: "30123456789",
+      librador: "Agro SA", f_emision: "2026-10-10", f_vencimiento: "2026-11-10"
+    }]);
+    const onSave = vi.fn();
+    render(<ChequeEntryDialog open isPayment banks={[{ name: "Banco Nación" }]} onSave={onSave} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Origen del cheque"), { target: { value: "TERCERO" } });
+    fireEvent.change(screen.getByLabelText("Buscar banco por nombre o CUIT"), { target: { value: "Banco Nación" } });
+    fireEvent.change(screen.getByPlaceholderText("Número / referencia"), { target: { value: "CH-84" } });
+    fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "12500" } });
+    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("desde la cartera");
+    fireEvent.click(screen.getByRole("button", { name: /Buscar en cartera/ }));
+    expect(await screen.findByRole("button", { name: "Usar cheque" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Usar cheque" }));
+    expect(screen.getByText(/cartera #84 seleccionado/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }));
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][0][0]).toMatchObject({
+      check_origin: "TERCERO", source_cheque_id: 84, check_type: "ECHEQ",
+      reference_number: "CH-84", drawer_cuit: "30123456789", amount: 12500,
+    });
+  });
+
 });

@@ -29,7 +29,6 @@ import {
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
 import { navigateToError } from '../../utils/errorNavigation';
-import { openNuevoReciboDesdeFactura } from '../../utils/openStandaloneWindow';
 import { useInternalCommercialDocuments } from '../common/useInternalCommercialDocuments';
 import ContentHeader from "../../components/layout/ContentHeader";
 import Button from "../../components/ui/Button";
@@ -791,7 +790,11 @@ export default function InvoicesPage() {
                     entities={entities} 
                     onOpenFull={handleOpenDetail} 
                     onPrint={(id) => window.open(`${API_URL}/accounting/documents/${id}/pdf`, '_blank')} 
-                    onOpenCollectionModal={() => openNuevoReciboDesdeFactura(inv)}
+                    onOpenCollectionModal={() => openWindow("receipt-collection-form", { mode: "new", initialInvoice: inv }, {
+                      title: `Nuevo Recibo · Factura ${inv.number || inv.id}`,
+                      width: 1270, height: 750, minWidth: 720, minHeight: 470,
+                      singletonKey: `collection-invoice-${inv.id}`,
+                    })}
                   />
                 )}
               </div>

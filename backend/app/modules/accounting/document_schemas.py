@@ -122,6 +122,8 @@ class PaymentItemBase(BaseModel):
     due_date: Optional[datetime] = None
     issue_date: Optional[datetime] = None
     check_type: Optional[str] = None
+    check_origin: Optional[Literal['PROPIO', 'TERCERO']] = None
+    source_cheque_id: Optional[int] = None
     drawer_name: Optional[str] = None
     drawer_cuit: Optional[str] = None
 

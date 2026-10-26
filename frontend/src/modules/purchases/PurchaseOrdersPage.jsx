@@ -7,7 +7,6 @@ import Badge from '../../components/ui/Badge';
 import Input from '../../components/ui/Input';
 import t from '../../components/ui/Table.module.css';
 import s from '../../components/layout/DocumentListPage.module.css';
-import { openNuevaOrdenCompra, openEditOrdenCompra } from '../../utils/openStandaloneWindow';
 import { useToast } from '../../context/ToastContext';
 import { useWindow } from '../../context/WindowContext';
 import { TraceabilityProgress } from '../../components/ui/TraceabilityStatusBadge';

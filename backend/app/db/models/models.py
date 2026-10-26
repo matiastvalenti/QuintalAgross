@@ -414,6 +414,8 @@ class PaymentItem(Base):
     due_date = Column(DateTime, nullable=True) # Para cheques
     issue_date = Column(DateTime, nullable=True)
     check_type = Column(String, nullable=True)
+    check_origin = Column(String, nullable=True)
+    source_cheque_id = Column(Integer, nullable=True)
     drawer_name = Column(String, nullable=True)
     drawer_cuit = Column(String, nullable=True)
     

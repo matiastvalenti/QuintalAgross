@@ -2,16 +2,19 @@ import React, { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Landmark, X, Search, Check, Trash2, ArrowRight } from "lucide-react";
 import s from "./ChequeEntryDialog.module.css";
+import api from "../../../services/api";
 
 const localToday = () => new Intl.DateTimeFormat("sv-SE", {
   timeZone: "America/Argentina/Buenos_Aires",
   year: "numeric", month: "2-digit", day: "2-digit",
 }).format(new Date());
 
-const buildDraft = (initialCheck, currency, suggestedAmount) => ({
+const buildDraft = (initialCheck, currency, suggestedAmount, isPayment = false) => ({
   id: initialCheck?.id ?? null,
   type: "CHECK",
   check_type: initialCheck?.check_type || "FISICO",
+  check_origin: initialCheck?.check_origin || (isPayment ? "PROPIO" : "TERCERO"),
+  source_cheque_id: initialCheck?.source_cheque_id || null,
   bank_name: initialCheck?.bank_name || "",
   reference_number: initialCheck?.reference_number || "",
   amount: initialCheck?.amount ?? suggestedAmount ?? "",
@@ -43,25 +46,78 @@ export default function ChequeEntryDialog({
   onSave,
 }) {
   const formId = useId();
-  const [draft, setDraft] = useState(() => buildDraft(initialCheck, currency, suggestedAmount));
+  const [draft, setDraft] = useState(() => buildDraft(initialCheck, currency, suggestedAmount, isPayment));
   const [error, setError] = useState("");
   const [queued, setQueued] = useState([]);
   const [bankFocused, setBankFocused] = useState(false);
+  const [portfolioMatches, setPortfolioMatches] = useState([]);
+  const [searchingPortfolio, setSearchingPortfolio] = useState(false);
   const numberRef = useRef(null);
 
   useEffect(() => {
     if (!open) return;
-    setDraft(buildDraft(initialCheck, currency, suggestedAmount));
+    setDraft(buildDraft(initialCheck, currency, suggestedAmount, isPayment));
     setQueued([]);
+    setPortfolioMatches([]);
     setBankFocused(false);
     setError("");
-  }, [open, initialCheck?.id, currency, suggestedAmount]);
+  }, [open, initialCheck?.id, currency, suggestedAmount, isPayment]);
 
   if (!open || typeof document === "undefined") return null;
 
   const change = (field, value) => {
-    setDraft(previous => ({ ...previous, [field]: value }));
+    const changesLinkedCheck = ["check_origin", "bank_name", "reference_number", "amount", "drawer_cuit"].includes(field);
+    setDraft(previous => ({ ...previous, [field]: value, ...(changesLinkedCheck ? { source_cheque_id: null } : {}) }));
+    if (changesLinkedCheck) setPortfolioMatches([]);
     if (error) setError("");
+  };
+
+  const searchPortfolio = async () => {
+    if (!draft.bank_name.trim() || !draft.reference_number.trim()) {
+      setError("Indicá banco y número para buscar el cheque de terceros en cartera.");
+      return;
+    }
+    setSearchingPortfolio(true);
+    setError("");
+    try {
+      const results = await api.get("/cheques/", {
+        params: { status: "EN_CARTERA", banco: draft.bank_name.trim(), nro_cheque: draft.reference_number.trim() }
+      });
+      const exact = (Array.isArray(results) ? results : []).filter(check =>
+        String(check.banco || "").trim().toLocaleLowerCase("es-AR") === draft.bank_name.trim().toLocaleLowerCase("es-AR") &&
+        String(check.nro_cheque || "").trim() === draft.reference_number.trim()
+      );
+      setPortfolioMatches(exact);
+      if (!exact.length) setError("No se encontró ese cheque disponible en cartera. Revisá el banco y el número.");
+    } catch (err) {
+      setError(err?.message || "No se pudo consultar la cartera de cheques.");
+    } finally {
+      setSearchingPortfolio(false);
+    }
+  };
+
+  const choosePortfolioCheque = check => {
+    const foundCurrency = String(check.moneda || currency).toUpperCase();
+    if (foundCurrency !== currency) {
+      setError("La moneda del cheque seleccionado no coincide con la de esta orden de pago.");
+      return;
+    }
+    setDraft(previous => ({
+      ...previous,
+      source_cheque_id: check.id,
+      check_origin: "TERCERO",
+      bank_name: check.banco,
+      reference_number: check.nro_cheque,
+      amount: Number(check.importe),
+      currency: foundCurrency,
+      check_type: check.tipo || "FISICO",
+      issue_date: check.f_emision || previous.issue_date,
+      due_date: check.f_vencimiento || check.f_pago || previous.due_date,
+      drawer_name: check.librador || previous.drawer_name,
+      drawer_cuit: check.cuit_emisor || previous.drawer_cuit,
+    }));
+    setPortfolioMatches([]);
+    setError("");
   };
 
   const editing = initialCheck?.id != null;
@@ -106,6 +162,14 @@ export default function ChequeEntryDialog({
       setError("El CUIT del librador debe tener 11 dígitos o quedar vacío.");
       return null;
     }
+    if (isPayment && draft.check_origin === "PROPIO" && drawerCuit.length !== 11) {
+      setError("Para emitir un cheque propio, completá el CUIT del librador (11 dígitos).");
+      return null;
+    }
+    if (isPayment && draft.check_origin === "TERCERO" && !draft.source_cheque_id) {
+      setError("Seleccioná el cheque de terceros desde la cartera antes de continuar.");
+      return null;
+    }
     return {
       ...draft,
       amount,
@@ -128,7 +192,10 @@ export default function ChequeEntryDialog({
     setQueued(previous => [...previous, { ...check, id: null, draftKey: Math.random().toString(36).slice(2) }]);
     // La mayoría de los lotes comparten banco, tipo, emisor y fechas.
     // Sólo limpiar lo que cambia cheque a cheque.
-    setDraft(previous => ({ ...previous, id: null, reference_number: "", amount: "" }));
+    setDraft(previous => ({
+      ...previous, id: null, reference_number: "", amount: "", source_cheque_id: null,
+      ...(previous.check_origin === "TERCERO" ? { drawer_name: "", drawer_cuit: "", issuer_tax_id: "" } : {})
+    }));
     setError("");
     setTimeout(() => numberRef.current?.focus(), 0);
   };
@@ -185,6 +252,15 @@ export default function ChequeEntryDialog({
                   <option value="ECHEQ">eCheq / electrónico</option>
                 </select>
               </label>
+              {isPayment && (
+                <label className={s.field}>
+                  <span>Origen del cheque</span>
+                  <select value={draft.check_origin} onChange={e => change("check_origin", e.target.value)} aria-label="Origen del cheque">
+                    <option value="PROPIO">Cheque propio emitido</option>
+                    <option value="TERCERO">Cheque de terceros en cartera</option>
+                  </select>
+                </label>
+              )}
               <label className={s.field}>
                 <span>Moneda</span>
                 <select value={draft.currency} disabled title="La moneda del cheque coincide con la del comprobante">
@@ -250,6 +326,30 @@ export default function ChequeEntryDialog({
                 <input value={draft.description} onChange={e => change("description", e.target.value)} placeholder="Detalle opcional" />
               </label>
             </div>
+            {isPayment && draft.check_origin === "TERCERO" && (
+              <div className={s.batchPanel}>
+                <div className={s.batchHeader}>
+                  <strong>Cheque de terceros</strong>
+                  <button className={s.batchEdit} type="button" onClick={searchPortfolio} disabled={searchingPortfolio}>
+                    {searchingPortfolio ? "Buscando..." : "Buscar en cartera"}
+                  </button>
+                </div>
+                {draft.source_cheque_id && <p className={s.bankHint}>Cheque de cartera #{draft.source_cheque_id} seleccionado. Si cambiás el número o importe, debés volver a seleccionarlo.</p>}
+                {portfolioMatches.length > 0 && (
+                  <div className={s.batchList}>
+                    {portfolioMatches.map(check => (
+                      <div className={s.batchRow} key={check.id}>
+                        <div className={s.batchDetails}>
+                          <strong>{check.banco} · {check.nro_cheque}</strong>
+                          <small>{check.moneda} {Number(check.importe).toLocaleString("es-AR", { minimumFractionDigits: 2 })} · Vto. {check.f_vencimiento || check.f_pago || "Sin fecha"} · CUIT {check.cuit_emisor || "s/d"}</small>
+                        </div>
+                        <button className={s.batchEdit} type="button" onClick={() => choosePortfolioCheque(check)}>Usar cheque</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             {!editing && queued.length > 0 && (
               <div className={s.batchPanel}>
                 <div className={s.batchHeader}>

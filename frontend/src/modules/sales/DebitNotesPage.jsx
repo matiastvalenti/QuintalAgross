@@ -67,7 +67,7 @@ export default function DebitNotesPage() {
   const [showCreationModal, setShowCreationModal] = useState(false);
   
   const { openWindow } = useWindow();
-  const { openEditNotaDebito } = useInternalCommercialDocuments();
+  const { openNuevaNotaDebito, openEditNotaDebito } = useInternalCommercialDocuments();
   const { showToast } = useToast();
   const navigate = useNavigate();
 
@@ -501,7 +501,7 @@ export default function DebitNotesPage() {
           <td className={s.td} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button 
-                onClick={(e) => { e.stopPropagation(); window.open(`/standalone/notas-debito/nueva?nota de débito_id=${inv.id}`, `nota-debito-nota de débito-${inv.id}`, 'width=1280,height=820,left=100,top=100'); }} 
+                onClick={(e) => { e.stopPropagation(); openNuevaNotaDebito(); }} 
                 style={{ all: 'unset', cursor: 'pointer', opacity: 0.6 }} 
                 title="Crear Nota de Débito"
               >

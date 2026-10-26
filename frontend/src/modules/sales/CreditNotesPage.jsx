@@ -511,7 +511,7 @@ export default function CreditNotesPage() {
           <td className={s.td} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
               <button 
-                onClick={(e) => { e.stopPropagation(); window.open(`/standalone/notas-credito/nueva?nota de crédito_id=${inv.id}`, `nota-debito-nota de crédito-${inv.id}`, 'width=1280,height=820,left=100,top=100'); }} 
+                onClick={(e) => { e.stopPropagation(); openNuevaNotaCredito(); }} 
                 style={{ all: 'unset', cursor: 'pointer', opacity: 0.6 }} 
                 title="Crear Nota de Crédito"
               >

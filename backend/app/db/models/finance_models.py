@@ -26,6 +26,7 @@ class Cheque(Base):
     banco = Column(String, nullable=False)
     nro_cheque = Column(String, nullable=False)
     tipo = Column(String, nullable=True)
+    origen = Column(String, nullable=True) # PROPIO emitido / TERCERO recibido
 
     importe = Column(Numeric(14, 2), nullable=True)
     moneda = Column(String, nullable=True) # ARS, USD

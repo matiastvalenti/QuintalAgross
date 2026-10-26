@@ -10,7 +10,6 @@ import Button from '../../components/ui/Button';
 import Badge from '../../components/ui/Badge';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
-import { openNuevoPago } from '../../utils/openStandaloneWindow';
 import { useLocation } from 'react-router-dom';
 import api from '../../services/api';
 import { chequeService } from '../../api/cheques';
@@ -21,12 +20,21 @@ import EmptyState from '../../components/ui/EmptyState';
 import ErrorState from '../../components/ui/ErrorState';
 
 // --- HELPERS ---
-const formatCurrency = (val) => {
+const formatCurrency = (val, currency = 'ARS') => {
     return new Intl.NumberFormat('es-AR', {
         style: 'currency',
-        currency: 'ARS',
+        currency: String(currency || 'ARS').toUpperCase() === 'USD' ? 'USD' : 'ARS',
         minimumFractionDigits: 0
     }).format(val);
+};
+
+const formatChequeTotals = (checks) => {
+    const totals = checks.reduce((acc, check) => {
+        const currency = String(check.moneda || 'ARS').toUpperCase();
+        acc[currency] = (acc[currency] || 0) + Number(check.importe || 0);
+        return acc;
+    }, {});
+    return Object.entries(totals).map(([currency, total]) => formatCurrency(total, currency)).join(" · ");
 };
 
 // --- MODAL COMPONENTS ---
@@ -58,7 +66,7 @@ function RejectModal({ cheque, onClose, onReject }) {
                     <div style={{ background: '#fef2f2', color: '#dc2626', padding: 10, borderRadius: 12 }}><AlertTriangle size={20} /></div>
                     <div>
                         <h2 style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>Rechazar Cheque</h2>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', margin: 0 }}>#{cheque.nro_cheque} · {formatCurrency(cheque.importe)}</p>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', margin: 0 }}>#{cheque.nro_cheque} · {formatCurrency(cheque.importe, cheque.moneda)}</p>
                     </div>
                 </div>
                 <form onSubmit={handleSubmit} style={{ padding: 32 }}>
@@ -116,7 +124,7 @@ function ClearModal({ cheque, onClose, onClear }) {
                     <div style={{ background: '#f0fdf4', color: '#166534', padding: 10, borderRadius: 12 }}><Check size={20} /></div>
                     <div>
                         <h2 style={{ fontSize: 18, fontWeight: 900, margin: 0 }}>Acreditar Cheque</h2>
-                        <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', margin: 0 }}>#{cheque.nro_cheque} · {formatCurrency(cheque.importe)}</p>
+                        <p style={{ fontSize: 11, fontWeight: 700, color: '#94a3b8', margin: 0 }}>#{cheque.nro_cheque} · {formatCurrency(cheque.importe, cheque.moneda)}</p>
                     </div>
                 </div>
                 <form onSubmit={handleSubmit} style={{ padding: 32 }}>
@@ -150,6 +158,8 @@ const getStateVariant = (estado) => {
         ENDOSADO: "ok",
         VENCIDO: "bad",
         RECHAZADO: "bad",
+        EMITIDO: "accent",
+        PENDIENTE: "warn",
     };
     return map[estado] || "default";
 };
@@ -186,7 +196,7 @@ export default function ChequesPage() {
         try {
             setLoading(true);
             setError(null);
-            const data = await chequeService.fetchCheques({ status: statusFilter || undefined });
+            const data = await chequeService.fetchCheques();
             setCheques(data);
             setCurrentPage(1); 
             setSelectedIds([]);
@@ -196,6 +206,10 @@ export default function ChequesPage() {
         } finally {
             setLoading(false);
         }
+    }, []);
+
+    useEffect(() => {
+        setSelectedIds([]);
     }, [statusFilter]);
 
     useEffect(() => {
@@ -250,8 +264,14 @@ export default function ChequesPage() {
         }
     };
 
+    const canEndorse = (check) => check.estado === "EN_CARTERA" && check.origen !== "PROPIO";
+
     const handleDeposit = async () => {
-        if (!selectedIds.length) return;
+        const selectedCheques = cheques.filter(c => selectedIds.includes(c.id));
+        if (!selectedCheques.length || selectedCheques.some(c => !canEndorse(c))) {
+            showToast("Solo podés depositar cheques de terceros disponibles en cartera.", "error");
+            return;
+        }
         try {
             await chequeService.deposit({ cheque_ids: selectedIds });
             showToast(`${selectedIds.length} cheques depositados`, 'success');
@@ -262,42 +282,60 @@ export default function ChequesPage() {
     };
 
     const handleOpenEndorseForm = () => {
-        if (!selectedIds.length) return;
         const selectedCheques = cheques.filter(c => selectedIds.includes(c.id));
+        if (!selectedCheques.length || selectedCheques.some(c => !canEndorse(c))) {
+            showToast("Seleccioná únicamente cheques disponibles en cartera para endosar.", "error");
+            return;
+        }
+        const currencies = [...new Set(selectedCheques.map(c => String(c.moneda || 'ARS').toUpperCase()))];
+        if (currencies.length !== 1) {
+            showToast("Para endosar cheques de monedas diferentes, generá una orden de pago por moneda.", "error");
+            return;
+        }
         const initialPayments = selectedCheques.map(c => ({
-            id: Math.random(),
+            id: `cartera-${c.id}`,
             type: 'CHECK',
-            amount: c.importe,
-            description: c.banco,
-            reference_number: c.nro_cheque,
-            due_date: c.f_pago,
+            check_origin: 'TERCERO',
+            source_cheque_id: c.id,
+            amount: Number(c.importe),
+            description: `Endoso cheque ${c.nro_cheque}`,
+            reference_number: String(c.nro_cheque),
+            due_date: c.f_vencimiento || c.f_pago,
+            issue_date: c.f_emision,
             bank_name: c.banco,
-            issuer_tax_id: c.cuit_emisor || "",
-            check_type: c.tipo || "FISICO"
+            drawer_name: c.librador || '',
+            drawer_cuit: c.cuit_emisor || '',
+            issuer_tax_id: c.cuit_emisor || '',
+            check_type: c.tipo || 'FISICO'
         }));
 
-        const draftId = crypto.randomUUID();
-        localStorage.setItem(`receipt_draft_${draftId}`, JSON.stringify({ initialPayments }));
-
-        openNuevoPago({ 
-            draft_id: draftId,
-            title: 'Orden de Pago (Endoso)', 
-            width: 1200, 
-            height: 850 
+        openWindow('receipt-form', {
+            mode: 'new',
+            isPayment: true,
+            initialPayments,
+            initialCurrency: currencies[0],
+        }, {
+            title: `Orden de Pago · Endoso de ${initialPayments.length} cheques`,
+            width: 1270, height: 750, minWidth: 720, minHeight: 470,
+            singletonKey: `endorse-${selectedCheques.map(c => c.id).sort((a,b)=>a-b).join('-')}`,
         });
     };
 
     const toggleSelect = (id) => {
+        const cheque = cheques.find(c => c.id === id);
+        if (!cheque || !canEndorse(cheque)) return;
         setSelectedIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
     };
 
     const toggleSelectAll = () => {
-        if (selectedIds.length === paginatedData.length) setSelectedIds([]);
-        else setSelectedIds(paginatedData.map(ch => ch.id));
+        const eligibleIds = paginatedData.filter(canEndorse).map(ch => ch.id);
+        setSelectedIds(prev => eligibleIds.length && eligibleIds.every(id => prev.includes(id))
+            ? prev.filter(id => !eligibleIds.includes(id))
+            : [...new Set([...prev, ...eligibleIds])]);
     };
 
     const filteredData = useMemo(() => {
-        let result = cheques;
+        let result = statusFilter ? cheques.filter(ch => statusFilter === 'EN_CARTERA' ? ['EN_CARTERA', 'PENDIENTE'].includes(ch.estado) : ch.estado === statusFilter) : cheques;
         if (search.trim()) {
             const q = search.toLowerCase();
             result = result.filter(ch => 
@@ -318,7 +356,7 @@ export default function ChequesPage() {
             if (valA > valB) return sortConfig.direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [cheques, search, filterDateFrom, filterDateTo, filterType, sortConfig]);
+    }, [cheques, statusFilter, search, filterDateFrom, filterDateTo, filterType, sortConfig]);
 
     const paginatedData = useMemo(() => {
         const start = (currentPage - 1) * itemsPerPage;
@@ -328,11 +366,19 @@ export default function ChequesPage() {
     const totalPages = Math.ceil(filteredData.length / itemsPerPage);
 
     const summary = useMemo(() => {
-        const total = cheques.reduce((a,c) => a + Number(c.importe || 0), 0);
-        const in_cartera = cheques.filter(c => c.estado === 'EN_CARTERA').reduce((a,c) => a + Number(c.importe || 0), 0);
-        const deposited = cheques.filter(c => c.estado === 'DEPOSITADO').length;
-        const rejected = cheques.filter(c => c.estado === 'RECHAZADO').length;
-        return { total, count: cheques.length, in_cartera, in_carteraCount: cheques.filter(c => c.estado === 'EN_CARTERA').length, deposited, rejected };
+        const available = cheques.filter(c => c.estado === 'EN_CARTERA' && c.origen !== 'PROPIO');
+        return {
+            count: cheques.length,
+            availableCount: available.length,
+            deposited: cheques.filter(c => c.estado === 'DEPOSITADO').length,
+            rejected: cheques.filter(c => c.estado === 'RECHAZADO').length,
+            emitted: cheques.filter(c => c.estado === 'EMITIDO').length,
+            byCurrency: available.reduce((acc, c) => {
+                const currency = String(c.moneda || 'ARS').toUpperCase();
+                acc[currency] = (acc[currency] || 0) + Number(c.importe || 0);
+                return acc;
+            }, {}),
+        };
     }, [cheques]);
 
     const handleFileSelect = (e) => {
@@ -402,15 +448,15 @@ export default function ChequesPage() {
                 <div className={s.summaryHeader}>
                     <div className={`${s.summaryCard} ${s.purple} ${!statusFilter ? s.active : ''}`} onClick={() => setStatusFilter("")}>
                         <div className={s.cardIcon}><Landmark size={18} /></div>
-                        <span className={s.cardTitle}>Cartera Total</span>
-                        <div className={s.balanceValue}>{formatCurrency(summary.total)}</div>
-                        <div className={s.cardFooter}><History size={10} style={{marginRight:4}} /> {summary.count} cheques registrados</div>
+                        <span className={s.cardTitle}>Todos los cheques</span>
+                        <div className={s.balanceValue}>{summary.count}</div>
+                        <div className={s.cardFooter}><History size={10} style={{marginRight:4}} /> Recibidos y emitidos</div>
                     </div>
                     <div className={`${s.summaryCard} ${s.yellow} ${statusFilter === 'EN_CARTERA' ? s.active : ''}`} onClick={() => setStatusFilter("EN_CARTERA")}>
                         <div className={s.cardIcon}><Clock size={18} /></div>
                         <span className={s.cardTitle}>En Cartera</span>
-                        <div className={s.balanceValue}>{formatCurrency(summary.in_cartera)}</div>
-                        <div className={s.cardFooter}>{summary.in_carteraCount} disponibles para uso</div>
+                        <div className={s.balanceValue}>{summary.availableCount}</div>
+                        <div className={s.cardFooter}>{Object.entries(summary.byCurrency).map(([cur, amount]) => formatCurrency(amount, cur)).join(" · ") || "Sin cheques disponibles"}</div>
                     </div>
                     <div className={`${s.summaryCard} ${s.blue} ${statusFilter === 'DEPOSITADO' ? s.active : ''}`} onClick={() => setStatusFilter("DEPOSITADO")}>
                         <div className={s.cardIcon}><ExternalLink size={18} /></div>
@@ -423,6 +469,12 @@ export default function ChequesPage() {
                         <span className={s.cardTitle}>Rechazos</span>
                         <div className={s.balanceValue}>{summary.rejected}</div>
                         <div className={s.cardFooter} style={{color: '#dc2626'}}>Requieren gestión inmediata</div>
+                    </div>
+                    <div className={`${s.summaryCard} ${s.green} ${statusFilter === 'EMITIDO' ? s.active : ''}`} onClick={() => setStatusFilter("EMITIDO")}>
+                        <div className={s.cardIcon}><CreditCard size={18} /></div>
+                        <span className={s.cardTitle}>Cheques propios emitidos</span>
+                        <div className={s.balanceValue}>{summary.emitted}</div>
+                        <div className={s.cardFooter}>Emitidos en órdenes de pago</div>
                     </div>
                 </div>
 
@@ -492,11 +544,11 @@ export default function ChequesPage() {
                                 <table className={t.table}>
                                     <thead>
                                         <tr>
-                                            <th style={{ width: 40 }}><input type="checkbox" checked={selectedIds.length === paginatedData.length && paginatedData.length > 0} onChange={toggleSelectAll} /></th>
+                                            <th style={{ width: 40 }}><input type="checkbox" checked={paginatedData.some(canEndorse) && paginatedData.filter(canEndorse).every(ch => selectedIds.includes(ch.id))} onChange={toggleSelectAll} aria-label="Seleccionar cheques disponibles" /></th>
                                             <th onClick={() => handleSort('banco')} style={{ cursor: 'pointer' }}>BANCO <SortIcon col="banco" /></th>
                                             <th onClick={() => handleSort('nro_cheque')} style={{ cursor: 'pointer' }}>NRO. <SortIcon col="nro_cheque" /></th>
                                             <th onClick={() => handleSort('f_pago')} style={{ cursor: 'pointer' }}>FECHA PAGO <SortIcon col="f_pago" /></th>
-                                            <th>ESTADO</th>
+                                            <th>ESTADO / ORIGEN</th>
                                             <th onClick={() => handleSort('importe')} style={{ textAlign: 'right', cursor: 'pointer' }}>IMPORTE <SortIcon col="importe" /></th>
                                             <th>CLIENTE / DADOR</th>
                                             <th>DESTINO / BENEFIC.</th>
@@ -506,12 +558,12 @@ export default function ChequesPage() {
                                     <tbody>
                                         {paginatedData.map(ch => (
                                             <tr key={ch.id} className={t.row}>
-                                                <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(ch.id)} onChange={() => toggleSelect(ch.id)} /></td>
+                                                <td onClick={e => e.stopPropagation()}><input type="checkbox" checked={selectedIds.includes(ch.id)} onChange={() => toggleSelect(ch.id)} disabled={!canEndorse(ch)} aria-label={`Seleccionar cheque ${ch.nro_cheque}`} /></td>
                                                 <td style={{ fontWeight: 800, fontSize: 13, color: '#0f172a' }}>{ch.banco}</td>
                                                 <td><code style={{ fontSize: 12, background: '#f1f5f9', padding: '2px 6px', borderRadius: 4, fontWeight: 700 }}>#{ch.nro_cheque}</code></td>
                                                 <td style={{ fontWeight: 600 }}>{ch.f_pago}</td>
-                                                <td><Badge variant={getStateVariant(ch.estado)}>{ch.estado}</Badge></td>
-                                                <td style={{ textAlign: 'right', fontWeight: 900, color: '#24389c', fontSize: 14 }}>{formatCurrency(ch.importe)}</td>
+                                                <td><Badge variant={getStateVariant(ch.estado)}>{ch.estado}</Badge><small style={{ display: "block", marginTop: 4, color: "#64748b" }}>{ch.origen === "PROPIO" ? "Propio" : "De tercero"}</small></td>
+                                                <td style={{ textAlign: 'right', fontWeight: 900, color: '#24389c', fontSize: 14 }}>{formatCurrency(ch.importe, ch.moneda)}</td>
                                                 <td style={{ fontSize: 12, fontWeight: 600 }}>{ch.cliente_dador || '-'}</td>
                                                 <td style={{ fontSize: 12, fontWeight: 700, color: ch.entregado_a ? '#24389c' : '#94a3b8' }}>{ch.entregado_a || '-'}</td>
                                                 <td style={{ textAlign: 'center' }}>
@@ -541,7 +593,7 @@ export default function ChequesPage() {
                             ))}
                             {daysInMonth.map((day, i) => {
                                 const dayCheques = getChequesForDay(day);
-                                const total = dayCheques.reduce((a,c) => a + Number(c.importe), 0);
+                                const total = formatChequeTotals(dayCheques);
                                 const isToday = day && 
                                     day === new Date().getDate() && 
                                     currentDate.getMonth() === new Date().getMonth() && 
@@ -552,7 +604,7 @@ export default function ChequesPage() {
                                         {day && (
                                             <>
                                                 <div className={s.dayNumber}>{day}</div>
-                                                {total > 0 && <div className={s.dayTotal}>{formatCurrency(total)}</div>}
+                                                {dayCheques.length > 0 && <div className={s.dayTotal}>{total}</div>}
                                                 <div className={s.eventList}>
                                                     {dayCheques.slice(0, 3).map(ch => (
                                                         <div 
@@ -594,7 +646,7 @@ export default function ChequesPage() {
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                     <span style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Importe</span>
-                                    <span style={{ fontWeight: 900, color: '#24389c', fontSize: 18 }}>{formatCurrency(selectedCheque.importe)}</span>
+                                    <span style={{ fontWeight: 900, color: '#24389c', fontSize: 18 }}>{formatCurrency(selectedCheque.importe, selectedCheque.moneda)}</span>
                                 </div>
                                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                     <span style={{ fontSize: 10, fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase' }}>Número</span>

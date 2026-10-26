@@ -135,6 +135,7 @@
 .yellow .cardIcon { background: #fffbeb; color: #d97706; }
 .blue .cardIcon { background: #f0f9ff; color: #0284c7; }
 .red .cardIcon { background: #fef2f2; color: #dc2626; }
+.green .cardIcon { background: #ecfdf5; color: #059669; }
 
 /* Filter Bar Glass */
 .filterBar {
