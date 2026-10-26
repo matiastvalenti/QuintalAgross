@@ -24,7 +24,7 @@ jobs:
       - name: Compilar formularios y pantallas
         run: npm run build
       - name: Pruebas de remitos y facturas parciales
-        run: npm test -- --run src/utils/documentQuantities.test.js src/modules/common/OrderEmailDialog.test.jsx src/modules/common/useInternalCommercialDocuments.test.jsx src/modules/common/InvoiceWorkspaceTabs.test.jsx src/components/workspace/windowGeometry.test.js src/components/workspace/Dock.test.jsx src/components/layout/DocumentListPage.test.jsx src/components/ui/Autocomplete.test.jsx src/components/workspace/WindowFrame.test.jsx src/modules/common/BnaDivisasRateField.test.jsx src/utils/remitoPackages.test.js src/utils/fxValidation.test.js src/tests/modules/ChequeEntryDialog.test.jsx src/tests/modules/ReceiptCollectionForm.test.jsx src/modules/entities/components/EntityImporter.test.jsx
+        run: npm test -- --run src/utils/documentQuantities.test.js src/modules/common/OrderEmailDialog.test.jsx src/modules/common/useInternalCommercialDocuments.test.jsx src/modules/common/InvoiceWorkspaceTabs.test.jsx src/components/workspace/windowGeometry.test.js src/components/workspace/Dock.test.jsx src/components/layout/DocumentListPage.test.jsx src/components/ui/Autocomplete.test.jsx src/components/workspace/WindowFrame.test.jsx src/modules/common/BnaDivisasRateField.test.jsx src/utils/remitoPackages.test.js src/utils/fxValidation.test.js src/tests/modules/ChequeEntryDialog.test.jsx src/tests/modules/ReceiptCollectionForm.test.jsx src/modules/entities/components/EntityImporter.test.jsx src/modules/entities/components/EntitiesTable.test.jsx
 
   pricing:
     runs-on: ubuntu-latest
