@@ -100,6 +100,7 @@ export default function WarehousesPage() {
                 await api.post('/inventory/warehouses/', formData);
                 showToast("Depósito creado", "success");
             }
+            window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'warehouses' } }));
             setIsEditing(false);
             fetchWarehouses();
         } catch (e) {
@@ -114,6 +115,7 @@ export default function WarehousesPage() {
         if (!confirm("¿Está seguro de eliminar este depósito?")) return;
         try {
             await api.delete(`/inventory/warehouses/${id}`);
+            window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'warehouses' } }));
             fetchWarehouses();
             showToast("Depósito eliminado", "success");
         } catch (e) {

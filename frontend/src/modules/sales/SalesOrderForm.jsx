@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { isValidUsdRate } from "../../utils/fxValidation";
+import { linesWithoutSalePrice } from "../../utils/salesOrderValidation";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -53,6 +54,7 @@ import {
   AlertCircle,
   ArrowUpRight,
   ArrowRight,
+  Settings2,
 } from "lucide-react";
 import s from "./SalesOrderForm.module.css";
 import { getPendingContainers, validateDocumentSelection } from "../../utils/documentQuantities";
@@ -123,6 +125,7 @@ export default function SalesOrderForm(props) {
   const [pointsOfSale, setPointsOfSale] = useState([]);
   const [sellers, setSellers] = useState([]);
   const [items, setItems] = useState([]);
+  const itemsWithoutPrice = useMemo(() => linesWithoutSalePrice(items), [items]);
   const [deliveryNotes, setDeliveryNotes] = useState([]);
   const [invoices, setInvoices] = useState([]);
 
@@ -135,6 +138,13 @@ export default function SalesOrderForm(props) {
 
   useEffect(() => {
     fetchInitialData();
+    const refreshCatalogs = () => { void fetchInitialData(); };
+    window.addEventListener("quintal:catalog-updated", refreshCatalogs);
+    window.addEventListener("focus", refreshCatalogs);
+    return () => {
+      window.removeEventListener("quintal:catalog-updated", refreshCatalogs);
+      window.removeEventListener("focus", refreshCatalogs);
+    };
   }, []);
 
   // ── AI Assistant: Pre-fill from initialData/initialLines ──
@@ -330,19 +340,19 @@ export default function SalesOrderForm(props) {
         if (whRes.ok) {
             const whs = await whRes.json();
             setWarehouses(whs);
-            if (whs.length > 0 && mode === "new") setWarehouseId(whs[0].id);
+            if (whs.length > 0 && mode === "new") setWarehouseId(current => current || whs[0].id);
         }
         if (scRes.ok) {
             const scs = await scRes.json();
             setSaleConditions(scs);
-            if (scs.length > 0 && mode === "new") setSelectedConditionId(scs[0].id);
+            if (scs.length > 0 && mode === "new") setSelectedConditionId(current => current || scs[0].id);
         }
         if (spRes.ok) setSellers(await spRes.json());
         if (posRes.ok) {
             const pvs = await posRes.json();
             const filteredPv = pvs.filter(p => !p.document_configs || p.document_configs.some(c => c.document_type === 'OV'));
             setPointsOfSale(filteredPv);
-            if (filteredPv.length > 0 && mode === "new") setPv(filteredPv[0].pv);
+            if (filteredPv.length > 0 && mode === "new") setPv(current => filteredPv.some(p => String(p.pv) === String(current)) ? current : filteredPv[0].pv);
         }
     } catch (e) { console.error(e); }
   };
@@ -417,8 +427,10 @@ export default function SalesOrderForm(props) {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     if (!entity) return showToast("Seleccione un cliente", "warning");
     if (items.length === 0) return showToast("Agregue productos", "warning");
+    if (itemsWithoutPrice.length > 0) return showToast(`Completá un precio mayor a cero en ${itemsWithoutPrice.length} producto(s) antes de guardar la orden.`, "error");
     if (currency === "USD" && (!isValidUsdRate(exchangeRate))) {
       return showToast("Ingresá un tipo de cambio válido antes de guardar una orden en USD.", "error");
     }
@@ -735,7 +747,7 @@ export default function SalesOrderForm(props) {
       qty: factor,
       qty_packages: 1,
       cost_price: p.cost_price || 0,
-      unit_price: p.base_price || p.cost_price || 0,
+      unit_price: Number(p.base_price) > 0 ? Number(p.base_price) : 0,
       discount_pct: 0,
       vat_rate: p.tax_type?.rate ?? 0.21,
       _unit_content: factor,
@@ -1006,7 +1018,7 @@ export default function SalesOrderForm(props) {
                                                 style={{ background: '#fffbeb', border: '1px solid #fcd34d', color: '#92400e' }}
                                                 title="Puedes editar el costo incluso si la orden está bloqueada"
                                             />
-                                            <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item.unit_price || 0} onChange={(e) => handleUpdateItem(item.id, 'unit_price', e.target.value)} readOnly={hasProgress || isReadOnly}  />
+                                            <input type="number" className={`${s.tableInput} ${w.tableInput} ${linesWithoutSalePrice([item]).length ? w.missingUnitPrice : ""}`} aria-label={`Precio unitario de ${item.name || item.description || "producto"}`} aria-invalid={linesWithoutSalePrice([item]).length > 0} value={item.unit_price || 0} onChange={(e) => handleUpdateItem(item.id, 'unit_price', e.target.value)} readOnly={hasProgress || isReadOnly}  />
                                             <input type="number" className={`${s.tableInput} ${w.tableInput}`} value={item.discount_pct || 0} onChange={(e) => handleUpdateItem(item.id, 'discount_pct', e.target.value)} readOnly={hasProgress || isReadOnly}  />
                                             <div style={{ fontSize: 11, fontWeight: 600, textAlign: 'center' }}>{((item.vat_rate || 0.21) * 100).toFixed(0)}%</div>
                                             <div style={{ fontSize: 11, fontWeight: 700, color: '#059669', textAlign: 'right' }}>
@@ -1038,10 +1050,10 @@ export default function SalesOrderForm(props) {
                       <div className={`${s.sideField} ${w.sideField}`}>
                           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
                             <label>Cliente</label>
-                            {!isReadOnly && <button type="button" title="Dar de alta un cliente dentro del sistema" onClick={() => openWindow("entities-manager",
-                              { initialType: "client", startNew: true, onCreated: setEntity },
-                              { title: "Nuevo cliente", width: 1200, height: 760, minWidth: 800, minHeight: 540, allowMultiple: true, singletonKey: `new-client-${windowId || "ventas"}` }
-                            )} style={{ border: "1px solid var(--border-color)", borderRadius: 7, padding: "4px 7px", background: "var(--bg-page)", color: "var(--text)", fontSize: 11, cursor: "pointer" }}>+ Nuevo cliente</button>}
+                            {!isReadOnly && <button type="button" className={w.clientSettingsButton} title="Gestionar clientes" aria-label="Gestionar clientes" onClick={() => openWindow("entities-manager",
+                              { initialType: "client", startNew: false, onCreated: setEntity },
+                              { title: "Gestión de clientes", width: 1200, height: 760, minWidth: 800, minHeight: 540, allowMultiple: true, singletonKey: `manage-client-${windowId || "ventas"}` }
+                            )}><Settings2 size={15} aria-hidden="true" /></button>}
                           </div>
                           {isReadOnly ? (
                               <div className={`${s.sideInput} ${w.sideInput}`}>{entity?.name || '-'}</div>
@@ -1080,7 +1092,7 @@ export default function SalesOrderForm(props) {
                       <div className={`${s.sideField} ${w.sideField}`}>
                           <label>Depósito</label>
                           {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{warehouses.find(w => w.id === warehouseId)?.name || warehouseId}</div> : (
-                              <select className={`${s.sideSelect} ${w.sideSelect}`} value={warehouseId} onChange={e => setWarehouseId(e.target.value)}>
+                              <select aria-label="Depósito" className={`${s.sideSelect} ${w.sideSelect}`} value={warehouseId} onFocus={fetchInitialData} onChange={e => setWarehouseId(e.target.value)}>
                                   <option value="">Seleccionar...</option>
                                   {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                               </select>
@@ -1089,7 +1101,7 @@ export default function SalesOrderForm(props) {
                       <div className={`${s.sideField} ${w.sideField}`}>
                           <label>Vendedor</label>
                           {isReadOnly ? <div className={`${s.sideInput} ${w.sideInput}`}>{sellers.find(sl => sl.id === salespersonId)?.name || 'Ninguno'}</div> : (
-                              <select className={`${s.sideSelect} ${w.sideSelect}`} value={salespersonId} onChange={e => setSalespersonId(e.target.value)}>
+                              <select aria-label="Vendedor" className={`${s.sideSelect} ${w.sideSelect}`} value={salespersonId} onFocus={fetchInitialData} onChange={e => setSalespersonId(e.target.value)}>
                                   <option value="">Ninguno</option>
                                   {sellers.map(sl => <option key={sl.id} value={sl.id}>{sl.name}</option>)}
                               </select>
@@ -1283,6 +1295,7 @@ export default function SalesOrderForm(props) {
                   <span className={`${s.footerCompactTotal} ${w.footerCompactTotal}`}>{fmt(totals.total)}</span>
               </div>
               <div className={w.saveArea}>
+                {!isReadOnly && itemsWithoutPrice.length > 0 && <div className={w.priceWarning} role="alert"><AlertCircle size={15} aria-hidden="true" /> {itemsWithoutPrice.length} producto(s) sin precio. Completalos para guardar.</div>}
 {isReadOnly ? (
                     <button
                       className={`${s.saveBtn} ${w.saveBtn}`}

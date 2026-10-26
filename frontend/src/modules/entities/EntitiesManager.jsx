@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Building2, RefreshCw, UsersRound } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Building2, RefreshCw, UsersRound } from 'lucide-react';
 import { useWindow } from '../../context/WindowContext';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
@@ -30,6 +30,7 @@ export default function EntitiesManager({ initialType = 'client', startNew = fal
     const [isEditing, setIsEditing] = useState(Boolean(startNew));
     const [isImporting, setIsImporting] = useState(false);
     const [editorDirty, setEditorDirty] = useState(false);
+    const [pendingDiscard, setPendingDiscard] = useState(null);
 
     const refresh = useCallback(() => setReloadKey(key => key + 1), []);
 
@@ -61,27 +62,40 @@ export default function EntitiesManager({ initialType = 'client', startNew = fal
         return () => controller.abort();
     }, [selectedType, debouncedSearch, reloadKey]);
 
-    const selectType = type => {
-        if (isEditing && editorDirty && !window.confirm('Tenés cambios sin guardar. ¿Querés cambiar de categoría?')) return;
-        setEditorDirty(false);
-        setSelectedType(type);
-        setSelectedEntity(null);
-        setIsEditing(false);
-        setSearchQuery('');
-        setDebouncedSearch('');
+    const confirmDiscard = (message, action) => {
+        if (editorDirty) {
+            setPendingDiscard({ message, action });
+            return;
+        }
+        action();
     };
 
-    const closeEditor = () => {
-        if (editorDirty && !window.confirm('Tenés cambios sin guardar. ¿Querés salir de la ficha?')) return;
-        setEditorDirty(false);
-        setIsEditing(false);
-        setSelectedEntity(null);
-    };
+    const selectType = type => confirmDiscard(
+        'Tenés cambios sin guardar en la ficha actual. Si cambiás de categoría, se perderán.',
+        () => {
+            setEditorDirty(false);
+            setSelectedType(type);
+            setSelectedEntity(null);
+            setIsEditing(false);
+            setSearchQuery('');
+            setDebouncedSearch('');
+        }
+    );
+
+    const closeEditor = () => confirmDiscard(
+        'Tenés cambios sin guardar en esta ficha. Si volvés al listado, se perderán.',
+        () => {
+            setEditorDirty(false);
+            setIsEditing(false);
+            setSelectedEntity(null);
+        }
+    );
 
     const handleSave = saved => {
         setEditorDirty(false);
         const creating = !selectedEntity;
         refresh();
+        window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'entities' } }));
         setIsEditing(false);
         setSelectedEntity(null);
         if (saved && creating && startNew && typeof onCreated === 'function') {
@@ -161,12 +175,26 @@ export default function EntitiesManager({ initialType = 'client', startNew = fal
                 </main>
             </div>
 
+            {pendingDiscard && (
+                <div className={s.modalBackdrop}>
+                    <div className={[s.modal, s.discardDialog].join(' ')} role="alertdialog" aria-modal="true" aria-labelledby="discard-dialog-title" aria-describedby="discard-dialog-body">
+                        <span className={s.discardIcon}><AlertTriangle size={23} /></span>
+                        <h2 id="discard-dialog-title">Cambios sin guardar</h2>
+                        <p id="discard-dialog-body">{pendingDiscard.message}</p>
+                        <div className={s.discardActions}>
+                            <button type="button" className={s.discardCancel} onClick={() => setPendingDiscard(null)}>Seguir editando</button>
+                            <button type="button" className={s.discardConfirm} onClick={() => { pendingDiscard.action(); setPendingDiscard(null); }}>Descartar cambios</button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {isImporting && (
                 <div className={s.modalBackdrop} onMouseDown={event => { if (event.target === event.currentTarget) setIsImporting(false); }}>
                     <div role="dialog" aria-modal="true" aria-label="Importar entidades desde Excel" className={s.modal}>
                         <EntityImporter
                             initialType={selectedType}
-                            onImportSuccess={() => { refresh(); }}
+                            onImportSuccess={() => { refresh(); window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'entities' } })); }}
                             onCancel={() => setIsImporting(false)}
                         />
                     </div>

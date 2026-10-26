@@ -84,12 +84,12 @@ export default function SimpleConfigPage({ type = 'campaigns', title = 'Campaña
         }
     };
 
-    // if (loading) return <div className={`${m.root} ${m.scroller}`}>Cargando...</div>;
+
 
     const labelStr = title.endsWith('s') ? title.slice(0, -1) : title;
 
     return (
-        <div style={{ padding: 20 }}>
+        <div className={`${m.root} ${m.scroller}`}>
             <ContentHeader title={title} breadcrumbs={[{ label: "Configuración" }, { label: title }]} />
             <div className={m.stats}><span className={m.stat}><strong>{items.length}</strong> registrados</span><span className={m.stat}><strong>{filteredItems.length}</strong> resultados</span></div>
             
@@ -124,6 +124,7 @@ export default function SimpleConfigPage({ type = 'campaigns', title = 'Campaña
                             icon={type === 'campaigns' ? Tag : (type === 'banks' ? Landmark : Briefcase)}
                             title={`Sin ${title}`}
                             description={query ? 'No hay resultados para esa búsqueda.' : `No hay ${title.toLowerCase()} configuradas aún.`}
+                            style={{ backgroundColor: 'transparent', border: '1px dashed #425576', color: '#f5f7ff', padding: '55px 20px' }}
                         />
                     ) : (
                         filteredItems.map(item => {

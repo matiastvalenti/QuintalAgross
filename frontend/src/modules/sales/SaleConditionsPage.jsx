@@ -66,6 +66,7 @@ export default function SaleConditionsPage() {
                 await api.post('/sales/sale-conditions/', { ...formData, description: desc });
             }
             
+            window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'sale-conditions' } }));
             setEditingId(null);
             setFormData({ description: '', due_days: 0, interest_rate: 0, financing_rate: 0 });
             showToast(editingId ? 'Condición actualizada' : 'Condición creada', 'success');
@@ -80,6 +81,7 @@ export default function SaleConditionsPage() {
         if (!window.confirm('¿Seguro que desea eliminar esta condición?')) return;
         try {
             await api.delete(`/sales/sale-conditions/${id}`);
+            window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'sale-conditions' } }));
             showToast('Condición eliminada', 'success');
             fetchConditions();
         } catch (e) {

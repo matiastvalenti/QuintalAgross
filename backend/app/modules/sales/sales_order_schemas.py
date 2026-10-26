@@ -1,7 +1,8 @@
 """Schemas Pydantic para Órdenes de Venta."""
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
+from math import isfinite
 
 
 from app.modules.inventory.product_schemas import ProductResponse
@@ -14,13 +15,20 @@ class SalesOrderLineCreate(BaseModel):
     package_size: Optional[float] = None
     package_unit: Optional[str] = None
     qty: float = 1.0
-    unit_price: float = 0.0
+    unit_price: float
     discount_pct: float = 0.0
     vat_rate: float = 0.21
     unit_cost: float = 0.0
     cost_price: Optional[float] = None # Alias para soportar frontend
     product_id: Optional[str] = None
     line_order: int = 0
+
+    @field_validator("unit_price")
+    @classmethod
+    def require_price(cls, v):
+        if not isfinite(v) or v <= 0:
+            raise ValueError("El precio unitario de cada producto debe ser mayor a cero")
+        return v
 
     @field_validator("qty")
     @classmethod
@@ -121,7 +129,7 @@ class SalesOrderCreate(BaseModel):
     vehicle_driver: Optional[str] = None
     notes: Optional[str] = None
     attachment_url: Optional[str] = None
-    lines: List[SalesOrderLineCreate] = []
+    lines: List[SalesOrderLineCreate] = Field(min_length=1)
 
 
     @field_validator("number", mode="before")
@@ -157,7 +165,7 @@ class SalesOrderUpdate(BaseModel):
     vehicle_driver: Optional[str] = None
     notes: Optional[str] = None
     attachment_url: Optional[str] = None
-    lines: Optional[List[SalesOrderLineCreate]] = None
+    lines: Optional[List[SalesOrderLineCreate]] = Field(default=None, min_length=1)
 
 
 class SalesOrderResponse(BaseModel):

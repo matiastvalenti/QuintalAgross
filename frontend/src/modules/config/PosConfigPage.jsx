@@ -68,6 +68,7 @@ export default function PosConfigPage() {
             } else {
                 await api.post('/config/pos', { ...editing, pv: padPV(editing.pv), document_configs: configs });
             }
+            window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'pos' } }));
             showToast("Punto de venta guardado", "success");
             setEditing(null);
             fetchPvs();
@@ -80,6 +81,7 @@ export default function PosConfigPage() {
         if (!window.confirm("¿Eliminar este punto de venta?")) return;
         try {
             await api.delete(`/config/pos/${id}`);
+            window.dispatchEvent(new CustomEvent('quintal:catalog-updated', { detail: { resource: 'pos' } }));
             showToast("Punto de venta eliminado", "success");
             fetchPvs();
         } catch (e) {
