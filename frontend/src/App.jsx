@@ -310,7 +310,17 @@ export default function App() {
                     <Route path="/contabilidad/impuestos" element={<TaxDashboard />} />
 
                     {/* Configuración */}
-                    <Route path="/configuracion/entidades" element={<EntitiesManager />} />
+                    <Route
+                      path="/configuracion/entidades"
+                      element={
+                        <OpenWindowRedirect
+                          type="entities-manager"
+                          props={{}}
+                          options={{ title: "Gestión de Entidades", width: 1280, height: 760, minWidth: 820, minHeight: 480, singletonKey: "config-entities" }}
+                          to="/"
+                        />
+                      }
+                    />
                     <Route path="/configuracion/condiciones-venta" element={<SaleConditionsPage />} />
                     <Route path="/configuracion" element={<SystemConfigPage />} />
 

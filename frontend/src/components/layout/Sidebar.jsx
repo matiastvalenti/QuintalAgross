@@ -191,8 +191,18 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
   };
 
   const handleItemClick = (e, item) => {
-      // Entidades se navega mediante su ruta interna /configuracion/entidades.
-      // No abrir una ventana nueva de Chrome para este módulo.
+      if (item.to === '/configuracion/entidades') {
+          e.preventDefault();
+          openWindow('entities-manager', {}, {
+              title: 'Gestión de Entidades',
+              width: 1280,
+              height: 760,
+              minWidth: 820,
+              minHeight: 480,
+              singletonKey: 'config-entities'
+          });
+          return;
+      }
       if (item.to === '/configuracion/flota') {
           e.preventDefault();
           openFleetManager({ title: 'Flota / Vehículos', width: 1050, height: 700 });

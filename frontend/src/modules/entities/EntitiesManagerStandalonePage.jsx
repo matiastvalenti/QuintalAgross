@@ -1,47 +1,32 @@
 /**
- * EntitiesManagerStandalonePage.jsx
- *
- * Página standalone para Gestión de Entidades.
+ * Ruta histórica: las entidades ya no se muestran en un popup de Chrome.
+ * Conservamos la URL antigua para llevar cualquier acceso guardado al
+ * módulo integrado en /configuracion/entidades.
  */
-import { useAuth } from "../../context/AuthContext";
-import EntitiesManager from "../../modules/entities/EntitiesManager";
-import LoadingScreen from "../../components/ui/LoadingScreen";
-
-function StandaloneGuard({ children }) {
-  const { user, loading } = useAuth();
-  if (loading) return <LoadingScreen message="Verificando sesión..." />;
-  if (!user)
-    return (
-      <div
-        style={{
-          padding: 40,
-          fontFamily: "system-ui, sans-serif",
-          color: "#1e293b",
-          textAlign: "center",
-        }}
-      >
-        <h2>Sesión requerida</h2>
-        <p>No hay sesión activa. Iniciá sesión desde la ventana principal.</p>
-      </div>
-    );
-  return <>{children}</>;
-}
+import { useEffect, useRef } from 'react';
+import { openEntitiesManager } from '../../utils/openStandaloneWindow';
 
 export default function EntitiesManagerStandalonePage() {
+  const redirected = useRef(false);
+
+  useEffect(() => {
+    if (redirected.current) return;
+    redirected.current = true;
+    openEntitiesManager();
+  }, []);
+
   return (
-    <StandaloneGuard>
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          display: "flex",
-          flexDirection: "column",
-        }}
-      >
-        <EntitiesManager
-          isStandalone={true}
-        />
-      </div>
-    </StandaloneGuard>
+    <div role="status" style={{
+      position: 'fixed',
+      inset: 0,
+      display: 'grid',
+      placeItems: 'center',
+      background: '#101729',
+      color: '#cbd5e1',
+      fontFamily: 'Inter, system-ui, sans-serif',
+      fontSize: 14
+    }}>
+      Abriendo Entidades dentro del sistema…
+    </div>
   );
 }

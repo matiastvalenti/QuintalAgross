@@ -347,7 +347,28 @@ export function openResumenCuenta(entityId = null, options = {}, viewParam = nul
 
 // === ENTIDADES Y CRM ===
 export function openEntitiesManager(options = {}) {
-  return openStandaloneWindow("/standalone/entidades", "entidades-manager", options);
+  // Compatibilidad con accesos antiguos: Entidades se usa dentro del ERP.
+  // Si se invoca desde una ventana standalone previa, recuperar la ventana
+  // principal (mismo origen) y cerrar la emergente creada por el sistema.
+  const route = '/configuracion/entidades';
+  let target = window;
+  try {
+    if (window.opener && !window.opener.closed && window.opener.location.origin === window.location.origin) {
+      target = window.opener;
+    }
+  } catch {
+    target = window;
+  }
+
+  try {
+    target.history.pushState({}, '', route);
+    target.dispatchEvent(new target.PopStateEvent('popstate'));
+  } catch {
+    target.location.assign(route);
+  }
+  target.focus?.();
+  if (target !== window) window.close();
+  return target;
 }
 
 export function openEntityDashboard(id, options = {}) {
