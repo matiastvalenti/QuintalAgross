@@ -525,8 +525,10 @@ export default function ReceiptForm({
           reference_number: p.reference_number,
           due_date: p.type === "CHECK" ? p.due_date : null,
           issue_date: p.type === "CHECK" ? p.issue_date : null,
-          check_type: p.check_type,
-          issuer_tax_id: p.issuer_tax_id,
+          check_type: p.type === "CHECK" ? p.check_type : null,
+          issue_date: p.type === "CHECK" ? p.issue_date : null,
+          drawer_name: p.type === "CHECK" ? p.drawer_name : null,
+          drawer_cuit: p.type === "CHECK" ? (p.drawer_cuit || p.issuer_tax_id || "") : null,
           accounting_account: p.accounting_account
         })),
         ...retentions.map((r) => ({
@@ -970,6 +972,7 @@ export default function ReceiptForm({
       initialCheck={checkDraft}
       currency={currency}
       banks={banks}
+      existingChecks={payments.filter(payment => payment.type === "CHECK")}
       isPayment={isPayment}
       onClose={() => { setShowCheckModal(false); setCheckDraft(null); }}
       onSave={saveCheck}

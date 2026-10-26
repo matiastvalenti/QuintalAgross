@@ -74,7 +74,6 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         const fxRes = await api.get(`/accounting/fx/usd?date=${today}`);
         if (fxRes?.rate) {
           defaultRate = Number(fxRes.rate);
-          if (mounted && fxRes.warning) showToast(fxRes.warning, "warning");
           if (mounted) setFxCache(prev => ({ ...prev, [today]: defaultRate }));
         }
       } catch (e) {
@@ -1250,6 +1249,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         currency={currency}
         suggestedAmount={!isAdvance && totalApplied > totalCollected ? Number((totalApplied - totalCollected).toFixed(2)) : ""}
         banks={banks}
+        existingChecks={payments.filter(payment => payment.type === "CHECK")}
         onClose={() => { setShowCheckModal(false); setEditingCheckId(null); }}
         onSave={saveCheck}
       />

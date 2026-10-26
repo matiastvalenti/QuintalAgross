@@ -43,7 +43,10 @@ describe("Carga por lote de cheques", () => {
   });
 
   it("el botón Cheque de Recibos incorpora dos cheques en una sola operación", async () => {
-    api.get.mockImplementation(url => Promise.resolve(url.includes("/fx/usd") ? { rate: 1500 } : []));
+    api.get.mockImplementation(url => Promise.resolve(
+      url.includes("/fx/usd") ? { rate: 1500 } :
+      url.includes("/config/banks") ? [{ id: "ber", name: "Banco Entre Ríos", tax_id: "30-12345678-9" }] : []
+    ));
     render(<MemoryRouter><ReceiptCollectionForm /></MemoryRouter>);
 
     await screen.findByText("Parámetros de Recibo");
@@ -63,4 +66,41 @@ describe("Carga por lote de cheques", () => {
     expect(screen.getByText(/N° CH-201/)).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Editar Cheque" })).toHaveLength(2);
   });
+  it("impide incorporar bancos no configurados y números duplicados del recibo", () => {
+    const onSave = vi.fn();
+    render(<ChequeEntryDialog open banks={[{ name: "Banco Nación", tax_id: "30-50001091-2" }]}
+      existingChecks={[{ id: "ya-1", type: "CHECK", bank_name: "Banco Nación", reference_number: "100" }]}
+      onSave={onSave} onClose={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText("Buscar banco por nombre o CUIT"), { target: { value: "Banco inventado" } });
+    fireEvent.change(screen.getByPlaceholderText("Número / referencia"), { target: { value: "101" } });
+    fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "9000" } });
+    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Configuración");
+    expect(onSave).not.toHaveBeenCalled();
+
+    fireEvent.change(screen.getByLabelText("Buscar banco por nombre o CUIT"), { target: { value: "Banco Nación" } });
+    fireEvent.change(screen.getByPlaceholderText("Número / referencia"), { target: { value: "100" } });
+    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }));
+    expect(screen.getByRole("alert")).toHaveTextContent("ya están incluidos");
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it("conserva datos del librador y cheque electrónico en los cheques preparados", () => {
+    const onSave = vi.fn();
+    render(<ChequeEntryDialog open banks={[{ name: "Banco Entre Ríos" }]} onSave={onSave} onClose={vi.fn()} />);
+    fireEvent.change(screen.getByLabelText("Buscar banco por nombre o CUIT"), { target: { value: "Banco Entre Ríos" } });
+    fireEvent.change(screen.getByPlaceholderText("Número / referencia"), { target: { value: "EC-1" } });
+    fireEvent.change(screen.getByPlaceholderText("0,00"), { target: { value: "13000" } });
+    fireEvent.change(screen.getByPlaceholderText("Nombre o razón social"), { target: { value: "Agro SRL" } });
+    fireEvent.change(screen.getByPlaceholderText("Opcional"), { target: { value: "30-12345678-9" } });
+    fireEvent.change(screen.getByDisplayValue("Cheque físico"), { target: { value: "ECHEQ" } });
+    fireEvent.click(screen.getByRole("button", { name: /Finalizar/ }));
+    expect(onSave).toHaveBeenCalledOnce();
+    expect(onSave.mock.calls[0][0][0]).toMatchObject({
+      bank_name: "Banco Entre Ríos", reference_number: "EC-1", check_type: "ECHEQ",
+      drawer_name: "Agro SRL", drawer_cuit: "30123456789", issuer_tax_id: "30123456789"
+    });
+  });
+
 });

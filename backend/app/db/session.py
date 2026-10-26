@@ -49,6 +49,29 @@ def run_migrations(engine):
                 except Exception:
                     pass # Column already exists
             
+            # Datos de cada cheque dentro del recibo / orden de pago.
+            # Idempotente para las bases SQLite ya existentes.
+            for col_def in [
+                ("issue_date", "DATETIME"),
+                ("check_type", "TEXT"),
+                ("drawer_name", "TEXT"),
+                ("drawer_cuit", "TEXT"),
+            ]:
+                try:
+                    conn.execute(text(f"ALTER TABLE payment_items ADD COLUMN {col_def[0]} {col_def[1]}"))
+                    conn.commit()
+                    print(f"Patched: Added {col_def[0]} to payment_items")
+                except Exception:
+                    pass
+
+            for col_def in [("librador", "TEXT"), ("f_emision", "DATE")]:
+                try:
+                    conn.execute(text(f"ALTER TABLE cheques ADD COLUMN {col_def[0]} {col_def[1]}"))
+                    conn.commit()
+                    print(f"Patched: Added {col_def[0]} to cheques")
+                except Exception:
+                    pass
+
             # Patch for commission_payments
             for col in ['sales_order_id', 'delivery_note_id', 'source_document_id']:
                 try:

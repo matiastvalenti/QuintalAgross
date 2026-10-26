@@ -887,6 +887,7 @@ def create_document(
         # Crear pagos si se proporcionan
         if doc.payments:
             from app.db import finance_models
+            seen_receipt_checks = set()
             for pay in doc.payments:
                 db_pay = models.PaymentItem(
                     document_id=db_doc.id,
@@ -897,17 +898,39 @@ def create_document(
                 # INTEGRACIÓN CON MÓDULO DE CHEQUES
                 if pay.type == models.PaymentMethod.CHECK:
                     if db_doc.doc_type == models.DocumentType.RECEIPT:
-                        # Crear el cheque en la cartera si es un recibo
+                        # Guardar trazabilidad real de cada cheque del lote.
+                        bank = (pay.bank_name or "").strip()
+                        number = (pay.reference_number or "").strip()
+                        drawer_cuit = "".join(ch for ch in (pay.drawer_cuit or "") if ch.isdigit())
+                        if not bank or not number:
+                            raise HTTPException(status_code=422, detail="Cada cheque debe tener banco y número.")
+                        if drawer_cuit and len(drawer_cuit) != 11:
+                            raise HTTPException(status_code=422, detail=f"CUIT inválido en el cheque {number}.")
+                        cheque_key = (bank.casefold(), number, drawer_cuit)
+                        if cheque_key in seen_receipt_checks:
+                            raise HTTPException(status_code=409, detail=f"El cheque {number} del banco {bank} está repetido en el recibo.")
+                        seen_receipt_checks.add(cheque_key)
+                        existing = db.query(finance_models.Cheque).filter(
+                            func.lower(finance_models.Cheque.banco) == bank.lower(),
+                            finance_models.Cheque.nro_cheque == number,
+                            finance_models.Cheque.cuit_emisor == drawer_cuit
+                        ).first()
+                        if existing:
+                            raise HTTPException(status_code=409, detail=f"El cheque {number} del banco {bank} ya existe en cartera o en el historial.")
                         new_cheque = finance_models.Cheque(
                             entity_id=db_doc.entity_id,
                             source_document_id=db_doc.id,
-                            banco=pay.bank_name or pay.description or "S/D",
-                            nro_cheque=pay.reference_number or "0",
+                            banco=bank,
+                            nro_cheque=number,
+                            tipo=pay.check_type or "FISICO",
                             importe=pay.amount,
                             moneda=db_doc.currency,
                             f_pago=pay.due_date.date() if pay.due_date else datetime.now().date(),
+                            f_vencimiento=pay.due_date.date() if pay.due_date else None,
+                            f_emision=pay.issue_date.date() if pay.issue_date else None,
                             cliente_dador=entity.name,
-                            cuit_emisor="", # Se podría ampliar el schema para pedir CUIT
+                            librador=pay.drawer_name or entity.name,
+                            cuit_emisor=drawer_cuit,
                             estado="EN_CARTERA",
                             cost_center=db_doc.cost_center
                         )
@@ -924,15 +947,28 @@ def create_document(
                         ref_num_str = str(pay.reference_number or "0").strip().lstrip('0')
                         if not ref_num_str: ref_num_str = "0"
 
-                        existing_ch = db.query(finance_models.Cheque).filter(
-                            # Comparamos el nro_cheque quitando ceros a la izquierda también en la DB
+                        # No endosar solamente por número e importe: otros bancos
+                        # pueden emitir el mismo número de cheque.
+                        cheque_query = db.query(finance_models.Cheque).filter(
                             func.ltrim(finance_models.Cheque.nro_cheque, '0') == ref_num_str,
-                            # Usamos un rango pequeño para evitar problemas de precisión en Numeric
                             finance_models.Cheque.importe >= float(pay.amount) - 0.05,
                             finance_models.Cheque.importe <= float(pay.amount) + 0.05,
-                            # Aceptamos EN_CARTERA o PENDIENTE (limpieza automática)
                             finance_models.Cheque.estado.in_(["EN_CARTERA", "PENDIENTE"])
-                        ).first()
+                        )
+                        if pay.bank_name:
+                            cheque_query = cheque_query.filter(
+                                func.lower(finance_models.Cheque.banco) == pay.bank_name.strip().lower()
+                            )
+                        if pay.drawer_cuit:
+                            cuit = "".join(ch for ch in pay.drawer_cuit if ch.isdigit())
+                            cheque_query = cheque_query.filter(finance_models.Cheque.cuit_emisor == cuit)
+                        matches = cheque_query.limit(2).all()
+                        if len(matches) > 1:
+                            raise HTTPException(status_code=409, detail=(
+                                "Hay más de un cheque en cartera con esos datos. "
+                                "Seleccioná uno inequívocamente antes de endosarlo."
+                            ))
+                        existing_ch = matches[0] if matches else None
 
                         if existing_ch:
                             logger.info(f"CHEQUE ENCONTRADO: ID={existing_ch.id}, Nro={existing_ch.nro_cheque}, Nuevo Estado=ENDOSADO")

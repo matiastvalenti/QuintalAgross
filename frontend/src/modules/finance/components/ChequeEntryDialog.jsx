@@ -37,6 +37,7 @@ export default function ChequeEntryDialog({
   currency = "ARS",
   suggestedAmount = "",
   banks = [],
+  existingChecks = [],
   isPayment = false,
   onClose,
   onSave,
@@ -65,7 +66,7 @@ export default function ChequeEntryDialog({
 
   const editing = initialCheck?.id != null;
   const bankRecords = Array.isArray(banks)
-    ? banks.map(bank => typeof bank === "string" ? { name: bank, tax_id: "" } : {
+    ? banks.filter(bank => typeof bank === "string" || bank.active !== false).map(bank => typeof bank === "string" ? { name: bank, tax_id: "" } : {
       name: bank.name || bank.nombre || "",
       tax_id: bank.tax_id || "",
     }).filter(bank => bank.name)
@@ -80,22 +81,39 @@ export default function ChequeEntryDialog({
   const parseCheck = () => {
     const amount = Number(draft.amount);
     if (!draft.bank_name.trim()) { setError("Indicá el banco del cheque."); return null; }
+    const validBank = bankRecords.find(bank =>
+      bank.name.trim().toLocaleLowerCase("es-AR") === draft.bank_name.trim().toLocaleLowerCase("es-AR"));
+    if (!validBank && (!editing || draft.bank_name.trim() !== initialCheck?.bank_name?.trim())) {
+      setError(bankRecords.length
+        ? "Seleccioná un banco cargado en Configuración → Bancos."
+        : "Primero cargá los bancos en Configuración → Bancos.");
+      return null;
+    }
     if (!draft.reference_number.trim()) { setError("Indicá el número de cheque."); return null; }
     if (!Number.isFinite(amount) || amount <= 0) { setError("El importe debe ser mayor a cero."); return null; }
     if (!draft.issue_date || !draft.due_date) { setError("Completá las fechas de emisión y vencimiento."); return null; }
     if (draft.due_date < draft.issue_date) { setError("El vencimiento no puede ser anterior a la emisión."); return null; }
-    const duplicate = queued.some(check =>
-      check.bank_name.trim().toLowerCase() === draft.bank_name.trim().toLowerCase() &&
-      check.reference_number.trim().toLowerCase() === draft.reference_number.trim().toLowerCase());
-    if (duplicate) { setError("Ya cargaste ese número de cheque para el mismo banco."); return null; }
+    const duplicate = [...queued, ...existingChecks.filter(check => !editing || check.id !== initialCheck?.id)].some(check => {
+      const sameBank = String(check.bank_name || "").trim().toLocaleLowerCase("es-AR") === draft.bank_name.trim().toLocaleLowerCase("es-AR");
+      const sameNumber = String(check.reference_number || "").trim() === draft.reference_number.trim();
+      const existingCuit = String(check.drawer_cuit || check.issuer_tax_id || "").replace(/\D/g, "");
+      const enteredCuit = String(draft.drawer_cuit || "").replace(/\D/g, "");
+      return sameBank && sameNumber && (!existingCuit || !enteredCuit || existingCuit === enteredCuit);
+    });
+    if (duplicate) { setError("Ese número de cheque y banco ya están incluidos en este comprobante."); return null; }
+    const drawerCuit = draft.drawer_cuit.replace(/\D/g, "");
+    if (drawerCuit && drawerCuit.length !== 11) {
+      setError("El CUIT del librador debe tener 11 dígitos o quedar vacío.");
+      return null;
+    }
     return {
       ...draft,
       amount,
-      bank_name: draft.bank_name.trim(),
+      bank_name: validBank?.name || draft.bank_name.trim(),
       reference_number: draft.reference_number.trim(),
       drawer_name: draft.drawer_name.trim(),
-      drawer_cuit: draft.drawer_cuit.trim(),
-      issuer_tax_id: draft.drawer_cuit.trim(),
+      drawer_cuit: drawerCuit,
+      issuer_tax_id: drawerCuit,
     };
   };
 
@@ -254,7 +272,7 @@ export default function ChequeEntryDialog({
               </div>
             )}
             {error && <div className={s.error} role="alert">{error}</div>}
-            {!editing && <p className={s.bankHint}>Los bancos se administran en Configuración → Bancos. Podés buscarlos por nombre o CUIT.</p>}
+            {!editing && <p className={s.bankHint}>Elegí un banco existente de Configuración → Bancos. Buscá por nombre o CUIT; si no está, cargalo en Configuración antes de continuar.</p>}
           </div>
           <div className={s.footer}>
             <button type="button" className={s.cancel} onClick={cancel}>Cancelar</button>

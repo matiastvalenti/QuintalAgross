@@ -412,6 +412,10 @@ class PaymentItem(Base):
     reference_number = Column(String, nullable=True)
     bank_name = Column(String, nullable=True)
     due_date = Column(DateTime, nullable=True) # Para cheques
+    issue_date = Column(DateTime, nullable=True)
+    check_type = Column(String, nullable=True)
+    drawer_name = Column(String, nullable=True)
+    drawer_cuit = Column(String, nullable=True)
     
     document = relationship("Document", back_populates="payments")
 

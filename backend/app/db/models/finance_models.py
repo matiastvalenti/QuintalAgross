@@ -36,6 +36,8 @@ class Cheque(Base):
 
     cliente_dador = Column(String, nullable=True) # Texto legacy/manual
     cuit_emisor = Column(String, nullable=False, default="")
+    librador = Column(String, nullable=True)
+    f_emision = Column(Date, nullable=True)
     beneficiario = Column(String, nullable=True)
     
     entregado_a = Column(String, nullable=True) # Texto legacy

@@ -13,6 +13,8 @@ class ChequeOut(BaseModel):
     f_vencimiento: Optional[date] = None
     cliente_dador: Optional[str] = None
     cuit_emisor: Optional[str] = ""
+    librador: Optional[str] = None
+    f_emision: Optional[date] = None
     beneficiario: Optional[str] = None
     
     entregado_a: Optional[str] = None
