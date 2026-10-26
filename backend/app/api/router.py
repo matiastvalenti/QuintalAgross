@@ -1,5 +1,6 @@
 from fastapi import APIRouter
 from app.modules.entities import router as entities
+from app.modules.entities.import_router import router as entities_import_router
 from app.modules.accounting import router as accounting
 from app.modules.finance import router as finance
 from app.modules.inventory import router as inventory
@@ -23,6 +24,8 @@ from app.api.ai_router import router as ai_router
 
 api_router = APIRouter()
 
+# Los endpoints específicos preceden al GET /entities/{entity_id}.
+api_router.include_router(entities_import_router)
 api_router.include_router(entities.router)
 api_router.include_router(accounting.router)
 api_router.include_router(application_router)
