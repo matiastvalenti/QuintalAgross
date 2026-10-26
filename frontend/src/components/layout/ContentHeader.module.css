@@ -41,3 +41,23 @@
     gap: var(--s-2);
     align-items: center;
 }
+.backButton {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    cursor: pointer;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 7px 11px;
+    margin-bottom: 9px;
+}
+.backButton:hover, .backButton:focus-visible {
+    color: var(--text);
+    border-color: #8470d0;
+    outline: none;
+}

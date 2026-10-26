@@ -17,7 +17,7 @@
     padding: 8px 16px;
     /* Reduced padding P0 */
     border-bottom: 1px solid var(--border-color);
-    background: #fff;
+    background: var(--bg-card);
     min-height: 32px;
 }
 

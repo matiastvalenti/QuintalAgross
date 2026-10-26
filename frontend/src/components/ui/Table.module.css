@@ -20,7 +20,7 @@
     font-size: 10px;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    background: #fff;
+    background: var(--th-bg, var(--bg-card));
     border-bottom: 1px solid var(--border-color);
     white-space: nowrap;
 }

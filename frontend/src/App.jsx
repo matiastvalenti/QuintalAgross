@@ -5,7 +5,6 @@ import {
   Routes,
   Route,
   Navigate,
-  useNavigate,
   useParams,
 } from "react-router-dom";
 import AppShell from "./components/layout/AppShell";
@@ -116,13 +115,12 @@ const ProtectedRoute = ({ children }) => {
 // ── Strict Window Route Helper ──
 const OpenWindowRedirect = ({ type, props, options, to }) => {
   const { openWindow } = useWindow();
-  const navigate = useNavigate();
-
   useEffect(() => {
     openWindow(type, props, options);
   }, []);
 
-  return <Navigate to={to} replace />;
+  // Las ventanas de Configuración permanecen dentro del ERP, sin redirigir al dashboard.
+  return to ? <Navigate to={to} replace /> : <SystemConfigPage />;
 };
 
 console.time('3. App.jsx Render');
@@ -270,7 +268,7 @@ export default function App() {
                     <Route path="/inventario/articulos" element={<ArticlesManager />} />
                     <Route path="/inventario/dashboard" element={<InventoryDashboard />} />
                     <Route path="/inventario/productos" element={<Navigate to="/inventario/articulos" replace />} />
-                    <Route path="/inventario/depositos" element={<WarehousesPage />} />
+                    <Route path="/inventario/depositos" element={<OpenWindowRedirect type="warehouses-manager" props={{}} options={{ title: "Depósitos", width: 1200, height: 760, singletonKey: "config-warehouses" }} />} />
                     <Route path="/inventario/movimientos" element={<StockMovementsPage />} />
 
                     {/* Finanzas */}
@@ -317,11 +315,17 @@ export default function App() {
                           type="entities-manager"
                           props={{}}
                           options={{ title: "Gestión de Entidades", width: 1280, height: 760, minWidth: 820, minHeight: 480, singletonKey: "config-entities" }}
-                          to="/"
                         />
                       }
                     />
-                    <Route path="/configuracion/condiciones-venta" element={<SaleConditionsPage />} />
+                    <Route path="/configuracion/condiciones-venta" element={<OpenWindowRedirect type="sale-conditions" props={{}} options={{ title: "Condiciones de Venta", width: 1120, height: 740, singletonKey: "config-conditions" }} />} />
+                    <Route path="/configuracion/empleados" element={<OpenWindowRedirect type="entities-manager" props={{ initialType: "employee" }} options={{ title: "Empleados", width: 1280, height: 760, singletonKey: "config-employees" }} />} />
+                    <Route path="/configuracion/bancos" element={<OpenWindowRedirect type="bank-config" props={{}} options={{ title: "Bancos", width: 1120, height: 740, singletonKey: "config-banks" }} />} />
+                    <Route path="/configuracion/pos" element={<OpenWindowRedirect type="pos-config" props={{}} options={{ title: "Puntos de Venta", width: 1120, height: 740, singletonKey: "config-pos" }} />} />
+                    <Route path="/configuracion/flota" element={<OpenWindowRedirect type="fleet-manager" props={{}} options={{ title: "Flota / Vehículos", width: 1200, height: 760, singletonKey: "config-fleet" }} />} />
+                    <Route path="/configuracion/usuarios" element={<OpenWindowRedirect type="users-manager" props={{}} options={{ title: "Usuarios y Permisos", width: 1200, height: 760, singletonKey: "config-users" }} />} />
+                    <Route path="/configuracion/unidades-negocio" element={<OpenWindowRedirect type="simple-config" props={{ type: "business-units", title: "Unidades de Negocio" }} options={{ title: "Unidades de Negocio", width: 1120, height: 740, singletonKey: "config-bu" }} />} />
+                    <Route path="/configuracion/campañas" element={<OpenWindowRedirect type="simple-config" props={{ type: "campaigns", title: "Campañas" }} options={{ title: "Campañas", width: 1120, height: 740, singletonKey: "config-campaigns" }} />} />
                     <Route path="/configuracion" element={<SystemConfigPage />} />
 
                     {/* Tareas y Planificación */}

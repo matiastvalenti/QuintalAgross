@@ -1,12 +1,12 @@
 import s from './Card.module.css';
 
-export default function Card({ title, actions, noPad, children, className = '' }) {
+export default function Card({ title, actions, headerActions, noPad, children, className = '', style, ...rest }) {
   return (
-    <div className={`${s.card} ${className}`}>
+    <div {...rest} className={`${s.card} ${className}`} style={style}>
       {title && (
         <div className={s.header}>
           <h3>{title}</h3>
-          {actions}
+          {actions ?? headerActions}
         </div>
       )}
       <div className={`${s.body} ${noPad ? s.noPad : ''}`}>{children}</div>

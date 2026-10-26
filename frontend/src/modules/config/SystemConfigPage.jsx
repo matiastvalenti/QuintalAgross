@@ -4,13 +4,7 @@ import {
   Warehouse, Settings2, ShieldCheck, MapPin,
   Users, Truck, Receipt, Landmark
 } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import { useWindow } from '../../context/WindowContext';
-import { 
-  openEntitiesManager, 
-  openFleetManager, 
-  openUsersManager 
-} from '../../utils/openStandaloneWindow';
 import s from './SystemConfigPage.module.css';
 
 const CONFIG_GROUPS = [
@@ -123,22 +117,14 @@ export default function SystemConfigPage() {
   const { openWindow } = useWindow();
 
   const handleOpen = (opt) => {
-    if (opt.window === 'entities-manager') {
-      openEntitiesManager({ title: opt.title });
-    } else if (opt.window === 'fleet-manager') {
-      openFleetManager({ title: opt.title });
-    } else if (opt.window === 'users-manager') {
-      openUsersManager({ title: opt.title });
-    } else {
-      openWindow(opt.window, opt.props || {}, {
-        title: opt.title,
-        width: 1050,
-        height: 700,
-        minWidth: 1000,
-        minHeight: 600,
-        singletonKey: `config-${opt.id}`
-      });
-    }
+    openWindow(opt.window, opt.props || {}, {
+      title: opt.title,
+      width: opt.width || (opt.id === 'entities' || opt.id === 'employees' ? 1280 : 1100),
+      height: opt.height || 760,
+      minWidth: 740,
+      minHeight: 480,
+      singletonKey: `config-${opt.id}`
+    });
   };
 
   return (
@@ -160,7 +146,14 @@ export default function SystemConfigPage() {
           <h2 className={s.sectionTitle}>{group.name}</h2>
           <div className={s.grid}>
             {group.options.map(opt => (
-              <div key={opt.id} className={s.card} onClick={() => handleOpen(opt)}>
+              <div key={opt.id} className={s.card} role="button" tabIndex={0} aria-label={`Abrir ${opt.title}`}
+                onClick={() => handleOpen(opt)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    handleOpen(opt);
+                  }
+                }}>
                 <div className={s.iconWrapper} style={{ backgroundColor: `${opt.color}15`, color: opt.color }}>
                   <opt.icon size={28} />
                 </div>

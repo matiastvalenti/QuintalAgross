@@ -34,6 +34,14 @@ const NAV_GROUPS = [
         ]
       },
       {
+        label: 'Inventario', icon: Package, perm: 'items',
+        children: [
+          { label: 'Artículos', to: '/inventario/articulos', perm: 'items' },
+          { label: 'Depósitos', to: '/inventario/depositos', perm: 'items' },
+          { label: 'Movimientos', to: '/inventario/movimientos', perm: 'items' },
+        ]
+      },
+      {
         label: 'Ventas', icon: CircleDollarSign, perm: 'sales_orders',
         badgeKey: 'ventas_pendientes', // TODO: Conectar con endpoint de estado operativo
         children: [
@@ -142,6 +150,7 @@ const NAV_GROUPS = [
           { label: 'Unidades de Negocio', to: '/configuracion/unidades-negocio', perm: 'users' },
           { label: 'Campañas', to: '/configuracion/campañas', perm: 'users' },
           { label: 'Puntos de Venta', to: '/configuracion/pos', perm: 'users' },
+          { label: 'Bancos', to: '/configuracion/bancos', perm: 'users' },
           { label: 'Condiciones de Venta', to: '/configuracion/condiciones-venta', perm: 'users' },
           { label: 'Auditoría de Sistema', to: '/configuracion/auditoria', perm: 'users' },
         ]
@@ -205,6 +214,21 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
       if (item.to === '/configuracion/flota') {
           e.preventDefault();
           openWindow('fleet-manager', {}, { title: 'Flota / Vehículos', width: 1050, height: 700, singletonKey: 'config-fleet' });
+      }
+      if (item.to === '/inventario/depositos') {
+          e.preventDefault();
+          openWindow('warehouses-manager', {}, { title: 'Depósitos', width: 1200, height: 760, singletonKey: 'config-warehouses' });
+          return;
+      }
+      if (item.to === '/configuracion/bancos') {
+          e.preventDefault();
+          openWindow('bank-config', {}, { title: 'Bancos', width: 1120, height: 740, singletonKey: 'config-banks' });
+          return;
+      }
+      if (item.to === '/configuracion/condiciones-venta') {
+          e.preventDefault();
+          openWindow('sale-conditions', {}, { title: 'Condiciones de Venta', width: 1120, height: 740, singletonKey: 'config-conditions' });
+          return;
       }
       if (item.to === '/configuracion/pos') {
           e.preventDefault();
