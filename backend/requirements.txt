@@ -11,7 +11,7 @@ openpyxl
 xlrd>=2.0.1
 requests
 reportlab==4.0.9
-psycopg2-binary==2.9.9
+psycopg2-binary==2.9.13
 APScheduler==3.10.4
 
 # Dependencias utilizadas por autenticación y documentos

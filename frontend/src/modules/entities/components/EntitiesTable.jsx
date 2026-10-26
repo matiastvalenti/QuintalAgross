@@ -1,302 +1,155 @@
-import React from 'react';
-import { 
-    Search as SearchIcon, Wallet, FileSpreadsheet, MapPin, Layout, Edit 
-} from 'lucide-react';
-import t from '../../../components/ui/Table.module.css';
-import Badge from '../../../components/ui/Badge';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronLeft, ChevronRight, FileSpreadsheet, FilterX, MapPin, Pencil, Plus, Search, ShieldAlert, Wallet, LayoutDashboard, RefreshCw, Download } from 'lucide-react';
 import { useWindow } from '../../../context/WindowContext';
-import { openResumenCuenta, openEntityDashboard } from '../../../utils/openStandaloneWindow';
-import TableSkeleton from '../../../components/ui/TableSkeleton';
-import EmptyState from '../../../components/ui/EmptyState';
+import s from '../EntitiesWorkspace.module.css';
 
-export default function EntitiesTable({ 
-    entities, 
-    loading,
-    error = '', 
-    selectedEntity, 
-    onSearch, 
-    searchQuery,
-    selectedType = 'client',
-    onSelect,
-    onNew,
-    onImport,
-    onImportSaldos
-}) {
+const PAGE_SIZE = 50;
+const labelByType = { client: 'Cliente', provider: 'Proveedor', mixed: 'Mixto', employee: 'Empleado' };
+const newByType = { client: 'Nuevo cliente', provider: 'Nuevo proveedor', mixed: 'Nueva entidad', employee: 'Nuevo empleado' };
+const collator = new Intl.Collator('es-AR', { numeric: true, sensitivity: 'base' });
+
+export default function EntitiesTable({ entities = [], loading, error = '', selectedType, onSearch, searchQuery, onSelect, onNew, onImport, onRefresh }) {
     const { openWindow } = useWindow();
+    const [sortField, setSortField] = useState('name');
+    const [sortDirection, setSortDirection] = useState('asc');
+    const [onlyIncomplete, setOnlyIncomplete] = useState(false);
+    const [page, setPage] = useState(1);
+
+    useEffect(() => { setPage(1); }, [entities, selectedType, searchQuery, sortField, sortDirection, onlyIncomplete]);
+
+    const orderedEntities = useMemo(() => {
+        const filtered = onlyIncomplete
+            ? entities.filter(e => !e.tax_id || !e.city || !e.state)
+            : entities;
+        return [...filtered].sort((a, b) => {
+            const left = String(a?.[sortField] ?? '');
+            const right = String(b?.[sortField] ?? '');
+            const result = collator.compare(left, right);
+            return sortDirection === 'asc' ? result : -result;
+        });
+    }, [entities, onlyIncomplete, sortField, sortDirection]);
+    const pages = Math.max(1, Math.ceil(orderedEntities.length / PAGE_SIZE));
+    const safePage = Math.min(page, pages);
+    const rows = orderedEntities.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+    const start = orderedEntities.length ? (safePage - 1) * PAGE_SIZE + 1 : 0;
+    const end = Math.min(safePage * PAGE_SIZE, orderedEntities.length);
+
+    const sortBy = field => {
+        if (sortField === field) setSortDirection(direction => direction === 'asc' ? 'desc' : 'asc');
+        else { setSortField(field); setSortDirection('asc'); }
+    };
+    const SortHeader = ({ field, children, className = '' }) => (
+        <button type="button" onClick={() => sortBy(field)} className={s.sortControl} aria-label={'Ordenar por ' + children}>
+            {children}
+            {sortField === field && (sortDirection === 'asc' ? <ArrowUp size={12} /> : <ArrowDown size={12} />)}
+        </button>
+    );
+    const openDashboard = entity => openWindow('entity-dashboard', { entityId: entity.id }, {
+        title: 'Ficha 360 · ' + entity.name, width: 1160, height: 750, minWidth: 720, minHeight: 450,
+        singletonKey: 'entity-dashboard-' + entity.id
+    });
+    const openStatement = entity => openWindow('statement-page', { entityId: entity.id }, {
+        title: 'Cuenta corriente · ' + entity.name, width: 1200, height: 740, minWidth: 720, minHeight: 450,
+        singletonKey: 'entity-statement-' + entity.id
+    });
+    const exportCsv = () => {
+        if (!orderedEntities.length) return;
+        const safeCell = value => {
+            let cell = String(value ?? '');
+            if (/^\s*[=+@-]/.test(cell)) cell = "'" + cell;
+            return '"' + cell.replace(/"/g, '""') + '"';
+        };
+        const headers = ['Código', 'Razón social', 'Tipo', 'CUIT', 'Condición IVA', 'Teléfono', 'Correo', 'Dirección', 'Localidad', 'Provincia', 'Código postal'];
+        const fields = ['code', 'name', 'type', 'tax_id', 'tax_category', 'phone', 'email', 'address', 'city', 'state', 'zip_code'];
+        const csv = [headers.map(safeCell).join(';'), ...orderedEntities.map(entity => fields.map(field => safeCell(entity[field])).join(';'))].join('\r\n');
+        const url = URL.createObjectURL(new Blob(['\uFEFF', csv], { type: 'text/csv;charset=utf-8' }));
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = 'entidades-' + selectedType + '.csv';
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(url);
+    };
+    const canImport = selectedType === 'client' || selectedType === 'provider';
+
     return (
-        <div style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'white', borderRadius: 'var(--r-md) var(--r-md) 0 0', overflow: 'hidden' }}>
-            {/* Table Header / Toolbar */}
-            <div style={{ 
-                padding: '8px 16px', 
-                borderBottom: '1px solid var(--border-color)',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'white'
-            }}>
-                <div style={{ position: 'relative', width: '380px' }}>
-                    <SearchIcon 
-                        size={15} 
-                        style={{ 
-                            position: 'absolute', 
-                            left: 10, 
-                            top: '50%', 
-                            transform: 'translateY(-50%)', 
-                            color: '#94a3b8' 
-                        }} 
-                    />
-                    <input 
-                        type="text"
-                        placeholder="Buscar..."
-                        value={searchQuery}
-                        onChange={(e) => onSearch(e.target.value)}
-                        style={{
-                            width: '100%',
-                            padding: '0 10px 0 28px',
-                            height: 'var(--input-h)',
-                            border: '1px solid var(--border-color)',
-                            borderRadius: 'var(--r-md)',
-                            fontSize: 'var(--text-sm)',
-                            outline: 'none',
-                            transition: 'all 0.2s ease',
-                            background: 'var(--bg-page)',
-                        }}
-                        onFocus={e => {
-                            e.target.style.borderColor = 'var(--primary)';
-                            e.target.style.background = 'white';
-                            e.target.style.boxShadow = '0 0 0 3px rgba(79, 70, 229, 0.1)';
-                        }}
-                        onBlur={e => {
-                            e.target.style.borderColor = '#e2e8f0';
-                            e.target.style.background = '#f8fafc';
-                            e.target.style.boxShadow = 'none';
-                        }}
-                    />
+        <div className={s.listSurface}>
+            <div className={s.tableTop}>
+                <div className={s.titleBlock}>
+                    <h2>{selectedType === 'provider' ? 'Proveedores' : selectedType === 'mixed' ? 'Entidades mixtas' : selectedType === 'employee' ? 'Empleados' : 'Clientes'}</h2>
+                    <p>Consultá, actualizá y gestioná cada ficha desde un solo lugar.</p>
                 </div>
-                
-                <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-                     <div style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', background: '#f1f5f9', padding: '4px 10px', borderRadius: '20px' }}>
-                        {entities.length} resultados
-                    </div>
-                    <button 
-                        onClick={onImportSaldos}
-                        title="Carga masiva de saldos históricos"
-                        style={{
-                            padding: '6px 14px',
-                            background: 'white',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            color: '#64748b',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            transition: 'all 0.2s ease',
-                        }}
-                        onMouseEnter={e => {
-                            e.currentTarget.style.borderColor = '#cbd5e1';
-                            e.currentTarget.style.background = '#f8fafc';
-                        }}
-                        onMouseLeave={e => {
-                            e.currentTarget.style.borderColor = '#e2e8f0';
-                            e.currentTarget.style.background = 'white';
-                        }}
-                    >
-                        <Wallet size={16} /> Cargar Saldos
-                    </button>
-                    <button 
-                        onClick={onImport}
-                        style={{
-                            padding: '6px 14px',
-                            background: 'white',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            color: '#64748b',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 8,
-                            transition: 'all 0.2s ease',
-                        }}
-                        onMouseEnter={e => {
-                            e.currentTarget.style.borderColor = '#cbd5e1';
-                            e.currentTarget.style.background = '#f8fafc';
-                        }}
-                        onMouseLeave={e => {
-                            e.currentTarget.style.borderColor = '#e2e8f0';
-                            e.currentTarget.style.background = 'white';
-                        }}
-                    >
-                        <FileSpreadsheet size={16} /> Importar {selectedType === 'provider' ? 'proveedores' : 'clientes'}
-                    </button>
-                    <button 
-                        onClick={onNew}
-                        style={{
-                            padding: '6px 16px',
-                            background: 'linear-gradient(135deg, var(--primary) 0%, #4338ca 100%)',
-                            border: 'none',
-                            borderRadius: '8px',
-                            color: 'white',
-                            fontSize: '12px',
-                            fontWeight: 600,
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 6,
-                            transition: 'all 0.2s ease',
-                            boxShadow: '0 4px 6px -1px rgba(79, 70, 229, 0.25)'
-                        }}
-                        onMouseEnter={e => {
-                            e.currentTarget.style.opacity = '0.9';
-                        }}
-                        onMouseLeave={e => {
-                            e.currentTarget.style.opacity = '1';
-                        }}
-                    >
-                        <span style={{ fontSize: '15px', lineHeight: 1, fontWeight: 700 }}>+</span> Nuevo {selectedType === 'provider' ? 'proveedor' : 'cliente'}
+                <div className={s.topButtons}>
+                    <button type="button" className={s.secondaryButton} onClick={exportCsv} disabled={loading || !orderedEntities.length} title="Descargar las fichas filtradas en CSV"><Download size={16} /> Exportar CSV</button>
+                    {canImport && (
+                        <button type="button" className={s.secondaryButton} onClick={onImport} title="Importación Excel con vista previa">
+                            <FileSpreadsheet size={16} /> Importar Excel
+                        </button>
+                    )}
+                    <button type="button" className={s.primaryButton} onClick={onNew}>
+                        <Plus size={17} /> {newByType[selectedType] || 'Nueva entidad'}
                     </button>
                 </div>
             </div>
 
-            {/* Table Body */}
-            <div style={{ flex: 1, overflowY: 'auto' }} className={t.container}>
+            <div className={s.filterBar}>
+                <div className={s.searchBox}>
+                    <Search size={18} aria-hidden="true" />
+                    <input type="search" aria-label="Buscar entidades" placeholder="Nombre, razón social, código o CUIT..." value={searchQuery} onChange={event => onSearch(event.target.value)} />
+                    {searchQuery && <button className={s.clearSearch} onClick={() => onSearch('')} aria-label="Limpiar búsqueda" title="Limpiar búsqueda"><FilterX size={15} /></button>}
+                </div>
+                <button type="button" className={onlyIncomplete ? s.activeFilter : s.filterButton} aria-pressed={onlyIncomplete} onClick={() => setOnlyIncomplete(v => !v)} title="Mostrar fichas sin CUIT, localidad o provincia">
+                    <ShieldAlert size={15} /> Fichas incompletas
+                </button>
+                <button type="button" className={s.refreshButton} onClick={onRefresh} disabled={loading} title="Recargar entidades"><RefreshCw size={16} /></button>
+            </div>
+
+            <div className={s.listMeta}>
+                <span>{loading ? 'Consultando padrón...' : `${orderedEntities.length.toLocaleString('es-AR')} ${orderedEntities.length === 1 ? 'registro' : 'registros'}`}</span>
+                <span className={s.listHint}>Hacé clic en una fila para editarla · Ordená desde los encabezados</span>
+            </div>
+
+            <div className={s.tableScroll}>
                 {loading ? (
-                    <TableSkeleton rows={10} cols={4} />
+                    <div className={s.statePanel} role="status">Cargando entidades…</div>
                 ) : error ? (
-                    <div role="alert" style={{ padding: 24, color: '#ef4444', fontSize: 13 }}>{error}</div>
-                ) : entities.length === 0 ? (
-                    <EmptyState 
-                        icon={SearchIcon} 
-                        title={searchQuery ? "Sin coincidencias" : `Todavía no hay ${selectedType === "provider" ? "proveedores" : "clientes"}`}
-                        description={searchQuery ? `No hay entidades que coincidan con "${searchQuery}"` : "Podés empezar con un alta manual o importar tu listado de Excel."}
-                        actionLabel={!searchQuery ? `Nuevo ${selectedType === "provider" ? "proveedor" : "cliente"}` : null}
-                        onAction={!searchQuery ? onNew : null}
-                    />
+                    <div className={s.errorPanel} role="alert"><ShieldAlert size={20} /> <span>{error}</span><button onClick={onRefresh}>Reintentar</button></div>
+                ) : orderedEntities.length === 0 ? (
+                    <div className={s.statePanel}>
+                        <Search size={27} />
+                        <h3>{searchQuery || onlyIncomplete ? 'No hay coincidencias' : 'Todavía no hay registros'}</h3>
+                        <p>{searchQuery || onlyIncomplete ? 'Probá con otros términos o quitá el filtro.' : 'Podés dar de alta una ficha o importar un listado desde Excel.'}</p>
+                        {(searchQuery || onlyIncomplete) ? <button className={s.secondaryButton} onClick={() => { onSearch(''); setOnlyIncomplete(false); }}>Limpiar filtros</button> : <button className={s.primaryButton} onClick={onNew}>Crear entidad</button>}
+                    </div>
                 ) : (
-                    <table className={t.table} style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%' }}>
-                        <thead style={{ position: 'sticky', top: 0, background: 'white', zIndex: 1, boxShadow: '0 1px 0 #e2e8f0' }}>
+                    <table className={s.dataTable}>
+                        <thead>
                             <tr>
-                                <th style={{ paddingLeft: 16, background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', width: '80px', height: '32px' }}>Código</th>
-                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', height: '32px' }}>Entidad</th>
-                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', width: '100px', height: '32px' }}>Tipo</th>
-                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', width: '130px', height: '32px' }}>CUIT</th>
-                                <th style={{ background: '#f8fafc', color: '#64748b', fontSize: '10px', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', height: '32px' }}>Ubicación</th>
-                                <th style={{ width: '120px', background: '#f8fafc', height: '32px' }}></th>
+                                <th><SortHeader field="code">Código</SortHeader></th>
+                                <th className={s.entityCol}><SortHeader field="name">Razón social / Nombre</SortHeader></th>
+                                <th><SortHeader field="type">Tipo</SortHeader></th>
+                                <th><SortHeader field="tax_id">CUIT</SortHeader></th>
+                                <th><SortHeader field="city">Localidad / Provincia</SortHeader></th>
+                                <th className={s.actionsHeading}>Acciones</th>
                             </tr>
                         </thead>
                         <tbody>
-                            {entities.map((e, index) => (
-                                <tr 
-                                    key={e.id}
-                                    className="animate-slide-up"
-                                    onClick={() => onSelect(e)}
-                                    style={{ 
-                                        cursor: 'pointer',
-                                        background: selectedEntity?.id === e.id ? 'var(--primary-light)' : 'transparent',
-                                        transition: 'all 0.1s ease',
-                                        borderBottom: '1px solid #f1f5f9',
-                                        animationDelay: `${index * 0.05}s`
-                                    }}
-                                    onMouseEnter={el => {
-                                        if (selectedEntity?.id !== e.id) {
-                                            el.currentTarget.style.background = '#f8fafc';
-                                        }
-                                    }}
-                                    onMouseLeave={el => {
-                                        if (selectedEntity?.id !== e.id) {
-                                            el.currentTarget.style.background = 'transparent';
-                                        }
-                                    }}
-                                    id={e.id}
-                                >
-                                    <td style={{ padding: '8px 12px', paddingLeft: 16, fontSize: '12px', fontWeight: 600, color: '#64748b' }}>
-                                        {e.code || '---'}
+                            {rows.map(entity => (
+                                <tr key={entity.id} className={s.dataRow} tabIndex={0} onClick={() => onSelect(entity)} onKeyDown={event => { if (event.key === 'Enter' && event.target === event.currentTarget) onSelect(entity); }} aria-label={'Editar ' + entity.name}>
+                                    <td><span className={s.codeCell}>{entity.code || '—'}</span></td>
+                                    <td className={s.entityCol}>
+                                        <div className={s.entityName} title={entity.name}>{entity.name || 'Sin nombre'}</div>
+                                        {entity.email && <div className={s.secondaryCell} title={entity.email}>{entity.email}</div>}
                                     </td>
-                                    <td style={{ padding: '8px 12px', fontSize: '13px', fontWeight: 600, color: '#1e293b', maxWidth: '240px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={e.name}>
-                                        {e.name}
-                                    </td>
-                                    <td style={{ padding: '8px 12px' }}>
-                                        {e.type === 'mixed' && <Badge variant="accent">Mixto</Badge>}
-                                        {e.type === 'client' && <Badge variant="primary">Cliente</Badge>}
-                                        {e.type === 'provider' && <Badge variant="success">Proveedor</Badge>}
-                                        {e.type === 'employee' && <Badge variant="info">Empleado</Badge>}
-                                    </td>
-                                    <td style={{ padding: '8px 12px', fontSize: '12px', color: '#475569', fontWeight: 500 }}>
-                                        {e.tax_id || 'Sin CUIT'}
-                                    </td>
-                                    <td style={{ padding: '8px 12px', fontSize: '12px', color: '#64748b' }}>
-                                        {e.city ? (
-                                            <div style={{ display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '180px' }}>
-                                                <MapPin size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
-                                                <span>{e.city}, {e.state}</span>
-                                            </div>
-                                        ) : (
-                                            <span style={{ fontSize: '11px', color: '#cbd5e1', fontStyle: 'italic' }}>No definida</span>
-                                        )}
-                                    </td>
-                                    <td style={{ textAlign: 'right', padding: '4px 16px 4px 4px' }} onClick={evt => evt.stopPropagation()}>
-                                        <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                                            <button 
-                                                title="Ver detalle / 360"
-                                                onClick={() => {
-                                                    openEntityDashboard(e.id, { 
-                                                        title: `Vista 360: ${e.name}`, 
-                                                        width: 1100, 
-                                                        height: 750 
-                                                    });
-                                                }}
-                                                style={{
-                                                    width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent',
-                                                    color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                }}
-                                                onMouseEnter={el => el.currentTarget.style.color = 'var(--primary)'}
-                                                onMouseLeave={el => el.currentTarget.style.color = '#94a3b8'}
-                                            >
-                                                <Layout size={15} />
-                                            </button>
-                                            <button 
-                                                title="Ver resumen / cuenta corriente"
-                                                onClick={() => {
-                                                    openResumenCuenta(e.id, { 
-                                                        title: `Resumen: ${e.name}`, 
-                                                        width: 1200, 
-                                                        height: 700 
-                                                    });
-                                                }}
-                                                style={{
-                                                    width: 26, height: 26, borderRadius: 6, border: 'none', background: 'transparent',
-                                                    color: '#94a3b8', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                }}
-                                                onMouseEnter={el => el.currentTarget.style.color = 'var(--primary)'}
-                                                onMouseLeave={el => el.currentTarget.style.color = '#94a3b8'}
-                                            >
-                                                <Wallet size={15} />
-                                            </button>
-                                            <button 
-                                                title="Editar"
-                                                onClick={() => {
-                                                    onSelect(e);
-                                                }}
-                                                style={{
-                                                    width: 26, height: 26, borderRadius: 6, border: 'none',
-                                                    background: selectedEntity?.id === e.id ? 'white' : 'transparent',
-                                                    boxShadow: selectedEntity?.id === e.id ? '0 1px 3px rgba(0,0,0,0.1)' : 'none',
-                                                    color: selectedEntity?.id === e.id ? 'var(--primary)' : '#cbd5e1',
-                                                    cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center'
-                                                }}
-                                                onMouseEnter={el => el.currentTarget.style.color = 'var(--primary)'}
-                                                onMouseLeave={el => {
-                                                    if (selectedEntity?.id !== e.id) {
-                                                        el.currentTarget.style.color = '#cbd5e1';
-                                                    }
-                                                }}
-                                            >
-                                                <Edit size={15} />
-                                            </button>
+                                    <td><span className={s['badge_' + entity.type] || s.badge_generic}>{labelByType[entity.type] || entity.type}</span></td>
+                                    <td><span className={entity.tax_id ? s.taxId : s.missingValue}>{entity.tax_id || 'Sin CUIT'}</span></td>
+                                    <td>{entity.city || entity.state ? <span className={s.locationCell}><MapPin size={14} /> {[entity.city, entity.state].filter(Boolean).join(', ')}</span> : <span className={s.missingValue}>Sin ubicación</span>}</td>
+                                    <td onClick={event => event.stopPropagation()}>
+                                        <div className={s.rowActions}>
+                                            <button type="button" title="Abrir ficha 360 dentro del sistema" aria-label={'Ficha 360 de ' + entity.name} onClick={() => openDashboard(entity)}><LayoutDashboard size={16} /></button>
+                                            <button type="button" title="Abrir cuenta corriente dentro del sistema" aria-label={'Cuenta corriente de ' + entity.name} onClick={() => openStatement(entity)}><Wallet size={16} /></button>
+                                            <button type="button" title="Editar entidad" aria-label={'Editar ' + entity.name} onClick={() => onSelect(entity)}><Pencil size={16} /></button>
                                         </div>
                                     </td>
                                 </tr>
@@ -305,6 +158,17 @@ export default function EntitiesTable({
                     </table>
                 )}
             </div>
+
+            {!loading && !error && orderedEntities.length > 0 && (
+                <div className={s.footerBar}>
+                    <span>Mostrando {start.toLocaleString('es-AR')}–{end.toLocaleString('es-AR')} de {orderedEntities.length.toLocaleString('es-AR')}</span>
+                    <div className={s.pagination}>
+                        <button type="button" aria-label="Página anterior" disabled={safePage === 1} onClick={() => setPage(p => Math.max(1, p - 1))}><ChevronLeft size={17} /></button>
+                        <span>Página {safePage} de {pages}</span>
+                        <button type="button" aria-label="Página siguiente" disabled={safePage >= pages} onClick={() => setPage(p => Math.min(pages, p + 1))}><ChevronRight size={17} /></button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

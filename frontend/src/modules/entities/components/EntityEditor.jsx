@@ -5,19 +5,19 @@ import { useToast } from '../../../context/ToastContext';
 import AccountSelector from '../../../components/ui/AccountSelector';
 
 const Section = ({ title, children }) => (
-    <div style={{ background: '#fff', borderRadius: 'var(--r-md)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
-        <div style={{ background: 'var(--bg-page)', padding: '6px 12px', borderBottom: '1px solid var(--border-color)', fontSize: 'var(--text-xs)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--text-secondary)' }}>
+    <section className="entity-form-section" style={{ background: 'var(--entity-panel, #202c46)', borderRadius: '10px', border: '1px solid var(--entity-border, rgba(255,255,255,.12))', overflow: 'hidden' }}>
+        <div style={{ background: '#17233b', padding: '12px 15px', borderBottom: '1px solid rgba(255,255,255,.1)', fontSize: '11px', fontWeight: 750, textTransform: 'uppercase', letterSpacing: '0.075em', color: '#b2a6fa' }}>
             {title}
         </div>
-        <div style={{ padding: '12px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+        <div className="entity-section-grid" style={{ padding: '16px', display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '14px' }}>
             {children}
         </div>
-    </div>
+    </section>
 );
 
 const FormGroup = ({ label, children, colSpan = 1 }) => (
-    <div style={{ gridColumn: `span ${colSpan}` }}>
-        <label style={{ display: 'block', marginBottom: 2, fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--text-secondary)' }}>{label}</label>
+    <div className="entity-form-group" style={{ gridColumn: `span ${colSpan}`, minWidth: 0 }}>
+        <label style={{ display: 'block', marginBottom: 2, fontSize: 'var(--text-sm)', fontWeight: 600, color: '#b9c8e0' }}>{label}</label>
         {children}
     </div>
 );
@@ -29,8 +29,8 @@ const inputStyle = {
     border: '1px solid var(--border-color)',
     borderRadius: 'var(--r-md)',
     fontSize: 'var(--text-md)',
-    color: 'var(--text)',
-    background: '#fff',
+    color: '#f8fafc',
+    background: '#162139',
     outline: 'none',
     transition: 'all 150ms ease',
 };
@@ -41,7 +41,7 @@ const inputFocusStyle = (e) => {
 };
 
 const inputBlurStyle = (e) => {
-    e.target.style.borderColor = '#e2e8f0';
+    e.target.style.borderColor = 'rgba(255,255,255,.17)';
     e.target.style.boxShadow = 'none';
 };
 
@@ -76,9 +76,11 @@ const createEmptyEntity = type => ({
         credit_status: 'OK'
     });
 
-export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client', onSelectExisting }) {
+export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client', onSelectExisting, onDirtyChange }) {
     const [activeTab, setActiveTab] = useState('general');
     const [saving, setSaving] = useState(false);
+    const [dirty, setDirty] = useState(false);
+    useEffect(() => { onDirtyChange?.(dirty); }, [dirty, onDirtyChange]);
     const [salespeople, setSalespeople] = useState([]);
     const [duplicateError, setDuplicateError] = useState(null);
     const [lookingUpCuit, setLookingUpCuit] = useState(false);
@@ -97,6 +99,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
     useEffect(() => {
         const token = localStorage.getItem('token');
         const headers = { 'Authorization': `Bearer ${token}` };
+        setDirty(false);
         if (entity) {
             setFormData({ ...entity, create_linked: false });
         } else {
@@ -136,6 +139,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
     };
 
     const handleChange = (field, value) => {
+        setDirty(true);
         let finalValue = value;
         
         if (field === 'name') {
@@ -245,33 +249,29 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
             
             if (!res.ok) {
                 if (res.status === 400) {
-                    try {
-                        const errData = await res.json();
-                        if (errData.detail && errData.detail.code === "ENTITY_HAS_DEPENDENCIES") {
-                            const labels = {
-                                documents: "Comprobantes",
-                                account_movements: "Movimientos de cuenta",
-                                sales_orders: "Órdenes de venta",
-                                purchase_orders: "Órdenes de compra",
-                                delivery_notes: "Remitos",
-                                cheques: "Cheques",
-                                expense_claims: "Rendiciones de gastos"
-                            };
-                            const deps = errData.detail.dependencies || {};
-                            const activeDeps = Object.entries(deps)
-                                .filter(([_, count]) => count > 0)
-                                .map(([key, count]) => `${labels[key] || key}: ${count}`)
-                                .join(", ");
-                            
-                            const msg = activeDeps 
-                                ? `No se puede eliminar esta entidad porque tiene operaciones asociadas. (${activeDeps})`
-                                : "No se puede eliminar esta entidad porque tiene operaciones asociadas.";
-                            throw new Error(msg);
-                        }
-                    } catch (pErr) {
-                        console.error("Error parsing validation error", pErr);
+                    const errData = await res.json().catch(() => ({}));
+                    if (errData.detail?.code === "ENTITY_HAS_DEPENDENCIES") {
+                        const labels = {
+                            documents: "Comprobantes",
+                            account_movements: "Movimientos de cuenta",
+                            sales_orders: "Órdenes de venta",
+                            purchase_orders: "Órdenes de compra",
+                            delivery_notes: "Remitos",
+                            cheques: "Cheques",
+                            expense_claims: "Rendiciones de gastos"
+                        };
+                        const deps = errData.detail.dependencies || {};
+                        const activeDeps = Object.entries(deps)
+                            .filter(([, count]) => count > 0)
+                            .map(([key, count]) => `${labels[key] || key}: ${count}`)
+                            .join(", ");
+                        throw new Error(activeDeps
+                            ? `No se puede eliminar porque tiene operaciones asociadas. (${activeDeps})`
+                            : 'No se puede eliminar porque tiene operaciones asociadas.');
                     }
-                    throw new Error('No se puede eliminar esta entidad porque tiene comprobantes, movimientos u operaciones asociadas.');
+                    throw new Error(typeof errData.detail === 'string'
+                        ? errData.detail
+                        : 'No se puede eliminar esta entidad porque tiene operaciones asociadas.');
                 }
                 if (res.status === 403) {
                     throw new Error('No tenés permisos para eliminar entidades.');
@@ -299,6 +299,10 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
 
     const handleSubmit = async (e) => {
         if (e) e.preventDefault();
+        if (!formData.name?.trim()) { showToast('Ingresá el nombre o razón social.', 'error'); return; }
+        const digits = String(formData.tax_id || '').replace(/\D/g, '');
+        if (digits.length !== 0 && digits.length !== 11) { showToast('El CUIT debe tener 11 dígitos.', 'error'); return; }
+        if (Number(formData.credit_limit || 0) < 0) { showToast('El límite de crédito no puede ser negativo.', 'error'); return; }
         setSaving(true);
         try {
             const method = entity ? 'PUT' : 'POST';
@@ -338,6 +342,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                 throw new Error(typeof errorData.detail === 'string' ? errorData.detail : errorData.detail?.message || 'Error al guardar la entidad.');
             }
             const saved = await res.json();
+            setDirty(false);
             onSave(saved);
         } catch (err) {
             if (showToast) {
@@ -351,9 +356,9 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#f8fafc' }}>
+        <div className="entity-editor-root" style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, background: '#202c46', color: '#f8fafc' }}>
             {/* Toolbar */}
-            <div style={{ padding: '0 16px', background: 'white', borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '36px' }}>
+            <div className="entity-editor-toolbar" style={{ padding: '10px 16px', background: '#202c46', borderBottom: '1px solid rgba(255,255,255,.12)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: '54px', gap: 12, flexWrap: 'wrap' }}>
                 <div style={{ display: 'flex', gap: 10, height: '100%' }}>
                     {['general', 'location', 'contact', 'commercial'].map(tab => (
                         <button
@@ -387,7 +392,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                             onClick={handleDelete}
                             style={{
                                 padding: '8px 14px',
-                                background: '#fff',
+                                background: '#202c46',
                                 border: '1px solid #fee2e2',
                                 borderRadius: '8px',
                                 color: '#ef4444',
@@ -408,10 +413,10 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                         onClick={onCancel}
                         style={{
                             padding: '8px 14px',
-                            background: 'white',
-                            border: '1px solid #e2e8f0',
+                            background: '#202c46',
+                            border: '1px solid rgba(255,255,255,.16)',
                             borderRadius: '8px',
-                            color: '#64748b',
+                            color: '#9cabca',
                             fontSize: '12px',
                             fontWeight: 600,
                             cursor: 'pointer',
@@ -442,16 +447,16 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                             transition: 'all 0.2s ease'
                         }}
                     >
-                        <Save size={16} /> {saving ? 'Guardando...' : 'Guardar Cambios'}
+                        <Save size={16} /> {saving ? 'Guardando...' : entity ? 'Guardar cambios' : 'Crear entidad'}
                     </button>
                 </div>
             </div>
 
             {/* Content */}
-            <div style={{ flex: 1, padding: '16px', overflowY: 'auto' }}>
-                <form id="entity-form" onSubmit={handleSubmit} style={{ maxWidth: '1000px', margin: '0 0' }}>
+            <div className="entity-editor-content" style={{ flex: 1, minHeight: 0, padding: '18px', overflowY: 'auto' }}>
+                <form id="entity-form" onSubmit={handleSubmit} style={{ maxWidth: '1180px', margin: '0' }}>
                     {activeTab === 'general' && (
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                        <div className="entity-form-columns" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '16px' }}>
                             <Section title="Identificación Principal">
                                 <FormGroup label="Razón Social / Nombre" colSpan={2}>
                                     <input 
@@ -494,7 +499,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                             <Section title="Configuración de Cuenta">
                                 <FormGroup label="Código Interno">
                                     <input 
-                                        style={{...inputStyle, background: '#f1f5f9', cursor: 'not-allowed'}} 
+                                        style={{...inputStyle, background: '#1b2944', cursor: 'not-allowed'}} 
                                         value={formData.code || ''} 
                                         readOnly
                                     />
@@ -515,7 +520,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                 </FormGroup>
                                 {!entity && (
                                     <FormGroup label="Cuenta Compartida" colSpan={2}>
-                                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '13px', cursor: 'pointer', padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px dashed #cbd5e1', color: '#475569' }}>
+                                        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '13px', cursor: 'pointer', padding: '12px 16px', background: '#17233b', borderRadius: '10px', border: '1px dashed #cbd5e1', color: '#bac9de' }}>
                                             <input 
                                                 type="checkbox" 
                                                 checked={formData.create_linked || false} 
@@ -531,7 +536,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                 {formData.type === 'employee' && (
                                     <>
                                         <FormGroup label="Rol" colSpan={2}>
-                                            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '13px', cursor: 'pointer', padding: '12px 16px', background: '#f8fafc', borderRadius: '10px', border: '1px solid #e2e8f0', color: '#475569' }}>
+                                            <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: '13px', cursor: 'pointer', padding: '12px 16px', background: '#17233b', borderRadius: '10px', border: '1px solid rgba(255,255,255,.16)', color: '#bac9de' }}>
                                                 <input 
                                                     type="checkbox" 
                                                     checked={formData.is_salesperson || false} 
@@ -545,12 +550,12 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                         </FormGroup>
                                         {formData.is_salesperson && (
                                             <FormGroup label="Configuración de Comisión" colSpan={2}>
-                                                <div style={{ background: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                                                <div style={{ background: '#17233b', padding: '12px', borderRadius: '10px', border: '1px solid rgba(255,255,255,.16)', display: 'flex', flexDirection: 'column', gap: '10px' }}>
                                                     <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
                                                         <div style={{ flex: '1 1 200px' }}>
-                                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Modalidad</label>
+                                                            <label style={{ fontSize: '11px', color: '#9cabca', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Modalidad</label>
                                                             <select 
-                                                                style={{...inputStyle, background: '#fff'}}
+                                                                style={{...inputStyle, background: '#202c46'}}
                                                                 value={formData.commission_mode || 'BY_COLLECTION'}
                                                                 onChange={e => handleChange('commission_mode', e.target.value)}
                                                             >
@@ -560,9 +565,9 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                                             </select>
                                                         </div>
                                                         <div style={{ width: '120px' }}>
-                                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Moneda Base</label>
+                                                            <label style={{ fontSize: '11px', color: '#9cabca', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Moneda Base</label>
                                                             <select 
-                                                                style={{...inputStyle, background: '#fff'}}
+                                                                style={{...inputStyle, background: '#202c46'}}
                                                                 value={formData.commission_currency || 'USD'}
                                                                 onChange={e => handleChange('commission_currency', e.target.value)}
                                                             >
@@ -571,9 +576,9 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                                             </select>
                                                         </div>
                                                         <div style={{ flex: '1 1 200px' }}>
-                                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Tipo de Cambio</label>
+                                                            <label style={{ fontSize: '11px', color: '#9cabca', fontWeight: 600, display: 'block', marginBottom: '4px' }}>Tipo de Cambio</label>
                                                             <select 
-                                                                style={{...inputStyle, background: '#fff'}}
+                                                                style={{...inputStyle, background: '#202c46'}}
                                                                 value={formData.commission_exchange_mode || 'INVOICE_RATE'}
                                                                 onChange={e => handleChange('commission_exchange_mode', e.target.value)}
                                                             >
@@ -586,10 +591,10 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                                     
                                                     <div style={{ display: 'flex', gap: '10px' }}>
                                                         <div style={{ width: '150px' }}>
-                                                            <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>% de Comisión</label>
+                                                            <label style={{ fontSize: '11px', color: '#9cabca', fontWeight: 600, display: 'block', marginBottom: '4px' }}>% de Comisión</label>
                                                             <input 
                                                                 type="number"
-                                                                style={{...inputStyle, background: '#fff'}}
+                                                                style={{...inputStyle, background: '#202c46'}}
                                                                 value={formData.commission_pct || 0}
                                                                 onChange={e => handleChange('commission_pct', Number(e.target.value))}
                                                                 placeholder="Ej: 2.0"
@@ -597,10 +602,10 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                                         </div>
                                                         {formData.commission_mode === 'BY_MARGIN' && (
                                                             <div style={{ width: '150px' }}>
-                                                                <label style={{ fontSize: '11px', color: '#64748b', fontWeight: 600, display: 'block', marginBottom: '4px' }}>% Particip. en Margen</label>
+                                                                <label style={{ fontSize: '11px', color: '#9cabca', fontWeight: 600, display: 'block', marginBottom: '4px' }}>% Particip. en Margen</label>
                                                                 <input 
                                                                     type="number"
-                                                                    style={{...inputStyle, background: '#fff'}}
+                                                                    style={{...inputStyle, background: '#202c46'}}
                                                                     value={formData.margin_commission_pct || 100}
                                                                     onChange={e => handleChange('margin_commission_pct', Number(e.target.value))}
                                                                     placeholder="Ej: 100"
@@ -609,7 +614,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                                         )}
                                                     </div>
 
-                                                    <div style={{ fontSize: '12px', color: '#64748b', fontStyle: 'italic', background: '#fff', padding: '8px', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
+                                                    <div style={{ fontSize: '12px', color: '#9cabca', fontStyle: 'italic', background: '#202c46', padding: '8px', borderRadius: '6px', border: '1px solid #f1f5f9' }}>
                                                         {formData.commission_mode === 'BY_COLLECTION' && `Calcula comisión del ${formData.commission_pct || 0}% sobre el total neto facturado. La disponibilidad se libera gradualmente a medida que el cliente paga la factura.`}
                                                         {formData.commission_mode === 'BY_MARGIN' && `Calcula comisión del ${formData.commission_pct || 0}% sobre la participación del ${formData.margin_commission_pct || 100}% del margen (Precio de Venta - Costo) línea por línea.`}
                                                         {formData.commission_mode === 'BY_CASH' && `Calcula comisión del ${formData.commission_pct || 0}% directo sobre cada pago ingresado por un cliente asignado a este vendedor, independiente del margen.`}
@@ -752,7 +757,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                         <option value="BLOCKED">🔴 BLOQUEADO (No permite facturar)</option>
                                     </select>
                                 </FormGroup>
-                                <div style={{ gridColumn: 'span 2', fontSize: '12px', color: '#64748b', fontStyle: 'italic' }}>
+                                <div style={{ gridColumn: 'span 2', fontSize: '12px', color: '#9cabca', fontStyle: 'italic' }}>
                                     El control de límite se realiza en USD. El estado BLOQUEADO impide guardar nuevas facturas.
                                 </div>
                             </Section>
@@ -791,7 +796,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                     zIndex: 9999
                 }}>
                     <div style={{
-                        background: 'white',
+                        background: '#202c46',
                         padding: '24px',
                         borderRadius: '8px',
                         width: '450px',
@@ -800,16 +805,16 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                         <h3 style={{ margin: '0 0 12px 0', color: 'var(--text)', fontSize: '18px', fontWeight: 700 }}>
                             CUIT ya registrado
                         </h3>
-                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563' }}>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#b8c6de' }}>
                             Ya existe una entidad registrada con ese CUIT.
                         </p>
                         
                         <div style={{
-                            background: '#f3f4f6',
+                            background: '#1b2944',
                             padding: '12px',
                             borderRadius: '6px',
                             fontSize: '13px',
-                            color: '#374151',
+                            color: '#dce4f7',
                             marginBottom: '20px',
                             display: 'flex',
                             flexDirection: 'column',
@@ -827,13 +832,13 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                 onClick={() => setDuplicateError(null)}
                                 style={{
                                     padding: '8px 14px',
-                                    background: 'white',
-                                    border: '1px solid #d1d5db',
+                                    background: '#202c46',
+                                    border: '1px solid rgba(255,255,255,.16)',
                                     borderRadius: '6px',
                                     cursor: 'pointer',
                                     fontSize: '12px',
                                     fontWeight: 600,
-                                    color: '#4b5563'
+                                    color: '#b8c6de'
                                 }}
                             >
                                 Cancelar
@@ -848,13 +853,13 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                 }}
                                 style={{
                                     padding: '8px 14px',
-                                    background: '#f1f5f9',
-                                    border: '1px solid #cbd5e1',
+                                    background: '#1b2944',
+                                    border: '1px solid rgba(255,255,255,.16)',
                                     borderRadius: '6px',
                                     cursor: 'pointer',
                                     fontSize: '12px',
                                     fontWeight: 600,
-                                    color: '#1e293b'
+                                    color: '#f8fafc'
                                 }}
                             >
                                 Ver entidad existente
@@ -891,7 +896,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                     zIndex: 9999
                 }}>
                     <div style={{
-                        background: 'white',
+                        background: '#202c46',
                         padding: '24px',
                         borderRadius: '8px',
                         width: '450px',
@@ -900,7 +905,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                         <h3 style={{ margin: '0 0 12px 0', color: '#ef4444', fontSize: '18px', fontWeight: 700 }}>
                             ¿Seguro que querés eliminar esta entidad?
                         </h3>
-                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#4b5563', lineHeight: '1.5' }}>
+                        <p style={{ margin: '0 0 16px 0', fontSize: '14px', color: '#b8c6de', lineHeight: '1.5' }}>
                             Solo se puede eliminar si no tiene comprobantes, movimientos ni operaciones asociadas.
                         </p>
                         
@@ -910,13 +915,13 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                                 onClick={() => setShowDeleteConfirm(false)}
                                 style={{
                                     padding: '8px 16px',
-                                    background: 'white',
-                                    border: '1px solid #d1d5db',
+                                    background: '#202c46',
+                                    border: '1px solid rgba(255,255,255,.16)',
                                     borderRadius: '6px',
                                     cursor: 'pointer',
                                     fontSize: '13px',
                                     fontWeight: 600,
-                                    color: '#4b5563'
+                                    color: '#b8c6de'
                                 }}
                             >
                                 Cancelar
