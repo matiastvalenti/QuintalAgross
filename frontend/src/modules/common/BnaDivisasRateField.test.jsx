@@ -62,7 +62,7 @@ describe("cotización oficial BNA divisas vendedor", () => {
       json: async () => ({ ...await published("2026-10-22").json(), source: "billetes" }),
     })));
     render(<Form date="2026-10-22" />);
-    expect(await screen.findByRole("status")).toHaveTextContent("Tipo de cambio manual");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Tipo de cambio manual"));
     expect(screen.queryByText(/no devolvió una cotización/i)).not.toBeInTheDocument();
     expect(screen.getByRole("spinbutton")).toHaveValue(1);
   });
