@@ -194,3 +194,20 @@
   --primary-light:rgba(165,148,249,.15);
 }
 .topButtons button:disabled {opacity:.5;cursor:not-allowed;}
+
+/* Esqueleto del padrón: mismos encabezados y alturas mientras responde el backend */
+.skeletonRow td { height: 53px; vertical-align: middle; }
+.skeletonBar {
+  display: block;
+  max-width: 100%;
+  height: 11px;
+  border-radius: 5px;
+  background: linear-gradient(100deg, #304160 24%, #425374 42%, #304160 62%);
+  background-size: 220% 100%;
+  animation: entity-loading-sweep 1.45s ease-in-out infinite;
+}
+@keyframes entity-loading-sweep {
+  from { background-position: 110% 0; }
+  to { background-position: -110% 0; }
+}
+@media (prefers-reduced-motion: reduce) { .skeletonBar { animation: none; } }

@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWindow } from '../../context/WindowContext';
-import { openResumenCuenta, openEntitiesManager, openUsersManager, openAuditLogs, openFleetManager } from '../../utils/openStandaloneWindow';
+import { openResumenCuenta, openUsersManager, openAuditLogs, openFleetManager } from '../../utils/openStandaloneWindow';
 import s from './Sidebar.module.css';
 
 const NAV_GROUPS = [
@@ -191,15 +191,8 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
   };
 
   const handleItemClick = (e, item) => {
-      // Configuraciones en ventanas
-      if (item.to === '/configuracion/entidades' || item.label === 'Entidades') {
-          e.preventDefault();
-          openEntitiesManager({ 
-              title: 'Gestión de Entidades', 
-              width: 1050, 
-              height: 600,
-          });
-      }
+      // Entidades se navega mediante su ruta interna /configuracion/entidades.
+      // No abrir una ventana nueva de Chrome para este módulo.
       if (item.to === '/configuracion/flota') {
           e.preventDefault();
           openFleetManager({ title: 'Flota / Vehículos', width: 1050, height: 700 });

@@ -26,6 +26,13 @@ const props = {
 };
 
 describe('Padrón de entidades', () => {
+    it('conserva la estructura de la tabla mientras carga, sin mostrar un panel vacío', () => {
+        render(<EntitiesTable {...props} entities={[]} loading />);
+        expect(screen.getByRole('table')).toBeInTheDocument();
+        expect(screen.getAllByTestId('entity-skeleton-row')).toHaveLength(10);
+        expect(screen.queryByText('Todavía no hay registros')).not.toBeInTheDocument();
+    });
+
     it('ordena por nombre y permite filtrar fichas incompletas', () => {
         render(<EntitiesTable {...props} />);
         const rows = screen.getAllByRole('row').slice(1);

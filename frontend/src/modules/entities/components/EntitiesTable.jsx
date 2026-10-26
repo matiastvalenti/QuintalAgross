@@ -110,12 +110,10 @@ export default function EntitiesTable({ entities = [], loading, error = '', sele
                 <span className={s.listHint}>Hacé clic en una fila para editarla · Ordená desde los encabezados</span>
             </div>
 
-            <div className={s.tableScroll}>
-                {loading ? (
-                    <div className={s.statePanel} role="status">Cargando entidades…</div>
-                ) : error ? (
+            <div className={s.tableScroll} aria-busy={loading}>
+                {error ? (
                     <div className={s.errorPanel} role="alert"><ShieldAlert size={20} /> <span>{error}</span><button onClick={onRefresh}>Reintentar</button></div>
-                ) : orderedEntities.length === 0 ? (
+                ) : !loading && orderedEntities.length === 0 ? (
                     <div className={s.statePanel}>
                         <Search size={27} />
                         <h3>{searchQuery || onlyIncomplete ? 'No hay coincidencias' : 'Todavía no hay registros'}</h3>
@@ -135,7 +133,16 @@ export default function EntitiesTable({ entities = [], loading, error = '', sele
                             </tr>
                         </thead>
                         <tbody>
-                            {rows.map(entity => (
+                            {loading ? Array.from({ length: 10 }, (_, index) => (
+                                <tr key={'loading-' + index} className={s.skeletonRow} data-testid="entity-skeleton-row" aria-hidden="true">
+                                    <td><span className={s.skeletonBar} style={{ width: 58 }} /></td>
+                                    <td><span className={s.skeletonBar} style={{ width: index % 3 === 0 ? '80%' : '60%' }} /><span className={s.skeletonBar} style={{ width: '38%', marginTop: 7, height: 7 }} /></td>
+                                    <td><span className={s.skeletonBar} style={{ width: 72 }} /></td>
+                                    <td><span className={s.skeletonBar} style={{ width: 118 }} /></td>
+                                    <td><span className={s.skeletonBar} style={{ width: 152 }} /></td>
+                                    <td><span className={s.skeletonBar} style={{ width: 74, marginLeft: 'auto' }} /></td>
+                                </tr>
+                            )) : rows.map(entity => (
                                 <tr key={entity.id} className={s.dataRow} tabIndex={0} onClick={() => onSelect(entity)} onKeyDown={event => { if (event.key === 'Enter' && event.target === event.currentTarget) onSelect(entity); }} aria-label={'Editar ' + entity.name}>
                                     <td><span className={s.codeCell}>{entity.code || '—'}</span></td>
                                     <td className={s.entityCol}>
