@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
+import { isValidUsdRate } from "../../utils/fxValidation";
 import { ReceiptShell, ShellSection } from "./components/ReceiptShell/ReceiptShell";
 import Card from "../../components/ui/Card";
 import Button from "../../components/ui/Button";
@@ -504,6 +505,9 @@ export default function ReceiptForm({
       return showToast(isPayment ? "El monto de la orden de pago debe ser mayor a cero" : "El monto del recibo debe ser mayor a cero", "error");
     if (difference < -0.01)
       return showToast("Aplicado superior al valor del recibo", "error");
+    const needsFx = currency === "USD" || applications.some(app => app.currency === "USD");
+    if (needsFx && (!isValidUsdRate(exchangeRate)))
+      return showToast("Ingresá un tipo de cambio válido para registrar movimientos en USD.", "error");
 
     const payload = {
       entity_id: entity.id,

@@ -62,8 +62,21 @@ describe("cotización oficial BNA divisas vendedor", () => {
       json: async () => ({ ...await published("2026-10-22").json(), source: "billetes" }),
     })));
     render(<Form date="2026-10-22" />);
-    expect(await screen.findByText(/no devolvió una cotización/i)).toBeInTheDocument();
+    expect(await screen.findByRole("status")).toHaveTextContent("Tipo de cambio manual");
+    expect(screen.queryByText(/no devolvió una cotización/i)).not.toBeInTheDocument();
     expect(screen.getByRole("spinbutton")).toHaveValue(1);
+  });
+
+  it("un HTTP 503 no dispara ningún warning visible y permite ingresar el TC", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({
+      ok: false, status: 503,
+      json: async () => ({ detail: "No se pudo obtener BNA divisas" }),
+    })));
+    render(<Form date="2026-10-22" />);
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Tipo de cambio manual"));
+    expect(screen.queryByText(/no se pudo obtener BNA/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("spinbutton"), { target: { value: "1542" } });
+    expect(screen.getByRole("spinbutton")).toHaveValue(1542);
   });
 
   it("conserva la cotización ingresada manualmente antes de que responda BNA", async () => {

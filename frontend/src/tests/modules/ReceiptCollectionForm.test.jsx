@@ -4,14 +4,31 @@ import { describe, it, expect, vi } from 'vitest';
 import ReceiptCollectionForm from '../../modules/finance/ReceiptCollectionForm';
 import api from '../../services/api';
 
+const { toastSpy } = vi.hoisted(() => ({ toastSpy: vi.fn() }));
+
 vi.mock('../../services/api');
-vi.mock('../../context/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
-vi.mock('../../modules/finance/components/ReceiptCollectionShell/ReceiptPendingInvoicesSelector', () => ({ default: () => null }));
+vi.mock('../../context/ToastContext', () => ({ useToast: () => ({ showToast: toastSpy }) }));
+vi.mock('../../modules/finance/components/ReceiptCollectionShell/ReceiptPendingInvoicesSelector', () => ({ default: () => <div data-testid="invoice-selector" /> }));
 
 const invoice = { id: 'invoice', entity_id: 'client', entity_name: 'Cliente de prueba',
   number: 'FC-PRUEBA', currency: 'USD', total_amount: 1000, pending_amount: 1000, exchange_rate: 1000 };
 
 describe('ReceiptCollectionForm FX', () => {
+  it('si BNA no responde, no dispara el aviso naranja ni cambia el importe de la factura', async () => {
+    toastSpy.mockClear();
+    api.get.mockImplementation(url => url.includes('/fx/usd')
+      ? Promise.reject(new Error('BNA no disponible'))
+      : Promise.resolve([]));
+    render(<MemoryRouter><ReceiptCollectionForm source="invoice" initialInvoice={invoice} /></MemoryRouter>);
+    await screen.findByText(/FC-PRUEBA/);
+    expect(screen.getByText(/FC-PRUEBA/)).toBeInTheDocument();
+    expect(screen.queryByTestId("invoice-selector")).not.toBeInTheDocument();
+    expect(toastSpy).not.toHaveBeenCalledWith(
+      expect.stringMatching(/BNA|último cierre|cotización verificada/i),
+      'warning'
+    );
+  });
+
   it('converts the invoice pending USD to ARS exactly once', async () => {
     api.get.mockImplementation(url => Promise.resolve(url.includes('/fx/usd') ? { rate: 1100 } : []));
     render(<MemoryRouter><ReceiptCollectionForm source="invoice" initialInvoice={invoice} /></MemoryRouter>);

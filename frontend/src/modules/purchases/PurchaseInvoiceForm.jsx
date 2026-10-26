@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useId } from "react";
+import { isValidUsdRate } from "../../utils/fxValidation";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -397,7 +398,7 @@ export default function PurchaseInvoiceForm(props) {
 
   const handleSave = async () => {
     if (!entity) return showToast("Falta Proveedor", "error"); // Changed Cliente
-    if (currency === "USD" && exchangeRate <= 1) {
+    if (currency === "USD" && !isValidUsdRate(exchangeRate)) {
         return showToast("Para moneda USD el Tipo de Cambio debe ser mayor a 1", "error");
     }
     

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
+import { isValidUsdRate } from "../../utils/fxValidation";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -418,6 +419,9 @@ export default function SalesOrderForm(props) {
   const handleSave = async () => {
     if (!entity) return showToast("Seleccione un cliente", "warning");
     if (items.length === 0) return showToast("Agregue productos", "warning");
+    if (currency === "USD" && (!isValidUsdRate(exchangeRate))) {
+      return showToast("Ingresá un tipo de cambio válido antes de guardar una orden en USD.", "error");
+    }
 
     setSaving(true);
     const payload = {

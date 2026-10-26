@@ -410,6 +410,20 @@ def void_document(
                 "warnings": ["El recibo ya se encontraba anulado."]
             }
 
+        # La anulación no puede dejar cheques activos en cartera ni devolver
+        # valores que ya fueron depositados/endosados.
+        from app.db import finance_models
+        from app.modules.finance.cheque_reversal import (
+            CheckCancellationError, cancel_receipt_checks,
+        )
+        receipt_checks = db.query(finance_models.Cheque).filter(
+            finance_models.Cheque.source_document_id == doc.id
+        ).all()
+        try:
+            cancel_receipt_checks(receipt_checks)
+        except CheckCancellationError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+
         reason = payload.reason if payload else "Anulación desde pantalla de recibos"
 
         # 1. Cargar aplicaciones donde este recibo es el origen
@@ -2572,6 +2586,30 @@ def annul_document(id: str, db: Session = Depends(get_db), current_user: models.
             )
 
         require_unapplied_draft(db, doc)
+
+        # Preservar la cartera de valores al anular un recibo u OP.
+        from app.modules.finance.cheque_reversal import (
+            CheckCancellationError, cancel_receipt_checks,
+            ensure_payment_checks_reconciled,
+        )
+        if doc.doc_type == models.DocumentType.RECEIPT:
+            from app.db import finance_models
+            receipt_checks = db.query(finance_models.Cheque).filter(
+                finance_models.Cheque.source_document_id == doc.id
+            ).all()
+            try:
+                cancel_receipt_checks(receipt_checks)
+            except CheckCancellationError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+        elif doc.doc_type == models.DocumentType.PAYMENT:
+            payment_items = db.query(models.PaymentItem).filter(
+                models.PaymentItem.document_id == doc.id
+            ).all()
+            try:
+                ensure_payment_checks_reconciled(payment_items)
+            except CheckCancellationError as exc:
+                raise HTTPException(status_code=409, detail=str(exc)) from exc
+
         was_draft = doc.is_draft
 
         generated_nc_msg = ""

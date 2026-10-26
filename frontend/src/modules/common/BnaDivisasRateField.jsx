@@ -151,8 +151,8 @@ export default function BnaDivisasRateField({
       <div id={`${inputId}-source`} className={s.source} role="status">
         {!isNew ? "Tipo de cambio guardado en este comprobante." :
           loading ? "Consultando BNA divisas vendedor..." :
-          error ? <span className={s.warning}>BNA: {error} Ingresá el TC verificado manualmente.</span> :
-          !quote ? "Sin cotización verificada." :
+          error ? "Tipo de cambio manual" :
+          !quote ? "Tipo de cambio manual" :
           rateMatchesDate ?
             compact ? null : <span>Banco Nación · Divisas vendedor USD {quote.rate.toLocaleString("es-AR", { maximumFractionDigits: 4 })} · {formatDate(quote.date)}{currency === "ARS" ? " · referencia USD/ARS" : ""}</span> :
           null

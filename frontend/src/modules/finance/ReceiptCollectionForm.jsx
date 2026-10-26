@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { isValidUsdRate } from "../../utils/fxValidation";
 import { useNavigate } from 'react-router-dom';
 import { 
   DollarSign, 
@@ -21,6 +22,7 @@ import Autocomplete from '../../components/ui/Autocomplete';
 import ReceiptPendingInvoicesSelector from './components/ReceiptCollectionShell/ReceiptPendingInvoicesSelector';
 import ChequeEntryDialog from './components/ChequeEntryDialog';
 import { formatNumberAR, formatDocumentType } from '../../utils/formatters';
+import { argentinaToday } from '../common/BnaDivisasRateField';
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
@@ -34,7 +36,7 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
   // States
   const [operationType, setOperationType] = useState('APPLIED_COLLECTION');
   const [entity, setEntity] = useState(null);
-  const [date, setDate] = useState(new Date().toISOString().split("T")[0]);
+  const [date, setDate] = useState(argentinaToday());
   const [currency, setCurrency] = useState('ARS');
   const [exchangeRate, setExchangeRate] = useState(0);
   const [fxCache, setFxCache] = useState({});
@@ -69,15 +71,16 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
       }
 
       let defaultRate = 0;
-      const today = new Date().toISOString().split("T")[0];
+      const today = argentinaToday();
       try {
         const fxRes = await api.get(`/accounting/fx/usd?date=${today}`);
         if (fxRes?.rate) {
           defaultRate = Number(fxRes.rate);
           if (mounted) setFxCache(prev => ({ ...prev, [today]: defaultRate }));
         }
-      } catch (e) {
-        if (mounted && !isView) showToast("No se pudo obtener BNA divisas. Ingrese y verifique el tipo de cambio manualmente.", "warning");
+      } catch {
+        // La cotización automática puede fallar; el campo sigue disponible
+        // y la validación impide registrar USD con un TC inválido.
       }
 
       // Normalization Logic
@@ -182,9 +185,8 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         setApplications(norm.applications);
         setPayments(norm.payments);
         
-        if (source === 'invoice' && mode === 'new') {
-            setShowInvoicesModal(true);
-        }
+        // Desde una factura ya llega el comprobante seleccionado.
+        // No abrir el selector otra vez ni pisar la imputación inicial.
       } else if (mounted) {
         setExchangeRate(defaultRate);
       }
@@ -222,11 +224,9 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
         const res = await api.get(`/accounting/fx/usd?date=${newDate}`);
         if (res?.rate) {
           rate = Number(res.rate);
-          if (res.warning) showToast(res.warning, "warning");
           setFxCache(prev => ({ ...prev, [newDate]: rate }));
         }
-      } catch (e) {
-        showToast("No hay cotización verificada para esa fecha. Revise e ingrese el tipo de cambio manualmente.", "warning");
+      } catch {
         setExchangeRate(0);
         setApplications(prev => prev.map(app => ({ ...app, collection_exchange_rate: 0 })));
       }
@@ -251,11 +251,9 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
           const res = await api.get(`/accounting/fx/usd?date=${date}`);
           if (res?.rate) {
             rate = Number(res.rate);
-            if (res.warning) showToast(res.warning, "warning");
-            setFxCache(prev => ({ ...prev, [date]: rate }));
+              setFxCache(prev => ({ ...prev, [date]: rate }));
           }
-        } catch (e) {
-          showToast("No hay cotización verificada para esa fecha. Revise e ingrese el tipo de cambio manualmente.", "warning");
+        } catch {
           setExchangeRate(0);
           setApplications(prev => prev.map(app => ({ ...app, collection_exchange_rate: 0 })));
         }
@@ -389,11 +387,11 @@ export default function ReceiptCollectionForm({ mode = 'new', source = 'manual',
   const validateForm = () => {
     if (!entity) return { valid: false, error: "No hay cliente seleccionado." };
     const needsFx = currency === 'USD' || applications.some(app => app.currency === 'USD');
-    if (needsFx && (!Number.isFinite(Number(exchangeRate)) || Number(exchangeRate) <= 0)) {
+    if (needsFx && (!isValidUsdRate(exchangeRate))) {
       return { valid: false, error: "Ingrese un tipo de cambio válido antes de registrar la cobranza." };
     }
     if (applications.some(app => app.currency === 'USD' &&
-        (!Number.isFinite(Number(app.collection_exchange_rate || exchangeRate)) || Number(app.collection_exchange_rate || exchangeRate) <= 0))) {
+        (!isValidUsdRate(app.collection_exchange_rate || exchangeRate)))) {
       return { valid: false, error: "Revise el tipo de cambio de los comprobantes aplicados." };
     }
     

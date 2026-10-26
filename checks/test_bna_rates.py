@@ -53,7 +53,8 @@ def test_side_cache_and_historical_date(monkeypatch):
     monkeypatch.setattr(router, 'fetch_exchange_rate', lambda: quote)
     result = router.get_usd_rate(date=today, side='buy')
     assert result['rate'] == 1500.25
-    assert yesterday.isoformat() in result['warning']
+    assert 'warning' not in result
+    assert result['quote_date'] == yesterday.isoformat()
     assert router.get_usd_rate(date=yesterday)['rate'] == 1503.5
     with pytest.raises(HTTPException) as exc:
         router.get_usd_rate(date=today-timedelta(days=20))

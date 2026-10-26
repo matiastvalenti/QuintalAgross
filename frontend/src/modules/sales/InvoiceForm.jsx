@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useId } from "react";
+import { isValidUsdRate } from "../../utils/fxValidation";
 import Button from "../../components/ui/Button";
 import Input from "../../components/ui/Input";
 import Select from "../../components/ui/Select";
@@ -593,7 +594,7 @@ export default function InvoiceForm(props) {
               const draftCurrency = draft.currency || data.currency || "ARS";
               setCurrency(draftCurrency);
               
-              if (draftCurrency === "USD" && (!draft.exchangeRate || draft.exchangeRate <= 1)) {
+              if (draftCurrency === "USD" && !isValidUsdRate(draft.exchangeRate)) {
                   try {
                       const fxRes = await fetch(`${API_URL}/accounting/fx/usd`, { headers: { Authorization: `Bearer ${token}` } });
                       if (fxRes.ok) {
@@ -753,7 +754,7 @@ export default function InvoiceForm(props) {
 
   const handleSave = async () => {
     if (!entity) return showToast("Falta Cliente", "error");
-    if (currency === "USD" && exchangeRate <= 1) {
+    if (currency === "USD" && !isValidUsdRate(exchangeRate)) {
         return showToast("Para moneda USD el Tipo de Cambio debe ser mayor a 1", "error");
     }
     if (['INVOICE', 'FCE_MIPYME', 'TIQUET_FACTURA'].includes(docType)) {

@@ -49,6 +49,4 @@ def get_usd_rate(date: Date | None = None, side: Literal["buy", "sell"] = "sell"
         "source_url": BNA_URL,
         "last_updated": datetime.fromtimestamp(_fx_cache["timestamp"], ZoneInfo("America/Argentina/Buenos_Aires")).isoformat(),
     }
-    if _fx_cache["quote_date"] != today.isoformat():
-        result["warning"] = f"Último cierre publicado por BNA: {_fx_cache['quote_date']}. Verifique la fecha antes de aplicar."
     return result

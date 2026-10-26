@@ -43,8 +43,11 @@ export default function ServiceWorksPage() {
     try {
       const q = await api.get(`/accounting/fx/usd?side=sell&date=${data.date}`);
       if (!(Number(q.rate) > 0)) throw new Error('Cotización inválida');
-      setter(current => current.date === data.date && current.currency === data.currency && current.exchange_rate === data.exchange_rate ? { ...current, exchange_rate: q.rate } : current); setNotice(q.warning || `BNA divisas vendedor · ${q.quote_date}`);
-    } catch (e) { setError(e.message); }
+      setter(current => current.date === data.date && current.currency === data.currency && current.exchange_rate === data.exchange_rate ? { ...current, exchange_rate: q.rate } : current);
+    } catch {
+      // Sin advertencias por cierres bancarios o fallos temporales:
+      // el tipo de cambio sigue siendo editable y obligatorio al facturar.
+    }
   }
   function currency(setter, data, value) {
     const next = { ...data, currency: value, exchange_rate: value === 'ARS' ? 1 : '' };
