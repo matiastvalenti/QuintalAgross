@@ -45,18 +45,10 @@ const inputBlurStyle = (e) => {
     e.target.style.boxShadow = 'none';
 };
 
-export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client', onSelectExisting }) {
-    const [activeTab, setActiveTab] = useState('general');
-    const [saving, setSaving] = useState(false);
-    const [salespeople, setSalespeople] = useState([]);
-    const [duplicateError, setDuplicateError] = useState(null);
-    const [lookingUpCuit, setLookingUpCuit] = useState(false);
-    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-
-    const [formData, setFormData] = useState({
+const createEmptyEntity = type => ({
         name: '',
         code: '',
-        type: initialType,
+        type,
         tax_id: '',
         tax_category: '',
         phone: '',
@@ -84,6 +76,16 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
         credit_status: 'OK'
     });
 
+export default function EntityEditor({ entity, onSave, onCancel, initialType = 'client', onSelectExisting }) {
+    const [activeTab, setActiveTab] = useState('general');
+    const [saving, setSaving] = useState(false);
+    const [salespeople, setSalespeople] = useState([]);
+    const [duplicateError, setDuplicateError] = useState(null);
+    const [lookingUpCuit, setLookingUpCuit] = useState(false);
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+    const [formData, setFormData] = useState(() => createEmptyEntity(initialType));
+
     const [taxCategories] = useState([
         {id: "RESPONSABLE_INSCRIPTO", label: "Responsable Inscripto"},
         {id: "MONOTRIBUTO", label: "Monotributo"},
@@ -98,7 +100,7 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
         if (entity) {
             setFormData({ ...entity, create_linked: false });
         } else {
-            setFormData(prev => ({ ...prev, type: initialType }));
+            setFormData(createEmptyEntity(initialType));
         }
 
         // Fetch salespeople for assignment
@@ -332,7 +334,8 @@ export default function EntityEditor({ entity, onSave, onCancel, initialType = '
                         console.error("Error parsing conflict error", pErr);
                     }
                 }
-                throw new Error('Error al guardar');
+                const errorData = await res.json().catch(() => ({}));
+                throw new Error(typeof errorData.detail === 'string' ? errorData.detail : errorData.detail?.message || 'Error al guardar la entidad.');
             }
             const saved = await res.json();
             onSave(saved);

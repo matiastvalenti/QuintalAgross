@@ -1036,7 +1036,13 @@ export default function SalesOrderForm(props) {
                   <div className={`${s.sideBlock} ${w.sideBlock}`}>
                       <div className={`${s.sideBlockTitle} ${w.sideBlockTitle}`}><User size={12}/> Datos de la venta</div>
                       <div className={`${s.sideField} ${w.sideField}`}>
-                          <label>Cliente</label>
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                            <label>Cliente</label>
+                            {!isReadOnly && <button type="button" title="Dar de alta un cliente dentro del sistema" onClick={() => openWindow("entities-manager",
+                              { initialType: "client", startNew: true, onCreated: setEntity },
+                              { title: "Nuevo cliente", width: 1200, height: 760, minWidth: 800, minHeight: 540, allowMultiple: true, singletonKey: `new-client-${windowId || "ventas"}` }
+                            )} style={{ border: "1px solid var(--border-color)", borderRadius: 7, padding: "4px 7px", background: "var(--bg-page)", color: "var(--text)", fontSize: 11, cursor: "pointer" }}>+ Nuevo cliente</button>}
+                          </div>
                           {isReadOnly ? (
                               <div className={`${s.sideInput} ${w.sideInput}`}>{entity?.name || '-'}</div>
                           ) : (

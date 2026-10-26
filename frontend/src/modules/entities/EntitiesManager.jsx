@@ -9,14 +9,17 @@ import LedgerImporter from './components/LedgerImporter';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 import LoadingScreen from '../../components/ui/LoadingScreen';
+import { useWindow } from '../../context/WindowContext';
 
-export default function EntitiesManager({ initialType = 'client' }) {
+export default function EntitiesManager({ initialType = 'client', startNew = false, onCreated, windowId }) {
+    const { closeWindow } = useWindow();
     const [selectedType, setSelectedType] = useState(initialType);
     const [entities, setEntities] = useState([]);
-    const [loading, setLoading] = useState(false); // Changed to false by default
+    const [loading, setLoading] = useState(false);
+    const [fetchError, setFetchError] = useState('');
     const [searchQuery, setSearchQuery] = useState('');
     const [selectedEntity, setSelectedEntity] = useState(null);
-    const [isEditing, setIsEditing] = useState(false);
+    const [isEditing, setIsEditing] = useState(Boolean(startNew));
     const [isImporting, setIsImporting] = useState(false);
     const [isImportingSaldos, setIsImportingSaldos] = useState(false);
 
@@ -28,9 +31,11 @@ export default function EntitiesManager({ initialType = 'client' }) {
         if (!isSearch) setLoading(true);
         try {
             const data = await api.get(`/entities/?type=${selectedType}&q=${searchQuery}`);
-            setEntities(data);
+            setEntities(Array.isArray(data) ? data : []);
+            setFetchError('');
         } catch (err) {
             console.error(err);
+            setFetchError('No se pudieron cargar las entidades. Comprobá la conexión y los permisos.');
         } finally {
             if (!isSearch) setLoading(false);
         }
@@ -54,7 +59,11 @@ export default function EntitiesManager({ initialType = 'client' }) {
 
     const handleSave = (saved) => {
         fetchEntities();
-        setSelectedEntity(saved);
+        if (saved && !selectedEntity && startNew && typeof onCreated === 'function') {
+            onCreated(saved);
+            if (windowId) closeWindow(windowId);
+        }
+        setSelectedEntity(saved || null);
         setIsEditing(false);
     };
 
@@ -101,10 +110,12 @@ export default function EntitiesManager({ initialType = 'client' }) {
                         <EntitiesTable 
                             entities={entities}
                             loading={loading}
+                            error={fetchError}
                             selectedEntity={selectedEntity}
                             onSelect={handleSelectEntity}
                             onSearch={setSearchQuery}
                             searchQuery={searchQuery}
+                            selectedType={selectedType}
                             onNew={handleNewEntity}
                             onImport={() => setIsImporting(true)}
                             onImportSaldos={() => setIsImportingSaldos(true)}
@@ -114,7 +125,7 @@ export default function EntitiesManager({ initialType = 'client' }) {
                     {/* EDITOR AREA (Bottom Panel) */}
                     {isEditing && (
                         <div style={{ 
-                            height: '50%', 
+                            height: '57%', 
                             background: 'white',
                             borderRadius: 'var(--r-md)',
                             boxShadow: 'var(--shadow-lg)',
@@ -161,6 +172,7 @@ export default function EntitiesManager({ initialType = 'client' }) {
                             overflow: 'hidden'
                         }}>
                             <EntityImporter 
+                                initialType={selectedType}
                                 onImportSuccess={handleImportSuccess}
                                 onCancel={() => setIsImporting(false)}
                             />

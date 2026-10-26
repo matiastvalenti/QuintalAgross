@@ -8,6 +8,7 @@ python-multipart
 python-dotenv
 pandas
 openpyxl
+xlrd>=2.0.1
 requests
 reportlab==4.0.9
 psycopg2-binary==2.9.9

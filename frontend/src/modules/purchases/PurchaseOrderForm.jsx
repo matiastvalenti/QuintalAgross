@@ -1699,7 +1699,13 @@ export default function PurchaseOrderForm(props) {
                 <User size={12} /> PROVEEDOR
               </div>
               <div className={s.sideField}>
-                <label>NOMBRE</label>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+                  <label>NOMBRE</label>
+                  {!isReadOnly && <button type="button" title="Dar de alta un proveedor dentro del sistema" onClick={() => openWindow("entities-manager",
+                    { initialType: "provider", startNew: true, onCreated: setSupplier },
+                    { title: "Nuevo proveedor", width: 1200, height: 760, minWidth: 800, minHeight: 540, allowMultiple: true, singletonKey: `new-provider-${windowId || "compras"}` }
+                  )} style={{ border: "1px solid var(--border-color)", borderRadius: 7, padding: "4px 7px", background: "var(--bg-page)", color: "var(--text)", fontSize: 11, cursor: "pointer" }}>+ Nuevo proveedor</button>}
+                </div>
                 {isReadOnly ? (
                   <div className={s.sideInput}>{supplier?.name || "-"}</div>
                 ) : (

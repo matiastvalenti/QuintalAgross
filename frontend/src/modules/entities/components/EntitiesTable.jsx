@@ -11,10 +11,12 @@ import EmptyState from '../../../components/ui/EmptyState';
 
 export default function EntitiesTable({ 
     entities, 
-    loading, 
+    loading,
+    error = '', 
     selectedEntity, 
     onSearch, 
     searchQuery,
+    selectedType = 'client',
     onSelect,
     onNew,
     onImport,
@@ -129,7 +131,7 @@ export default function EntitiesTable({
                             e.currentTarget.style.background = 'white';
                         }}
                     >
-                        <FileSpreadsheet size={16} /> Importar Excel
+                        <FileSpreadsheet size={16} /> Importar {selectedType === 'provider' ? 'proveedores' : 'clientes'}
                     </button>
                     <button 
                         onClick={onNew}
@@ -155,7 +157,7 @@ export default function EntitiesTable({
                             e.currentTarget.style.opacity = '1';
                         }}
                     >
-                        <span style={{ fontSize: '15px', lineHeight: 1, fontWeight: 700 }}>+</span> Nuevo
+                        <span style={{ fontSize: '15px', lineHeight: 1, fontWeight: 700 }}>+</span> Nuevo {selectedType === 'provider' ? 'proveedor' : 'cliente'}
                     </button>
                 </div>
             </div>
@@ -164,12 +166,14 @@ export default function EntitiesTable({
             <div style={{ flex: 1, overflowY: 'auto' }} className={t.container}>
                 {loading ? (
                     <TableSkeleton rows={10} cols={4} />
+                ) : error ? (
+                    <div role="alert" style={{ padding: 24, color: '#ef4444', fontSize: 13 }}>{error}</div>
                 ) : entities.length === 0 ? (
                     <EmptyState 
                         icon={SearchIcon} 
-                        title="Sin resultados" 
-                        description={searchQuery ? `No hay entidades que coincidan con "${searchQuery}"` : "No hay entidades cargadas en esta categoría."}
-                        actionLabel={!searchQuery ? "Nueva Entidad" : null}
+                        title={searchQuery ? "Sin coincidencias" : `Todavía no hay ${selectedType === "provider" ? "proveedores" : "clientes"}`}
+                        description={searchQuery ? `No hay entidades que coincidan con "${searchQuery}"` : "Podés empezar con un alta manual o importar tu listado de Excel."}
+                        actionLabel={!searchQuery ? `Nuevo ${selectedType === "provider" ? "proveedor" : "cliente"}` : null}
                         onAction={!searchQuery ? onNew : null}
                     />
                 ) : (

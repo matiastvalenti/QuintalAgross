@@ -76,12 +76,18 @@ def read_entities(
         query = query.filter(Entity.is_salesperson == is_salesperson)
         
     if q:
-        search = f"%{q}%"
-        query = query.filter(
-            (Entity.name.ilike(search)) | 
-            (Entity.code.ilike(search)) | 
-            (Entity.tax_id.ilike(search))
+        search = f"%{q.strip()}%"
+        predicate = (
+            Entity.name.ilike(search) |
+            Entity.code.ilike(search) |
+            Entity.tax_id.ilike(search)
         )
+        # Permitir consultar CUIT con o sin guiones desde cualquier selector.
+        normalized_query = normalize_tax_id(q)
+        if len(normalized_query) >= 4:
+            normalized_column = func.replace(func.replace(Entity.tax_id, "-", ""), " ", "")
+            predicate = predicate | normalized_column.ilike(f"%{normalized_query}%")
+        query = query.filter(predicate)
         
     entities = query.offset(skip).limit(limit).all()
     return entities
@@ -123,8 +129,15 @@ def _get_next_code(db: Session, type: EntityType) -> str:
 
 @router.post("/", response_model=EntitySchema, dependencies=[Depends(check_permission("customers", "create"))])
 def create_entity(entity: EntityCreate, db: Session = Depends(get_db)):
+    requested_type = entity.type
+    if entity.create_linked:
+        if requested_type not in (EntityType.CLIENT, EntityType.PROVIDER):
+            raise HTTPException(status_code=400, detail="Solo clientes y proveedores pueden habilitarse como mixtos.")
+        # Una misma persona/CUIT tiene una sola entidad y cuenta corriente.
+        # Los dos roles se expresan como MIXED, sin duplicar el padrón.
+        entity.type = EntityType.MIXED
     if not entity.code:
-        entity.code = _get_next_code(db, entity.type)
+        entity.code = _get_next_code(db, requested_type)
     else:
         exists = db.query(Entity).filter(Entity.code == entity.code).first()
         if exists: raise HTTPException(status_code=400, detail="Entity with this Code already exists")
@@ -155,25 +168,6 @@ def create_entity(entity: EntityCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_entity)
     
-    if entity.create_linked:
-        secondary_type = EntityType.PROVIDER if entity.type == EntityType.CLIENT else EntityType.CLIENT
-        secondary_code = _get_next_code(db, secondary_type)
-        db_linked = Entity(
-            name=entity.name, type=secondary_type, code=secondary_code, tax_id=entity.tax_id,
-            tax_category=entity.tax_category, email=entity.email, phone=entity.phone,
-            contact_name=entity.contact_name, address=entity.address, city=entity.city,
-            state=entity.state, zip_code=entity.zip_code, country=entity.country,
-            price_list_id=entity.price_list_id, salesperson_id=entity.salesperson_id,
-            business_unit=entity.business_unit, is_salesperson=entity.is_salesperson,
-            commission_type=entity.commission_type, commission_pct=entity.commission_pct,
-            notes=entity.notes, linked_entity_id=db_entity.id
-        )
-        db.add(db_linked)
-        db.commit()
-        db.refresh(db_linked)
-        db_entity.linked_entity_id = db_linked.id
-        db.add(db_entity)
-        db.commit()
     return db_entity
 
 @router.get("/{entity_id}", response_model=EntitySchema, dependencies=[Depends(check_permission("customers", "view"))])
