@@ -9,20 +9,26 @@ import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 import TableSkeleton from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
+import m from './ManagementWorkspace.module.css';
 
 export default function SimpleConfigPage({ type = 'campaigns', title = 'Campañas' }) {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [query, setQuery] = useState('');
     const [newItemName, setNewItemName] = useState('');
     const [editingItem, setEditingItem] = useState(null); // { id, name }
     const { showToast } = useToast();
 
     const endpoint = `/config/${type}`;
+    const filteredItems = items.filter(item => String(item.name || '').toLocaleLowerCase('es-AR').includes(query.trim().toLocaleLowerCase('es-AR')));
+    const duplicated = (name, id) => items.some(item => item.id !== id && item.name.trim().toLocaleLowerCase('es-AR') === name.trim().toLocaleLowerCase('es-AR'));
 
     useEffect(() => {
         fetchItems(items.length === 0); // Only loud load if we have nothing
         setEditingItem(null);
         setNewItemName('');
+        setQuery('');
     }, [type]);
 
     const fetchItems = async (showLoading = true) => {
@@ -38,28 +44,32 @@ export default function SimpleConfigPage({ type = 'campaigns', title = 'Campaña
     };
 
     const handleAdd = async () => {
-        if (!newItemName.trim()) return;
+        if (saving || !newItemName.trim()) return;
+        if (duplicated(newItemName)) { showToast('Ya existe un registro con ese nombre', 'error'); return; }
+        setSaving(true);
         try {
-            await api.post(endpoint, { name: newItemName, active: true });
+            await api.post(endpoint, { name: newItemName.trim(), active: true });
             showToast("Guardado correctamente", "success");
             setNewItemName('');
             fetchItems();
         } catch (e) {
             showToast("Error al guardar", "error");
-        }
+        } finally { setSaving(false); }
     };
 
     const handleUpdate = async () => {
-        if (!editingItem || !editingItem.name.trim()) return;
+        if (saving || !editingItem || !editingItem.name.trim()) return;
+        if (duplicated(editingItem.name, editingItem.id)) { showToast('Ya existe un registro con ese nombre', 'error'); return; }
+        setSaving(true);
         try {
-            await api.put(`${endpoint}/${editingItem.id}`, { name: editingItem.name });
+            await api.put(`${endpoint}/${editingItem.id}`, { name: editingItem.name.trim() });
             showToast("Actualizado correctamente", "success");
             setEditingItem(null);
             fetchItems();
         } catch (e) {
             console.error(e);
             showToast("Error al actualizar", "error");
-        }
+        } finally { setSaving(false); }
     };
 
     const handleDelete = async (id) => {
@@ -74,17 +84,18 @@ export default function SimpleConfigPage({ type = 'campaigns', title = 'Campaña
         }
     };
 
-    // if (loading) return <div style={{ padding: 20 }}>Cargando...</div>;
+    // if (loading) return <div className={`${m.root} ${m.scroller}`}>Cargando...</div>;
 
     const labelStr = title.endsWith('s') ? title.slice(0, -1) : title;
 
     return (
         <div style={{ padding: 20 }}>
-            <ContentHeader title={title} />
+            <ContentHeader title={title} breadcrumbs={[{ label: "Configuración" }, { label: title }]} />
+            <div className={m.stats}><span className={m.stat}><strong>{items.length}</strong> registrados</span><span className={m.stat}><strong>{filteredItems.length}</strong> resultados</span></div>
             
-            <Card style={{ marginTop: 20, maxWidth: 600 }}>
+            <Card style={{ marginTop: 12, maxWidth: 960 }}>
                 {/* Form Alta */}
-                <div style={{ display: 'flex', gap: 12, marginBottom: 24, alignItems: 'flex-end' }}>
+                <div className={m.toolbar} style={{ marginBottom: 22 }}>
                     <div style={{ flex: 1 }}>
                         <Input 
                             label={`Nueva ${labelStr}`}
@@ -94,12 +105,13 @@ export default function SimpleConfigPage({ type = 'campaigns', title = 'Campaña
                         />
                     </div>
                     <div>
-                        <Button size="sm" onClick={handleAdd} disabled={!newItemName}>
+                        <Button size="sm" onClick={handleAdd} disabled={saving || !newItemName.trim()} loading={saving}>
                             <Plus size={14} /> Agregar
                         </Button>
                     </div>
                 </div>
 
+                <label className={m.searchField} style={{ marginBottom: 18 }}><Search size={16}/><input value={query} onChange={e => setQuery(e.target.value)} aria-label={`Buscar ${title}`} placeholder={`Buscar ${title.toLowerCase()}...`}/></label>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     {loading ? (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -107,14 +119,14 @@ export default function SimpleConfigPage({ type = 'campaigns', title = 'Campaña
                                 <div key={i} style={{ height: 48, background: 'var(--panel-2)', borderRadius: 8, animation: 'pulse 1.5s infinite' }} />
                             ))}
                         </div>
-                    ) : items.length === 0 ? (
+                    ) : filteredItems.length === 0 ? (
                         <EmptyState 
                             icon={type === 'campaigns' ? Tag : (type === 'banks' ? Landmark : Briefcase)}
                             title={`Sin ${title}`}
-                            description={`No hay ${title.toLowerCase()} configuradas aún.`}
+                            description={query ? 'No hay resultados para esa búsqueda.' : `No hay ${title.toLowerCase()} configuradas aún.`}
                         />
                     ) : (
-                        items.map(item => {
+                        filteredItems.map(item => {
                             const isEditing = editingItem?.id === item.id;
                             
                             return (
@@ -152,7 +164,7 @@ export default function SimpleConfigPage({ type = 'campaigns', title = 'Campaña
                                     <div style={{ display: 'flex', gap: 6, marginLeft: 12 }}>
                                         {isEditing ? (
                                             <>
-                                                <Button size="sm" variant="success" onClick={handleUpdate} title="Guardar">
+                                                <Button size="sm" variant="success" onClick={handleUpdate} disabled={saving} loading={saving} title="Guardar">
                                                     <Check size={14} />
                                                 </Button>
                                                 <Button size="sm" variant="ghost" onClick={() => setEditingItem(null)} title="Cancelar">

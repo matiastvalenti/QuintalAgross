@@ -6,12 +6,18 @@ import { Plus, Trash2, Save, Edit2, X, Search, Clock } from 'lucide-react';
 import api from '../../services/api';
 import TableSkeleton from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
+import { useToast } from '../../context/ToastContext';
+import m from '../config/ManagementWorkspace.module.css';
 
 
 export default function SaleConditionsPage() {
     const [conditions, setConditions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [editingId, setEditingId] = useState(null);
+    const [saving, setSaving] = useState(false);
+    const [query, setQuery] = useState('');
+    const { showToast } = useToast();
+    const filteredConditions = conditions.filter(c => String(c.description || '').toLocaleLowerCase('es-AR').includes(query.trim().toLocaleLowerCase('es-AR')));
     const [formData, setFormData] = useState({
         description: '',
         due_days: 0,
@@ -30,6 +36,7 @@ export default function SaleConditionsPage() {
             setConditions(data);
         } catch (e) {
             console.error(e);
+            showToast('No se pudieron cargar las condiciones de venta', 'error');
         } finally {
             setLoading(false);
         }
@@ -46,41 +53,52 @@ export default function SaleConditionsPage() {
     };
 
     const handleSave = async () => {
+        if (saving) return;
+        const desc = formData.description.trim();
+        if (!desc) { showToast('Ingresá una descripción para la condición', 'error'); return; }
+        if (conditions.some(c => c.id !== editingId && c.description.trim().toLocaleLowerCase('es-AR') === desc.toLocaleLowerCase('es-AR'))) { showToast('Ya existe una condición con ese nombre', 'error'); return; }
+        if (!Number.isInteger(Number(formData.due_days)) || Number(formData.due_days) < 0 || [formData.interest_rate, formData.financing_rate].some(v => !Number.isFinite(Number(v)) || Number(v) < 0)) { showToast('Plazo y tasas deben ser números válidos, sin valores negativos', 'error'); return; }
+        setSaving(true);
         try {
             if (editingId) {
-                await api.put(`/sales/sale-conditions/${editingId}`, formData);
+                await api.put(`/sales/sale-conditions/${editingId}`, { ...formData, description: desc });
             } else {
-                await api.post('/sales/sale-conditions/', formData);
+                await api.post('/sales/sale-conditions/', { ...formData, description: desc });
             }
             
             setEditingId(null);
             setFormData({ description: '', due_days: 0, interest_rate: 0, financing_rate: 0 });
+            showToast(editingId ? 'Condición actualizada' : 'Condición creada', 'success');
             fetchConditions();
         } catch (e) {
             console.error(e);
-        }
+            showToast('No se pudo guardar la condición de venta', 'error');
+        } finally { setSaving(false); }
     };
 
     const handleDelete = async (id) => {
         if (!window.confirm('¿Seguro que desea eliminar esta condición?')) return;
         try {
             await api.delete(`/sales/sale-conditions/${id}`);
+            showToast('Condición eliminada', 'success');
             fetchConditions();
         } catch (e) {
             console.error(e);
+            showToast('No se pudo eliminar. Puede haber documentos vinculados.', 'error');
         }
     };
 
     return (
-    <div style={{ padding: '24px', background: 'var(--bg-page)', minHeight: '100%' }}>
+    <div className={`${m.root} ${m.scroller}`}>
         <ContentHeader 
             title="Condiciones de Venta" 
             breadcrumbs={[{label:'Configuración'}, {label:'Condiciones de Venta'}]}
         />
 
+        <div className={m.toolbar} style={{ marginTop: 16 }}><label className={m.searchField} style={{ flex: '1 1 270px' }}><Search size={16} /><input aria-label="Buscar condiciones de venta" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar por descripción" /></label><span className={m.stat}><strong>{filteredConditions.length}</strong> de {conditions.length} condiciones</span></div>
         {/* Editor Card */}
         <div style={{ 
-            background: 'white', 
+            background: 'var(--bg-card)', 
             borderRadius: 'var(--r-lg)', 
             border: '1px solid var(--border-color)', 
             padding: '20px', 
@@ -95,7 +113,7 @@ export default function SaleConditionsPage() {
                 </h3>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 120px 120px 120px auto', gap: '20px', alignItems: 'flex-end' }}>
+            <div className={m.formGrid} style={{ alignItems: 'end' }}>
                 <Input 
                     label="Descripción Comercial" 
                     value={formData.description} 
@@ -121,7 +139,7 @@ export default function SaleConditionsPage() {
                     onChange={e => setFormData({...formData, financing_rate: parseFloat(e.target.value) || 0})}
                 />
                 <div style={{ display: 'flex', gap: '8px' }}>
-                    <Button onClick={handleSave} style={{ whiteSpace: 'nowrap' }}>
+                    <Button onClick={handleSave} disabled={saving} loading={saving} style={{ whiteSpace: 'nowrap' }}>
                         {editingId ? <Save size={16} style={{marginRight:8}}/> : <Plus size={16} style={{marginRight:8}}/>} 
                         {editingId ? 'Guardar Cambios' : 'Agregar'}
                     </Button>
@@ -138,8 +156,8 @@ export default function SaleConditionsPage() {
         </div>
 
         {/* List Card */}
-        <div style={{ 
-            background: 'white', 
+        <div className={m.tableScroll} style={{ 
+            background: 'var(--bg-card)', 
             borderRadius: 'var(--r-lg)', 
             border: '1px solid var(--border-color)', 
             marginTop: '20px', 
@@ -163,18 +181,18 @@ export default function SaleConditionsPage() {
                                 <TableSkeleton rows={5} cols={5} />
                             </td>
                         </tr>
-                    ) : conditions.length === 0 ? (
+                    ) : filteredConditions.length === 0 ? (
                         <tr>
                             <td colSpan="5" style={{ padding: 0 }}>
                                 <EmptyState 
                                     icon={Clock}
                                     title="Sin condiciones"
-                                    description="No hay condiciones de venta configuradas aún."
+                                    description={query ? "Ninguna condición coincide con la búsqueda." : "No hay condiciones de venta configuradas aún."}
                                 />
                             </td>
                         </tr>
                     ) : (
-                        conditions.map(c => {
+                        filteredConditions.map(c => {
                             const isEditing = editingId === c.id;
                             return (
                                 <tr key={c.id} style={{ 
@@ -189,10 +207,10 @@ export default function SaleConditionsPage() {
                                     <td style={tdStyle}>{c.financing_rate}%</td>
                                     <td style={{...tdStyle, textAlign: 'right'}}>
                                         <div style={{ display: 'flex', gap: '4px', justifyContent: 'flex-end' }}>
-                                            <button onClick={() => handleEdit(c)} style={iconBtnStyle} title="Editar">
+                                            <button onClick={() => handleEdit(c)} style={iconBtnStyle} title="Editar" aria-label={`Editar ${c.description}`}>
                                                 <Edit2 size={14} />
                                             </button>
-                                            <button onClick={() => handleDelete(c.id)} style={{...iconBtnStyle, color: 'var(--bad)'}} title="Eliminar">
+                                            <button onClick={() => handleDelete(c.id)} style={{...iconBtnStyle, color: 'var(--bad)'}} title="Eliminar" aria-label={`Eliminar ${c.description}`}>
                                                 <Trash2 size={14} />
                                             </button>
                                         </div>
@@ -204,10 +222,6 @@ export default function SaleConditionsPage() {
                 </tbody>
             </table>
         </div>
-        <style>{`
-            @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
-            tbody tr:hover { background-color: var(--bg-page) !important; }
-        `}</style>
     </div>
     );
 }

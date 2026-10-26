@@ -7,10 +7,12 @@ import { Plus, Trash2, Edit2, Check, X, Landmark, Search } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
 import EmptyState from '../../components/ui/EmptyState';
+import m from './ManagementWorkspace.module.css';
 
 export default function BankConfigPage() {
     const [items, setItems] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [saving, setSaving] = useState(false);
     const [newName, setNewName] = useState('');
     const [newTaxId, setNewTaxId] = useState('');
     const [query, setQuery] = useState('');
@@ -48,6 +50,7 @@ export default function BankConfigPage() {
     };
 
     const handleAdd = async () => {
+        if (saving) return;
         if (!newName.trim() || digits(newTaxId).length !== 11) {
             showToast("Ingresá razón social y CUIT de 11 dígitos del banco.", "error");
             return;
@@ -56,6 +59,7 @@ export default function BankConfigPage() {
             showToast("Ya existe un banco con ese nombre o CUIT.", "error");
             return;
         }
+        setSaving(true);
         try {
             await api.post(endpoint, { 
                 name: newName, 
@@ -68,10 +72,11 @@ export default function BankConfigPage() {
             fetchItems();
         } catch (e) {
             showToast("Error al guardar banco", "error");
-        }
+        } finally { setSaving(false); }
     };
 
     const handleUpdate = async () => {
+        if (saving) return;
         if (!editingItem || !editingItem.name.trim()) return;
         if (editingItem.tax_id && digits(editingItem.tax_id).length !== 11) {
             showToast("El CUIT debe tener 11 dígitos.", "error");
@@ -81,6 +86,7 @@ export default function BankConfigPage() {
             showToast("Ya existe un banco con ese nombre o CUIT.", "error");
             return;
         }
+        setSaving(true);
         try {
             await api.put(`${endpoint}/${editingItem.id}`, { 
                 name: editingItem.name,
@@ -91,7 +97,7 @@ export default function BankConfigPage() {
             fetchItems();
         } catch (e) {
             showToast("Error al actualizar banco", "error");
-        }
+        } finally { setSaving(false); }
     };
 
     const handleDelete = async (id) => {
@@ -106,12 +112,13 @@ export default function BankConfigPage() {
     };
 
     return (
-        <div style={{ padding: 20 }}>
-            <ContentHeader title="Configuración de Bancos" />
+        <div className={`${m.root} ${m.scroller}`}>
+            <ContentHeader title="Bancos" breadcrumbs={[{label: "Configuración"}, {label: "Bancos"}]} />
+            <div className={m.stats}><span className={m.stat}><strong>{items.length}</strong> bancos registrados</span><span className={m.stat}><strong>{matchingBanks.length}</strong> resultados</span></div>
             
-            <Card style={{ marginTop: 20, maxWidth: 980 }}>
+            <Card style={{ marginTop: 14, maxWidth: 1240 }}>
                 {/* Form Alta */}
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 12, marginBottom: 24, alignItems: 'flex-end' }}>
+                <div className={m.flexGrid} style={{ marginBottom: 22 }}>
                     <div>
                         <Input 
                             label="Razón social / Nombre del Banco"
@@ -129,7 +136,7 @@ export default function BankConfigPage() {
                         />
                     </div>
                     <div>
-                        <Button onClick={handleAdd} disabled={!newName.trim() || digits(newTaxId).length !== 11}>
+                        <Button onClick={handleAdd} disabled={saving || !newName.trim() || digits(newTaxId).length !== 11} loading={saving}>
                             <Plus size={16} /> Agregar
                         </Button>
                     </div>
@@ -143,7 +150,7 @@ export default function BankConfigPage() {
                             <input value={query} onChange={e => setQuery(e.target.value)} placeholder="Nombre o número de CUIT..." style={{ flex: 1, minWidth: 0, height: 39, border: 0, outline: 0, background: 'transparent', color: '#f8fafc' }} />
                         </div>
                     </label>
-                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Estos resultados corresponden a los bancos guardados en Quintal. La consulta externa al padrón ARCA requiere integración autorizada.</span>
+                    <span style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Datos registrados en el sistema. Verificá la razón social y el CUIT antes de guardar.</span>
                     {loading ? (
                         <div style={{ padding: '40px 0', textAlign: 'center', color: 'var(--text-secondary)' }}>Cargando bancos...</div>
                     ) : matchingBanks.length === 0 ? (
@@ -153,7 +160,7 @@ export default function BankConfigPage() {
                             description={query ? "No se encontró ningún banco guardado con ese nombre o CUIT." : "No hay bancos configurados aún."}
                         />
                     ) : (
-                        <div style={{ border: '1px solid var(--border-color)', borderRadius: 12, overflow: 'hidden' }}>
+                        <div className={m.tableScroll} style={{ border: '1px solid var(--border-color)', borderRadius: 12 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px' }}>
                                 <thead style={{ background: 'var(--bg-page)', borderBottom: '1px solid var(--border-color)' }}>
                                     <tr>
@@ -197,7 +204,7 @@ export default function BankConfigPage() {
                                                     <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
                                                         {isEditing ? (
                                                             <>
-                                                                <Button size="sm" variant="success" onClick={handleUpdate} title="Guardar">
+                                                                <Button size="sm" variant="success" onClick={handleUpdate} disabled={saving} loading={saving} title="Guardar">
                                                                     <Check size={14} />
                                                                 </Button>
                                                                 <Button size="sm" variant="ghost" onClick={() => setEditingItem(null)} title="Cancelar">

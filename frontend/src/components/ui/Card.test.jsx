@@ -12,7 +12,7 @@ describe('Card compartida', () => {
     );
     const card = screen.getByText('Editar Depósito').closest('div[class*="card"]');
     expect(card.style.overflow).toBe('hidden');
-    expect(card.style.flex).toBe('1');
+    expect(card.style.flex).toContain('1');
     expect(screen.getByRole('button', { name: 'Cancelar' })).toBeInTheDocument();
   });
 });

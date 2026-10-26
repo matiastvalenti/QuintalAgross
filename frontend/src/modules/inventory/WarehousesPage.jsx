@@ -9,6 +9,7 @@ import t from '../../components/ui/Table.module.css';
 import { Package, MapPin, Building2, Plus, Edit2, Trash2, Eye, Search } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import api from '../../services/api';
+import m from '../config/ManagementWorkspace.module.css';
 import TableSkeleton from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
 
@@ -33,6 +34,10 @@ export default function WarehousesPage() {
     const [selectedStockWh, setSelectedStockWh] = useState(null);
     const [stockItems, setStockItems] = useState([]);
     const [loadingStock, setLoadingStock] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [query, setQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('ALL');
+    const filteredWarehouses = warehouses.filter(wh => (statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? wh.active : !wh.active)) && [wh.name, wh.code, wh.address, wh.ownership].some(v => String(v || '').toLocaleLowerCase('es-AR').includes(query.trim().toLocaleLowerCase('es-AR'))));
 
     useEffect(() => {
         fetchWarehouses();
@@ -45,6 +50,7 @@ export default function WarehousesPage() {
             setWarehouses(data);
         } catch (e) {
             console.error("Error fetching warehouses", e);
+            showToast("No se pudieron cargar los depósitos", "error");
         } finally {
             setLoading(false);
         }
@@ -52,6 +58,7 @@ export default function WarehousesPage() {
 
     const handleOpenModal = (wh = null) => {
         if (wh) {
+            setEditingWarehouse(wh);
             setFormData({ 
                 name: wh.name, 
                 code: wh.code || '', 
@@ -81,6 +88,10 @@ export default function WarehousesPage() {
 
     const handleSave = async (e) => {
         if (e) e.preventDefault();
+        if (saving) return;
+        if (!formData.name.trim()) { showToast('Ingresá el nombre del depósito', 'error'); return; }
+        if (warehouses.some(wh => wh.id !== editingWarehouse?.id && (wh.name.trim().toLocaleLowerCase('es-AR') === formData.name.trim().toLocaleLowerCase('es-AR') || (formData.code.trim() && wh.code?.trim().toLocaleLowerCase('es-AR') === formData.code.trim().toLocaleLowerCase('es-AR'))))) { showToast('Ya existe un depósito con ese nombre o código', 'error'); return; }
+        setSaving(true);
         try {
             if (editingWarehouse) {
                 await api.put(`/inventory/warehouses/${editingWarehouse.id}`, formData);
@@ -93,7 +104,9 @@ export default function WarehousesPage() {
             fetchWarehouses();
         } catch (e) {
             console.error(e);
-            showToast("Error al guardar", "error");
+            showToast("Error al guardar el depósito", "error");
+        } finally {
+            setSaving(false);
         }
     };
 
@@ -125,7 +138,7 @@ export default function WarehousesPage() {
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', overflow: 'hidden' }}>
+        <div className={m.root} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', overflow: 'hidden' }}>
             {!(isEditing || selectedStockWh) && (
                 <div style={{ padding: '16px 20px 0 20px' }}>
                     <ContentHeader 
@@ -144,23 +157,30 @@ export default function WarehousesPage() {
                 padding: (isEditing || selectedStockWh) ? '8px 20px 20px 20px' : '12px 20px 20px 20px',
                 overflow: 'hidden'
             }}>
+                {!(isEditing || selectedStockWh) && (
+                    <div className={m.toolbar} style={{ padding: '2px 4px 6px' }}>
+                        <label className={m.searchField} style={{ flex: '1 1 300px' }}><Search size={16} aria-hidden="true"/><input aria-label="Buscar depósitos" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar por nombre, código, propiedad o dirección" /></label>
+                        <select aria-label="Filtrar depósitos" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ padding: '10px 12px', borderRadius: 9 }}><option value="ALL">Todos los estados</option><option value="ACTIVE">Activos</option><option value="INACTIVE">Inactivos</option></select>
+                        <span className={m.stat}><strong>{filteredWarehouses.length}</strong> de {warehouses.length} depósitos</span>
+                    </div>
+                )}
                 {/* Warehouses List Section */}
                 <div style={{ 
                     flex: (isEditing || selectedStockWh) ? '0 0 auto' : '1', 
-                    height: (isEditing || selectedStockWh) ? '100px' : 'auto',
-                    minHeight: (isEditing || selectedStockWh) ? '100px' : 'none',
+                    height: isEditing ? 0 : selectedStockWh ? '160px' : 'auto',
+                    minHeight: isEditing ? 0 : selectedStockWh ? '160px' : 0,
                     overflow: 'hidden',
-                    display: 'flex',
+                    display: isEditing ? 'none' : 'flex',
                     flexDirection: 'column'
                 }}>
                     <Card noPad style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         {loading ? (
                             <TableSkeleton rows={8} cols={6} />
-                        ) : warehouses.length === 0 ? (
+                        ) : filteredWarehouses.length === 0 ? (
                             <EmptyState 
                                 icon={Building2} 
-                                title="Sin depósitos" 
-                                description="Comenzá creando tu primer depósito para gestionar el inventario."
+                                title={warehouses.length ? "Sin coincidencias" : "Sin depósitos"} 
+                                description={warehouses.length ? "No hay depósitos que coincidan con los filtros." : "Comenzá creando tu primer depósito para gestionar el inventario."}
                                 actionLabel="Nuevo Depósito"
                                 onAction={() => handleOpenModal()}
                             />
@@ -178,7 +198,7 @@ export default function WarehousesPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {warehouses.map(wh => (
+                                        {filteredWarehouses.map(wh => (
                                             <tr key={wh.id} style={{ background: (selectedStockWh?.id === wh.id || editingWarehouse?.id === wh.id) ? 'var(--panel-2)' : 'transparent' }}>
                                                 <td>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -208,13 +228,13 @@ export default function WarehousesPage() {
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                                                        <Button variant="ghost" size="sm" onClick={() => viewStock(wh)} title="Ver Stock">
+                                                        <Button variant="ghost" size="sm" onClick={() => viewStock(wh)} title="Ver stock" aria-label={`Ver stock de ${wh.name}`}>
                                                             <Eye size={16} />
                                                         </Button>
-                                                        <Button variant="ghost" size="sm" onClick={() => handleOpenModal(wh)}>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleOpenModal(wh)} aria-label={`Editar depósito ${wh.name}`}>
                                                             <Edit2 size={16} />
                                                         </Button>
-                                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(wh.id)} style={{ color: 'var(--error)' }}>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(wh.id)} aria-label={`Eliminar depósito ${wh.name}`} style={{ color: 'var(--error)' }}>
                                                             <Trash2 size={16} />
                                                         </Button>
                                                     </div>
@@ -246,7 +266,7 @@ export default function WarehousesPage() {
                                 }}>
                                     <form onSubmit={handleSave} style={{ 
                                         display: 'grid', 
-                                        gridTemplateColumns: '1fr 1fr 1.5fr', 
+                                        gridTemplateColumns: 'repeat(auto-fit, minmax(min(220px, 100%), 1fr))', 
                                         gap: '8px 12px',
                                         width: '100%' 
                                     }}>
@@ -337,8 +357,8 @@ export default function WarehousesPage() {
                                     </div>
 
                                     <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 12, gridColumn: '1 / -1' }}>
-                                        <Button variant="secondary" onClick={() => setIsEditing(false)}>Cancelar</Button>
-                                        <Button type="submit">{editingWarehouse ? 'Guardar Cambios' : 'Crear Depósito'}</Button>
+                                        <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                                        <Button type="submit" loading={saving} disabled={saving}>{editingWarehouse ? 'Guardar Cambios' : 'Crear Depósito'}</Button>
                                     </div>
                                 </form>
                             </div>

@@ -11,6 +11,7 @@ import { getInitials } from '../../utils/formatters';
 import t from '../../components/ui/Table.module.css';
 import TableSkeleton from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
+import m from '../config/ManagementWorkspace.module.css';
 
 const ACTIONS = [
     { id: 'view', label: 'Ver', icon: Eye, color: '#3b82f6' },
@@ -85,6 +86,11 @@ export default function UsersManager() {
     const [users, setUsers] = useState([]);
     const [roles, setRoles] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [saving, setSaving] = useState(false);
+    const [query, setQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('ALL');
+    const filteredUsers = users.filter(u => (statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? u.active : !u.active)) && [u.full_name, u.username, u.email, ...(u.roles || [])].some(v => String(v || '').toLocaleLowerCase('es-AR').includes(query.trim().toLocaleLowerCase('es-AR'))));
+    const filteredRoles = roles.filter(r => [r.name, r.description].some(v => String(v || '').toLocaleLowerCase('es-AR').includes(query.trim().toLocaleLowerCase('es-AR'))));
     
     // Form State
     const [editingId, setEditingId] = useState(null);
@@ -116,6 +122,11 @@ export default function UsersManager() {
     };
 
     const handleSaveUser = async () => {
+        if (saving) return;
+        if (!userForm.full_name.trim() || !userForm.username.trim() || !userForm.email.trim() || (!editingId && !userForm.password)) { showToast('Completá nombre, usuario, email y contraseña al crear', 'error'); return; }
+        if (!/^\S+@\S+\.\S+$/.test(userForm.email.trim())) { showToast('Ingresá un email válido', 'error'); return; }
+        if (users.some(u => u.id !== editingId && (u.username.toLocaleLowerCase('es-AR') === userForm.username.trim().toLocaleLowerCase('es-AR') || u.email?.toLocaleLowerCase('es-AR') === userForm.email.trim().toLocaleLowerCase('es-AR')))) { showToast('Ya existe un usuario o email con esos datos', 'error'); return; }
+        setSaving(true);
         try {
             // Si es nuevo y no hay username, generamos uno por las dudas
             const finalForm = { ...userForm };
@@ -124,6 +135,7 @@ export default function UsersManager() {
             }
 
             if (editingId) {
+                if (!finalForm.password) delete finalForm.password;
                 await api.put(`/auth/users/${editingId}`, finalForm);
             } else {
                 await api.post('/auth/users', finalForm);
@@ -132,11 +144,11 @@ export default function UsersManager() {
             showToast("Usuario guardado", "success");
             setView('list');
             setEditingId(null);
-            setUserForm({ username: '', full_name: '', email: '', role_id: '', password: '', active: true });
+            setUserForm({ username: '', full_name: '', email: '', roles: [], password: '', active: true });
             fetchData();
         } catch (e) {
-            showToast("Error al guardar", "error");
-        }
+            showToast("Error al guardar usuario", "error");
+        } finally { setSaving(false); }
     };
 
     const handleToggleActive = async (u) => {
@@ -165,6 +177,10 @@ export default function UsersManager() {
     };
 
     const handleSaveRole = async () => {
+        if (saving) return;
+        if (!roleForm.name.trim()) { showToast('Ingresá un nombre de perfil', 'error'); return; }
+        if (roles.some(r => r.id !== editingId && r.name.trim().toLocaleLowerCase('es-AR') === roleForm.name.trim().toLocaleLowerCase('es-AR'))) { showToast('Ya existe un perfil con ese nombre', 'error'); return; }
+        setSaving(true);
         try {
             if (editingId) {
                 await api.put(`/auth/roles/${editingId}`, roleForm);
@@ -175,8 +191,8 @@ export default function UsersManager() {
             setView('list');
             fetchData();
         } catch (e) {
-            showToast(e.message || "Error al guardar", "error");
-        }
+            showToast(e.message || "Error al guardar el perfil", "error");
+        } finally { setSaving(false); }
     };
 
     const handleDeleteRole = async (id, is_system) => {
@@ -192,24 +208,25 @@ export default function UsersManager() {
     };
 
     const toggleUserRole = (roleName) => {
-        const newRoles = userForm.roles.includes(roleName)
-            ? userForm.roles.filter(r => r !== roleName)
-            : [...userForm.roles, roleName];
+        const currentRoles = userForm.roles || [];
+        const newRoles = currentRoles.includes(roleName)
+            ? currentRoles.filter(r => r !== roleName)
+            : [...currentRoles, roleName];
         setUserForm({ ...userForm, roles: newRoles });
     };
 
     const togglePermissionAction = (itemId, actionId) => {
-        const currentItem = roleForm.permissions[itemId] || { view: false, create: false, edit: false, delete: false };
+        const currentItem = (roleForm.permissions || {})[itemId] || { view: false, create: false, edit: false, delete: false };
         const newItem = { ...currentItem, [actionId]: !currentItem[actionId] };
         setRoleForm({
             ...roleForm,
-            permissions: { ...roleForm.permissions, [itemId]: newItem }
+            permissions: { ...(roleForm.permissions || {}), [itemId]: newItem }
         });
     };
 
     if (view === 'editUser') {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', padding: 24 }}>
+            <div className={m.root} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', padding: 24, overflowY: 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
                     <Button variant="ghost" onClick={() => setView('list')}>
                         <ArrowRight size={18} style={{ transform: 'rotate(180deg)' }} /> Volver
@@ -219,12 +236,12 @@ export default function UsersManager() {
                     </h2>
                 </div>
 
-                <div style={{ maxWidth: 800, background: 'white', borderRadius: 16, border: '1px solid var(--border-color)', padding: 32, boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                <div style={{ maxWidth: 800, background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border-color)', padding: 32, boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: 24 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                         <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Datos del Empleado
                         </label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(225px, 100%), 1fr))', gap: 20 }}>
                             <Input 
                                 label="Nombre Completo" 
                                 value={userForm.full_name} 
@@ -248,7 +265,7 @@ export default function UsersManager() {
                         <label style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                             Credenciales de Acceso
                         </label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 20 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(225px, 100%), 1fr))', gap: 20 }}>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                                 <Input 
                                     label="Nombre de Usuario (Login)" 
@@ -293,14 +310,14 @@ export default function UsersManager() {
 
                     <div style={{ display: 'flex', gap: 12, padding: '12px 16px', background: 'var(--bg-app)', borderRadius: 12, border: '1px solid var(--border-color)', alignItems: 'center', cursor: 'pointer' }} onClick={() => setUserForm({ ...userForm, active: !userForm.active })}>
                          <div style={{ width: 40, height: 20, background: userForm.active ? 'var(--success)' : '#cbd5e1', borderRadius: 10, position: 'relative', transition: 'all 0.2s' }}>
-                             <div style={{ width: 14, height: 14, background: 'white', borderRadius: '50%', position: 'absolute', top: 3, left: userForm.active ? 23 : 3, transition: 'all 0.2s' }} />
+                             <div style={{ width: 14, height: 14, background: 'var(--bg-card)', borderRadius: '50%', position: 'absolute', top: 3, left: userForm.active ? 23 : 3, transition: 'all 0.2s' }} />
                          </div>
                          <span style={{ fontSize: 13, fontWeight: 700 }}>Usuario Activo (Permitir acceso al sistema)</span>
                     </div>
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12, borderTop: '1px solid var(--border-color)', paddingTop: 24 }}>
                         <Button variant="secondary" onClick={() => setView('list')}>Cancelar</Button>
-                        <Button onClick={handleSaveUser}>Confirmar y Guardar</Button>
+                        <Button onClick={handleSaveUser} disabled={saving} loading={saving}>Confirmar y Guardar</Button>
                     </div>
                 </div>
             </div>
@@ -309,7 +326,7 @@ export default function UsersManager() {
 
     if (view === 'editRole') {
         return (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', padding: 24 }}>
+            <div className={m.root} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', padding: 24, overflowY: 'auto' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
                     <Button variant="ghost" onClick={() => setView('list')}>
                         <ArrowRight size={18} style={{ transform: 'rotate(180deg)' }} /> Volver
@@ -319,8 +336,8 @@ export default function UsersManager() {
                     </h2>
                 </div>
 
-                <div style={{ maxWidth: 1000, background: 'white', borderRadius: 16, border: '1px solid var(--border-color)', padding: 32, boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: 24 }}>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 20 }}>
+                <div style={{ maxWidth: 1000, background: 'var(--bg-card)', borderRadius: 16, border: '1px solid var(--border-color)', padding: 32, boxShadow: 'var(--shadow-sm)', display: 'flex', flexDirection: 'column', gap: 24 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(270px, 100%), 1fr))', gap: 20 }}>
                         <Input label="Nombre del Perfil" value={roleForm.name} onChange={e => setRoleForm({ ...roleForm, name: e.target.value })} disabled={roleForm.is_system} />
                         <Input label="Descripción Corta" value={roleForm.description} onChange={e => setRoleForm({ ...roleForm, description: e.target.value })} />
                     </div>
@@ -329,7 +346,7 @@ export default function UsersManager() {
                         <h3 style={{ fontSize: 15, fontWeight: 700, margin: '12px 0 20px 0', display: 'flex', alignItems: 'center', gap: 8 }}>
                             <Settings size={18} /> Matriz de Permisos por Funcionalidad
                         </h3>
-                        <div style={{ border: '1px solid var(--border-color)', borderRadius: 16, overflow: 'hidden' }}>
+                        <div className={m.tableScroll} style={{ border: '1px solid var(--border-color)', borderRadius: 16 }}>
                             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                 <thead style={{ background: 'var(--bg-app)' }}>
                                     <tr>
@@ -347,18 +364,20 @@ export default function UsersManager() {
                                 <tbody>
                                     {PERMISSION_GROUPS.map(group => (
                                         <React.Fragment key={group.title}>
-                                            <tr style={{ background: '#f8fafc' }}>
+                                            <tr style={{ background: 'var(--th-bg)' }}>
                                                 <td colSpan={5} style={{ padding: '8px 20px', fontSize: 11, fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>{group.title}</td>
                                             </tr>
                                             {group.items.map(item => (
                                                 <tr key={item.id} style={{ borderBottom: '1px solid var(--border-color)' }}>
                                                     <td style={{ padding: '12px 20px 12px 32px', fontSize: 13, fontWeight: 600, color: 'var(--text-main)' }}>{item.label}</td>
                                                     {ACTIONS.map(a => {
-                                                        const isSelected = roleForm.permissions[item.id]?.[a.id];
+                                                        const isSelected = roleForm.permissions?.[item.id]?.[a.id];
                                                         return (
                                                             <td key={a.id} style={{ textAlign: 'center' }}>
-                                                                <div 
+                                                                <button type="button"
                                                                     onClick={() => togglePermissionAction(item.id, a.id)}
+                                                                    aria-label={`${a.label}: ${item.label}`}
+                                                                    aria-pressed={Boolean(isSelected)}
                                                                     style={{
                                                                         width: 20, height: 20, borderRadius: 4, border: '2px solid',
                                                                         borderColor: isSelected ? a.color : '#e2e8f0',
@@ -368,7 +387,7 @@ export default function UsersManager() {
                                                                     }}
                                                                 >
                                                                     {isSelected && <Check size={14} color="white" />}
-                                                                </div>
+                                                                </button>
                                                             </td>
                                                         );
                                                     })}
@@ -383,7 +402,7 @@ export default function UsersManager() {
 
                     <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 12, marginTop: 12, borderTop: '1px solid var(--border-color)', paddingTop: 24 }}>
                         <Button variant="secondary" onClick={() => setView('list')}>Cancelar</Button>
-                        <Button onClick={handleSaveRole}>Guardar Configuración de Perfil</Button>
+                        <Button onClick={handleSaveRole} disabled={saving} loading={saving}>Guardar Configuración de Perfil</Button>
                     </div>
                 </div>
             </div>
@@ -391,7 +410,7 @@ export default function UsersManager() {
     }
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)' }}>
+        <div className={m.root} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)' }}>
             <div style={{ padding: '16px 20px 8px 20px' }}>
                 <ContentHeader 
                     title="Control de Accesos" 
@@ -418,6 +437,11 @@ export default function UsersManager() {
                 />
             </div>
 
+            <div className={m.toolbar} style={{ padding: '4px 20px 16px' }}>
+              <label className={m.searchField} style={{ flex: '1 1 260px' }}><Search size={16}/><input aria-label="Buscar usuarios y perfiles" value={query} onChange={e => setQuery(e.target.value)} placeholder={activeTab === 'users' ? 'Buscar nombre, usuario, email o perfil' : 'Buscar perfiles de acceso'} /></label>
+              {activeTab === 'users' && <select aria-label="Filtrar usuarios" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ borderRadius: 9, padding: 9 }}><option value="ALL">Todos los usuarios</option><option value="ACTIVE">Activos</option><option value="INACTIVE">Inactivos</option></select>}
+              <span className={m.stat}><strong>{activeTab === 'users' ? filteredUsers.length : filteredRoles.length}</strong> de {activeTab === 'users' ? users.length : roles.length}</span>
+            </div>
             {/* Main Tabs */}
             <div style={{ display: 'flex', padding: '0 20px', borderBottom: '1px solid var(--border-color)', gap: 20 }}>
                 <button 
@@ -448,7 +472,7 @@ export default function UsersManager() {
                 {loading ? (
                     <TableSkeleton rows={10} cols={4} />
                 ) : activeTab === 'users' ? (
-                    <div style={{ background: 'white', borderRadius: 'var(--r-md)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
+                    <div style={{ background: 'var(--bg-card)', borderRadius: 'var(--r-md)', border: '1px solid var(--border-color)', boxShadow: 'var(--shadow-sm)', overflow: 'hidden' }}>
                         <table className={t.table}>
                             <thead>
                                 <tr>
@@ -459,11 +483,11 @@ export default function UsersManager() {
                                 </tr>
                             </thead>
                             <tbody>
-                                {users.map(u => (
+                                {filteredUsers.map(u => (
                                     <tr key={u.id} style={{ opacity: u.active ? 1 : 0.55 }}>
                                         <td>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: u.active ? 'var(--primary-light)' : '#f1f5f9', color: u.active ? 'var(--primary)' : 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
+                                                <div style={{ width: 36, height: 36, borderRadius: '50%', background: u.active ? 'var(--primary-light)' : 'var(--panel-2)', color: u.active ? 'var(--primary)' : 'var(--text-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 700 }}>
                                                     {getInitials(u.full_name)}
                                                 </div>
                                                 <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -515,7 +539,7 @@ export default function UsersManager() {
                                                     <Button variant="ghost" size="sm" style={{ padding: 8, color: 'var(--primary)' }} 
                                                         onClick={() => {
                                                             setEditingId(u.id);
-                                                            setUserForm({ ...u, password: "" });
+                                                            setUserForm({ ...u, roles: u.roles || [], password: '' });
                                                             setView('editUser');
                                                         }}
                                                     >
@@ -535,12 +559,12 @@ export default function UsersManager() {
                         </table>
                     </div>
                 ) : (
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(350px, 1fr))', gap: 20 }}>
-                        {roles.map(r => (
-                            <div key={r.id} style={{ background: 'white', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20, display: 'flex', flexDirection: 'column', gap: 12, transition: 'all 0.2s', boxShadow: 'var(--shadow-sm)', position: 'relative' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(300px, 100%), 1fr))', gap: 20 }}>
+                        {filteredRoles.map(r => (
+                            <div key={r.id} style={{ background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border-color)', padding: 20, display: 'flex', flexDirection: 'column', gap: 12, transition: 'all 0.2s', boxShadow: 'var(--shadow-sm)', position: 'relative' }}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                                        <div style={{ width: 40, height: 40, borderRadius: 10, background: r.is_system ? '#e0f2fe' : '#fef3c7', color: r.is_system ? '#0369a1' : '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        <div style={{ width: 40, height: 40, borderRadius: 10, background: r.is_system ? '#244966' : '#60472a', color: r.is_system ? '#0369a1' : '#b45309', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                                             <Shield size={20} />
                                         </div>
                                         <div>
@@ -552,7 +576,7 @@ export default function UsersManager() {
                                         {can('users', 'edit') && (
                                             <Button variant="ghost" size="sm" style={{ padding: 8, color: 'var(--primary)' }} onClick={() => {
                                                 setEditingId(r.id);
-                                                setRoleForm(r);
+                                                setRoleForm({ ...r, permissions: r.permissions || {} });
                                                 setView('editRole');
                                             }}>
                                                 <Edit3 size={16} />
@@ -566,11 +590,11 @@ export default function UsersManager() {
                                     </div>
                                 </div>
                                 <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: '8px 0', minHeight: 40 }}>{r.description || 'Sin descripción.'}</p>
-                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, borderTop: '1px solid var(--border-color)', paddingTop: 12 }}>
+                                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(225px, 100%), 1fr))', gap: 8, borderTop: '1px solid var(--border-color)', paddingTop: 12 }}>
                                     {PERMISSION_GROUPS.map(group => {
                                         const totalItems = group.items.length;
                                         const activeItems = group.items.filter(item => {
-                                            const p = r.permissions[item.id];
+                                            const p = (r.permissions || {})[item.id];
                                             return p && (p.view || p.create || p.edit || p.delete);
                                         }).length;
                                         

@@ -12,6 +12,7 @@ import Badge from '../../components/ui/Badge';
 import api from '../../services/api';
 import TableSkeleton from '../../components/ui/TableSkeleton';
 import EmptyState from '../../components/ui/EmptyState';
+import m from '../config/ManagementWorkspace.module.css';
 
 const VEHICLE_TYPES = [
     { value: 'TRUCK', label: 'Camión', icon: Truck },
@@ -49,6 +50,10 @@ export default function FleetPage() {
     const [viewingDetails, setViewingDetails] = useState(null);
     const [vehicleExpensesDetail, setVehicleExpensesDetail] = useState([]);
     const [loadingDetails, setLoadingDetails] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [query, setQuery] = useState('');
+    const [statusFilter, setStatusFilter] = useState('ALL');
+    const filteredVehicles = vehicles.filter(veh => (statusFilter === 'ALL' || (statusFilter === 'ACTIVE' ? veh.active : !veh.active)) && [veh.name, veh.plate, veh.driver_name, veh.type].some(v => String(v || '').toLocaleLowerCase('es-AR').includes(query.trim().toLocaleLowerCase('es-AR'))));
 
     useEffect(() => {
         fetchVehicles();
@@ -102,6 +107,10 @@ export default function FleetPage() {
 
     const handleSave = async (e) => {
         if (e) e.preventDefault();
+        if (saving) return;
+        if (!formData.name.trim()) { showToast('Ingresá el nombre de la unidad', 'error'); return; }
+        if (formData.plate.trim() && vehicles.some(veh => veh.id !== editingVehicle?.id && veh.plate?.trim().toLocaleUpperCase('es-AR') === formData.plate.trim().toLocaleUpperCase('es-AR'))) { showToast('Ya existe una unidad con esa patente', 'error'); return; }
+        setSaving(true);
         try {
             if (editingVehicle) {
                 await api.put(`/vehicles/${editingVehicle.id}`, formData);
@@ -115,7 +124,7 @@ export default function FleetPage() {
         } catch (e) {
             console.error(e);
             showToast("Error al guardar vehículo", "error");
-        }
+        } finally { setSaving(false); }
     };
 
     const handleDelete = async (id) => {
@@ -163,7 +172,7 @@ export default function FleetPage() {
     };
 
     return (
-        <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', overflow: 'hidden' }}>
+        <div className={m.root} style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--bg-page)', overflow: 'hidden' }}>
             <div style={{ padding: '16px 20px 0 20px', display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <ContentHeader 
                     title="Gastos de vehículos y equipos" 
@@ -171,7 +180,7 @@ export default function FleetPage() {
                     actions={<Button onClick={() => handleOpenModal()} icon={<Plus size={18}/>}>Nuevo Vehículo</Button>}
                 />
                 
-                <div style={{ display: 'flex', gap: 12, background: 'white', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border-color)', alignItems: 'flex-end', boxShadow: 'var(--shadow-sm)' }}>
+                <div className={m.toolbar} style={{ display: 'flex', gap: 12, background: 'var(--bg-card)', padding: '12px 16px', borderRadius: 12, border: '1px solid var(--border-color)', alignItems: 'flex-end', boxShadow: 'var(--shadow-sm)' }}>
                     <div style={{ flex: 1 }}>
                         <label style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)', marginBottom: 4, display: 'block' }}>Desde</label>
                         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-color)', outline: 'none' }} />
@@ -181,6 +190,7 @@ export default function FleetPage() {
                         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ width: '100%', padding: '8px 12px', borderRadius: 8, border: '1px solid var(--border-color)', outline: 'none' }} />
                     </div>
                 </div>
+                <div className={m.toolbar}><label className={m.searchField} style={{ flex: '1 1 270px' }}><Search size={16}/><input aria-label="Buscar vehículos" value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar unidad, patente o chofer" /></label><select aria-label="Filtrar flota por estado" value={statusFilter} onChange={e => setStatusFilter(e.target.value)} style={{ borderRadius: 8, padding: 10 }}><option value="ALL">Todos los estados</option><option value="ACTIVE">Activos</option><option value="INACTIVE">Inactivos</option></select><span className={m.stat}><strong>{filteredVehicles.length}</strong> de {vehicles.length} unidades</span></div>
             </div>
 
             <div style={{ 
@@ -193,19 +203,19 @@ export default function FleetPage() {
             }}>
                 <div style={{ 
                     flex: isEditing ? '0 0 auto' : '1', 
-                    height: isEditing ? '150px' : 'auto',
+                    height: isEditing ? 0 : 'auto',
                     overflow: 'hidden',
-                    display: 'flex',
+                    display: isEditing ? 'none' : 'flex',
                     flexDirection: 'column'
                 }}>
                     <Card noPad style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                         {loading ? (
                             <TableSkeleton rows={10} cols={8} />
-                        ) : vehicles.length === 0 ? (
+                        ) : filteredVehicles.length === 0 ? (
                             <EmptyState 
                                 icon={Truck} 
-                                title="Sin vehículos" 
-                                description="Comenzá cargando tu flota de unidades (propias o terceros)."
+                                title={vehicles.length ? "Sin coincidencias" : "Sin vehículos"} 
+                                description={vehicles.length ? "No hay vehículos con estos filtros." : "Comenzá cargando tu flota de unidades (propias o terceros)."}
                                 actionLabel="Nuevo Vehículo"
                                 onAction={() => handleOpenModal()}
                             />
@@ -225,7 +235,7 @@ export default function FleetPage() {
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        {vehicles.map(veh => (
+                                        {filteredVehicles.map(veh => (
                                             <tr key={veh.id} style={{ background: editingVehicle?.id === veh.id ? 'var(--panel-2)' : 'transparent' }}>
                                                 <td>
                                                     <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -234,7 +244,7 @@ export default function FleetPage() {
                                                     </div>
                                                 </td>
                                                 <td>{veh.type}</td>
-                                                <td><code style={{background: '#f1f5f9', padding: '2px 4px', borderRadius: 4}}>{veh.plate || '-'}</code></td>
+                                                <td><code>{veh.plate || '-'}</code></td>
                                                 <td>
                                                     <div style={{ display: 'flex', gap: 6 }}>
                                                         {getAlertLevel(veh.insurance_due) === 'expired' && <Badge variant="red" title={`Seguro Vencido: ${new Date(veh.insurance_due).toLocaleDateString()}`}>SEG</Badge>}
@@ -259,10 +269,10 @@ export default function FleetPage() {
                                                 </td>
                                                 <td style={{ textAlign: 'right' }}>
                                                     <div style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }}>
-                                                        <Button variant="ghost" size="sm" onClick={() => handleOpenModal(veh)}>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleOpenModal(veh)} aria-label={`Editar ${veh.name}`}>
                                                             <Edit2 size={16} />
                                                         </Button>
-                                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(veh.id)} style={{ color: 'var(--bad)' }}>
+                                                        <Button variant="ghost" size="sm" onClick={() => handleDelete(veh.id)} aria-label={`Desactivar ${veh.name}`} style={{ color: 'var(--bad)' }}>
                                                             <Trash2 size={16} />
                                                         </Button>
                                                     </div>
@@ -292,7 +302,7 @@ export default function FleetPage() {
                             }}>
                                 <form onSubmit={handleSave} style={{ 
                                     display: 'grid', 
-                                    gridTemplateColumns: '1fr 1fr', 
+                                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(230px, 100%), 1fr))', 
                                     gap: '12px 20px' 
                                 }}>
                                     <div style={{ gridColumn: '1 / -1' }}>
@@ -369,8 +379,8 @@ export default function FleetPage() {
                                     </div>
 
                                     <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end', marginTop: 10, gridColumn: '1 / -1' }}>
-                                        <Button variant="secondary" onClick={() => setIsEditing(false)}>Cancelar</Button>
-                                        <Button type="submit">{editingVehicle ? 'Guardar Cambios' : 'Crear Vehículo'}</Button>
+                                        <Button type="button" variant="secondary" onClick={() => setIsEditing(false)}>Cancelar</Button>
+                                        <Button type="submit" loading={saving} disabled={saving}>{editingVehicle ? 'Guardar Cambios' : 'Crear Vehículo'}</Button>
                                     </div>
                                 </form>
                             </div>
