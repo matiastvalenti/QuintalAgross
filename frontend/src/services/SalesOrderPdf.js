@@ -671,7 +671,14 @@ export const generatePrePrintedDeliveryNotePdf = async (
 
     if (showBackground) {
         const templateUrl = options.templateUrl || `${API_URL}/templates/QUINTAL%20AGROSS%20Rem%2021x29,7.pdf`;
-        const templateBytes = await fetch(templateUrl).then(res => {
+        // Proteger plantillas del ERP sin enviar el token a orígenes externos.
+        const resolvedTemplate = new URL(templateUrl, API_URL);
+        const isInternalTemplate = resolvedTemplate.origin === new URL(API_URL).origin
+            && resolvedTemplate.pathname.startsWith('/templates/');
+        const token = isInternalTemplate ? localStorage.getItem('token') : null;
+        const templateBytes = await fetch(templateUrl, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {}
+        }).then(res => {
             if (!res.ok) throw new Error("No se pudo cargar la plantilla PDF");
             return res.arrayBuffer();
         });

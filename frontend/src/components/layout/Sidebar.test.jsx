@@ -45,4 +45,27 @@ describe('Navegación de Entidades', () => {
       popup.mockRestore();
     }
   });
+
+  it.each([
+    ['Flota (Vehículos)', 'fleet-manager', 'config-fleet'],
+    ['Usuarios y Perfiles', 'users-manager', 'config-users'],
+    ['Auditoría de Sistema', 'audit-logs', 'config-audit']
+  ])('abre %s en el ERP y no en Chrome', (label, type, singletonKey) => {
+    openWindow.mockClear();
+    const popup = vi.spyOn(window, 'open').mockImplementation(() => null);
+    try {
+      render(
+        <MemoryRouter initialEntries={['/']}>
+          <Sidebar />
+          <LocationIndicator />
+        </MemoryRouter>
+      );
+      fireEvent.click(screen.getByText(label));
+      expect(openWindow).toHaveBeenCalledWith(type, {}, expect.objectContaining({ singletonKey }));
+      expect(screen.getByTestId('current-route')).toHaveTextContent('/');
+      expect(popup).not.toHaveBeenCalled();
+    } finally {
+      popup.mockRestore();
+    }
+  });
 });

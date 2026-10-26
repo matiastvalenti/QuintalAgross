@@ -1,7 +1,9 @@
 from datetime import datetime
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse, JSONResponse
+from app.modules.auth.auth_router import get_current_user
 import os
 from pathlib import Path
 from app.db.session import engine, Base, run_migrations, SessionLocal
@@ -43,7 +45,20 @@ UPLOADS_DIR = BACKEND_ROOT / "uploads"
 UPLOADS_DIR.mkdir(exist_ok=True)
 
 app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
-app.mount("/templates", StaticFiles(directory=str(BACKEND_ROOT / "app/api/excel")), name="templates")
+# El directorio de ejemplos también contiene documentos comerciales: no exponerlo por HTTP.
+ALLOWED_PDF_TEMPLATES = {
+    "Factura_Nro_100012698 (1) (1).pdf",
+    "QUINTAL AGROSS Rem 21x29,7.pdf",
+}
+
+@app.get("/templates/{filename}", include_in_schema=False)
+def download_pdf_template(filename: str, _user=Depends(get_current_user)):
+    if filename not in ALLOWED_PDF_TEMPLATES:
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    template = BACKEND_ROOT / "app/api/excel" / filename
+    if not template.is_file():
+        raise HTTPException(status_code=404, detail="Plantilla no encontrada")
+    return FileResponse(template, media_type="application/pdf")
 
 app.add_middleware(
     CORSMiddleware,
@@ -59,12 +74,9 @@ async def ensure_cors_headers(request, call_next):
     try:
         response = await call_next(request)
     except Exception as e:
-        import traceback
-        error_msg = traceback.format_exc()
-        print("--- DEBUG ERROR ---")
-        print(error_msg)
-        from starlette.responses import PlainTextResponse
-        response = PlainTextResponse(f"Internal Server Error: {error_msg}", status_code=500)
+        import logging
+        logging.getLogger(__name__).exception("Error no controlado en la API")
+        response = JSONResponse({"detail": "Error interno del servidor"}, status_code=500)
 
     response.headers.setdefault("Access-Control-Allow-Origin", "*")
     response.headers.setdefault("Access-Control-Allow-Credentials", "false")

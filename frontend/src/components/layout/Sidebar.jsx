@@ -7,7 +7,6 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useWindow } from '../../context/WindowContext';
-import { openResumenCuenta, openUsersManager, openAuditLogs, openFleetManager } from '../../utils/openStandaloneWindow';
 import s from './Sidebar.module.css';
 
 const NAV_GROUPS = [
@@ -205,7 +204,7 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
       }
       if (item.to === '/configuracion/flota') {
           e.preventDefault();
-          openFleetManager({ title: 'Flota / Vehículos', width: 1050, height: 700 });
+          openWindow('fleet-manager', {}, { title: 'Flota / Vehículos', width: 1050, height: 700, singletonKey: 'config-fleet' });
       }
       if (item.to === '/configuracion/pos') {
           e.preventDefault();
@@ -221,30 +220,18 @@ export default function Sidebar({ openMobile, setOpenMobile }) {
       }
       if (item.to === '/configuracion/usuarios' || item.label === 'Usuarios y Perfiles') {
           e.preventDefault();
-          openUsersManager({ 
-              title: 'Gestión de Usuarios y Accesos', 
-              width: 1100, 
-              height: 700,
-          });
+          openWindow('users-manager', {}, { title: 'Gestión de Usuarios y Accesos', width: 1100, height: 700, singletonKey: 'config-users' });
       }
       
       if (item.to === '/contabilidad/cuenta-corriente') {
           e.preventDefault();
-          openResumenCuenta(null, { 
-              title: 'Resumen de Cuenta Corriente', 
-              width: 1200, 
-              height: 750,
-          });
+          openWindow('statement-page', {}, { title: 'Resumen de Cuenta Corriente', width: 1200, height: 750, singletonKey: 'account-statement' });
       }
       /* Removed application-manager window redirect, now a full page */
 
       if (item.to === '/configuracion/auditoria') {
           e.preventDefault();
-          openAuditLogs({ 
-              title: 'Visor de Auditoría', 
-              width: 1200, 
-              height: 750,
-          });
+          openWindow('audit-logs', {}, { title: 'Visor de Auditoría', width: 1200, height: 750, singletonKey: 'config-audit' });
       }
       if (item.to?.startsWith('/campo/')) {
           e.preventDefault();

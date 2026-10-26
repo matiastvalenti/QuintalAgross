@@ -9,6 +9,7 @@ from passlib.context import CryptContext
 from pydantic import BaseModel
 import os
 import uuid
+from app.modules.auth.security_policy import ensure_role_assignment_allowed, verify_setup_token, ensure_initial_password
 
 from app.db.session import get_db
 from app.db.models.auth_models import User, Role, AuditLog
@@ -110,7 +111,7 @@ async def get_current_user(token: str = Depends(oauth2_scheme), db: Session = De
     if not user:
         user = db.query(User).filter(User.email == identity).first()
         
-    if user is None:
+    if user is None or not user.active:
         raise credentials_exception
     return user
 
@@ -210,7 +211,12 @@ def check_roles(required_roles: List[str]):
     return role_checker
 
 @router.post("/register", response_model=dict)
-def register_user(user_in: UserCreate, db: Session = Depends(get_db)):
+def register_user(
+    user_in: UserCreate,
+    current_user: User = Depends(check_permission("users", "create")),
+    db: Session = Depends(get_db)
+):
+    ensure_role_assignment_allowed(current_user.roles, user_in.roles)
     # Check if user exists
     existing = db.query(User).filter(User.email == user_in.email).first()
     if existing:
@@ -328,8 +334,7 @@ async def refresh_token(data: RefreshRequest, db: Session = Depends(get_db)):
 async def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     if not user:
-        # Don't reveal if user exists for security, but for dev we can return 404
-        raise HTTPException(status_code=404, detail="Email no encontrado")
+        return {"message": "La recuperación por correo aún no está habilitada. Solicitá el cambio a un administrador."}
         
     # Generate recovery token (15 min expire)
     recovery_token = jwt.encode(
@@ -342,7 +347,7 @@ async def forgot_password(data: ForgotPasswordRequest, db: Session = Depends(get
     # Por ahora, el token se genera pero no se expone en la respuesta
     
     return {
-        "message": "Si el email existe, se ha enviado un código de recuperación."
+        "message": "La recuperación por correo aún no está habilitada. Solicitá el cambio a un administrador."
     }
 
 @router.post("/reset-password")
@@ -365,34 +370,32 @@ async def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_d
     
     return {"message": "Contraseña actualizada correctamente"}
 
-@router.get("/install")
-def install_first_user(db: Session = Depends(get_db)):
-    # Check if any user exists
-    count = db.query(User).count()
-    if count > 0:
-        return {"message": "El sistema ya est\u00e1 inicializado"}
-    
-    admin_email = "comercial@quintalagross.ar"
-    admin_username = "admin"
-    admin_password = "admin"
-    
+class InitialInstallRequest(BaseModel):
+    email: str
+    username: str
+    password: str
+    full_name: str
+    setup_token: str
+
+@router.post("/install")
+def install_first_user(data: InitialInstallRequest, db: Session = Depends(get_db)):
+    """Alta inicial: exige secreto de instalación y contraseña robusta."""
+    verify_setup_token(data.setup_token, os.environ.get("QUINTAL_SETUP_TOKEN", ""))
+    if db.query(User).count() > 0:
+        raise HTTPException(status_code=409, detail="El sistema ya está inicializado")
+    ensure_initial_password(data.password)
+
     new_user = User(
-        email=admin_email,
-        username=admin_username,
-        hashed_password=get_password_hash(admin_password),
-        full_name="Administrador Comercial",
+        email=data.email,
+        username=data.username,
+        hashed_password=get_password_hash(data.password),
+        full_name=data.full_name,
         roles=["admin", "owner"],
         active=True
     )
     db.add(new_user)
     db.commit()
-    return {
-        "message": "Usuario administrador creado con éxito",
-        "email": admin_email,
-        "username": admin_username,
-        "password": admin_password,
-        "note": "Por favor, inicie sesión y cambie la contraseña inmediatamente."
-    }
+    return {"message": "Administrador inicial creado. Desactivá QUINTAL_SETUP_TOKEN tras configurar el sistema."}
 
 class ProfileUpdate(BaseModel):
     full_name: Optional[str] = None
@@ -491,6 +494,7 @@ async def create_user_admin(
     current_user: User = Depends(check_permission("users", "create")),
     db: Session = Depends(get_db)
 ):
+    ensure_role_assignment_allowed(current_user.roles, user_in.roles)
     # Check email
     if db.query(User).filter(User.email == user_in.email).first():
         raise HTTPException(status_code=400, detail="El email ya está registrado")
@@ -525,7 +529,10 @@ async def update_user_admin(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
-    
+    ensure_role_assignment_allowed(current_user.roles, user_in.roles or [], user.roles)
+    if user_in.permissions is not None and not ({"admin", "owner"} & set(current_user.roles or [])):
+        raise HTTPException(status_code=403, detail="Solo administración puede modificar permisos")
+
     if user_in.full_name is not None: user.full_name = user_in.full_name
     if user_in.email is not None: user.email = user_in.email
     if user_in.username is not None: user.username = user_in.username
@@ -553,6 +560,7 @@ async def delete_user_admin(
     if not user:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
     
+    ensure_role_assignment_allowed(current_user.roles, [], user.roles)
     username_deleted = user.username
     db.delete(user)
     db.commit()
